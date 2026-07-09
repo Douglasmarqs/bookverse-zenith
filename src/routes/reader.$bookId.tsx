@@ -250,7 +250,7 @@ function ReaderPage() {
             />
           </header>
 
-          {chapter.paragraphs.map((p, i) => (
+          {chapter.paragraphs.map((p: string, i: number) => (
             <p key={i} className="mb-6 [text-align:justify] [hyphens:auto]">
               {p}
             </p>
@@ -332,7 +332,7 @@ function ReaderPage() {
               <h3 className="mt-1 font-display text-lg font-medium">{book.title}</h3>
             </div>
             <ul className="flex-1 overflow-y-auto p-3">
-              {book.chapters.map((c, i) => {
+              {book.chapters.map((c: typeof book.chapters[number], i: number) => {
                 const active = i === chapterIndex;
                 return (
                   <li key={c.id}>
