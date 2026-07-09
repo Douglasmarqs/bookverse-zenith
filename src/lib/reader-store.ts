@@ -1,11 +1,12 @@
 /**
  * Reader store — settings + progress persistence.
  *
- * Local-first via localStorage, with an async interface so a cloud sync
- * (Firebase / Lovable Cloud) can plug in without touching the UI. To wire
- * a remote backend later, replace `readRemote` / `writeRemote` and keep the
- * shape identical.
+ * Local-first (localStorage) with Firebase Firestore sync when signed in.
+ * Progress is stored at `users/{uid}/progress/{bookId}`.
  */
+
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { ensureUser, getFirebase } from "./firebase";
 
 export type ReaderTheme = "light" | "sepia" | "dark";
 export type ReaderFont = "serif" | "sans";
@@ -14,16 +15,16 @@ export type ReaderMode = "scroll" | "paginated";
 export interface ReaderSettings {
   theme: ReaderTheme;
   font: ReaderFont;
-  fontSize: number; // px (14–28)
-  lineHeight: number; // 1.3–2.2
-  margin: number; // px horizontal padding (16–96)
-  maxWidth: number; // ch (40–90)
+  fontSize: number;
+  lineHeight: number;
+  margin: number;
+  maxWidth: number;
   mode: ReaderMode;
 }
 
 export interface ReadingProgress {
   chapterIndex: number;
-  scrollRatio: number; // 0..1 within chapter
+  scrollRatio: number;
   updatedAt: number;
 }
 
@@ -59,7 +60,7 @@ export function saveSettings(s: ReaderSettings): void {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
 }
 
-export function loadProgress(bookId: string): ReadingProgress | null {
+export function loadProgressLocal(bookId: string): ReadingProgress | null {
   if (typeof window === "undefined") return null;
   const raw = localStorage.getItem(progressKey(bookId));
   if (!raw) return null;
@@ -70,15 +71,59 @@ export function loadProgress(bookId: string): ReadingProgress | null {
   }
 }
 
+/** Back-compat alias — returns local progress immediately (sync). */
+export const loadProgress = loadProgressLocal;
+
+/**
+ * Loads progress with a Firestore fallback. Returns the newest of remote/local
+ * (by `updatedAt`) and reconciles both caches.
+ */
+export async function loadProgressRemote(
+  bookId: string,
+): Promise<ReadingProgress | null> {
+  const local = loadProgressLocal(bookId);
+  const fb = getFirebase();
+  if (!fb) return local;
+  try {
+    const user = await ensureUser();
+    if (!user) return local;
+    const ref = doc(fb.db, "users", user.uid, "progress", bookId);
+    const snap = await getDoc(ref);
+    const remote = snap.exists() ? (snap.data() as ReadingProgress) : null;
+    if (remote && (!local || remote.updatedAt > local.updatedAt)) {
+      localStorage.setItem(progressKey(bookId), JSON.stringify(remote));
+      return remote;
+    }
+    if (local && (!remote || local.updatedAt > (remote?.updatedAt ?? 0))) {
+      // Push newer local up to remote.
+      await setDoc(ref, local, { merge: true });
+    }
+    return local ?? remote;
+  } catch (err) {
+    console.warn("[reader] loadProgressRemote failed", err);
+    return local;
+  }
+}
+
 export function saveProgress(bookId: string, p: ReadingProgress): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(progressKey(bookId), JSON.stringify(p));
-  // Fire-and-forget remote sync when cloud is wired.
   void writeRemote(bookId, p);
 }
 
-/* ---------- Remote sync stubs (Firebase to be wired next) ---------- */
-
-async function writeRemote(_bookId: string, _p: ReadingProgress): Promise<void> {
-  // TODO: send to Firestore doc `users/{uid}/progress/{bookId}` once auth is wired.
+async function writeRemote(bookId: string, p: ReadingProgress): Promise<void> {
+  const fb = getFirebase();
+  if (!fb) return;
+  try {
+    const user = await ensureUser();
+    if (!user) return;
+    const ref = doc(fb.db, "users", user.uid, "progress", bookId);
+    await setDoc(
+      ref,
+      { ...p, bookId, uid: user.uid, syncedAt: Date.now() },
+      { merge: true },
+    );
+  } catch (err) {
+    console.warn("[reader] writeRemote failed", err);
+  }
 }
