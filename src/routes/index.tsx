@@ -99,14 +99,16 @@ function Home() {
 
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <Link
-                to="/"
+                to="/reader/$bookId"
+                params={{ bookId: "casa-espiritos" }}
                 className="group inline-flex items-center gap-2 rounded-full bg-gold px-6 py-3.5 text-sm font-medium text-primary-foreground transition-transform hover:scale-[1.02] active:scale-[0.98]"
               >
                 Começar a ler
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
               </Link>
               <Link
-                to="/"
+                to="/reader/$bookId"
+                params={{ bookId: "casa-espiritos" }}
                 className="inline-flex items-center gap-2 rounded-full border border-border px-6 py-3.5 text-sm font-medium text-foreground/85 hover:border-gold/50 hover:text-foreground"
               >
                 <Play className="h-4 w-4 text-gold" />
