@@ -12,7 +12,7 @@ import {
 
 import { SAMPLE_BOOK, type Book } from "@/lib/sample-book";
 import {
-  loadProgress,
+  loadProgressRemote,
   loadSettings,
   saveProgress,
   saveSettings,
