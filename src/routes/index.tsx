@@ -99,14 +99,16 @@ function Home() {
 
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <Link
-                to="/"
+                to="/reader/$bookId"
+                params={{ bookId: "casa-espiritos" }}
                 className="group inline-flex items-center gap-2 rounded-full bg-gold px-6 py-3.5 text-sm font-medium text-primary-foreground transition-transform hover:scale-[1.02] active:scale-[0.98]"
               >
                 Começar a ler
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
               </Link>
               <Link
-                to="/"
+                to="/reader/$bookId"
+                params={{ bookId: "casa-espiritos" }}
                 className="inline-flex items-center gap-2 rounded-full border border-border px-6 py-3.5 text-sm font-medium text-foreground/85 hover:border-gold/50 hover:text-foreground"
               >
                 <Play className="h-4 w-4 text-gold" />
@@ -337,7 +339,11 @@ function BookCard({ book, rank }: { book: Book; rank?: number }) {
 
 function ContinueCard({ book }: { book: Book }) {
   return (
-    <button className="group grid grid-cols-[auto_1fr] items-center gap-5 rounded-2xl border border-border/60 bg-card/60 p-4 text-left transition hover:border-gold/40 hover:bg-card">
+    <Link
+      to="/reader/$bookId"
+      params={{ bookId: "casa-espiritos" }}
+      className="group grid grid-cols-[auto_1fr] items-center gap-5 rounded-2xl border border-border/60 bg-card/60 p-4 text-left transition hover:border-gold/40 hover:bg-card"
+    >
       <img
         src={book.cover}
         alt={book.title}
@@ -364,7 +370,7 @@ function ContinueCard({ book }: { book: Book }) {
           </div>
         </div>
       </div>
-    </button>
+    </Link>
   );
 }
 
