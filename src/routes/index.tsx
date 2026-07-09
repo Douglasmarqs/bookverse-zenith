@@ -339,7 +339,11 @@ function BookCard({ book, rank }: { book: Book; rank?: number }) {
 
 function ContinueCard({ book }: { book: Book }) {
   return (
-    <button className="group grid grid-cols-[auto_1fr] items-center gap-5 rounded-2xl border border-border/60 bg-card/60 p-4 text-left transition hover:border-gold/40 hover:bg-card">
+    <Link
+      to="/reader/$bookId"
+      params={{ bookId: "casa-espiritos" }}
+      className="group grid grid-cols-[auto_1fr] items-center gap-5 rounded-2xl border border-border/60 bg-card/60 p-4 text-left transition hover:border-gold/40 hover:bg-card"
+    >
       <img
         src={book.cover}
         alt={book.title}
@@ -366,7 +370,7 @@ function ContinueCard({ book }: { book: Book }) {
           </div>
         </div>
       </div>
-    </button>
+    </Link>
   );
 }
 
