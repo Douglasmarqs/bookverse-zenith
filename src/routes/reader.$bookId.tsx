@@ -86,16 +86,16 @@ function ReaderPage() {
   // Hydrate settings + progress after mount (avoid SSR mismatch).
   useEffect(() => {
     setSettings(loadSettings());
-    const p = loadProgress(book.id);
-    if (p) {
-      setChapterIndex(Math.min(p.chapterIndex, book.chapters.length - 1));
-      // apply scroll after render
-      requestAnimationFrame(() => {
-        const el = contentRef.current;
-        if (el) el.scrollTop = p.scrollRatio * (el.scrollHeight - el.clientHeight);
-      });
-    }
-    setHydrated(true);
+    void loadProgressRemote(book.id).then((p) => {
+      if (p) {
+        setChapterIndex(Math.min(p.chapterIndex, book.chapters.length - 1));
+        requestAnimationFrame(() => {
+          const el = contentRef.current;
+          if (el) el.scrollTop = p.scrollRatio * (el.scrollHeight - el.clientHeight);
+        });
+      }
+      setHydrated(true);
+    });
   }, [book.id, book.chapters.length]);
 
   // Persist settings.
