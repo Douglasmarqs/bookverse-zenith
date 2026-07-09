@@ -10,7 +10,7 @@ import {
   CloudOff,
 } from "lucide-react";
 
-import { SAMPLE_BOOK } from "@/lib/sample-book";
+import { SAMPLE_BOOK, type Book } from "@/lib/sample-book";
 import {
   loadProgress,
   loadSettings,
@@ -30,8 +30,7 @@ export const Route = createFileRoute("/reader/$bookId")({
       { name: "robots", content: "noindex" },
     ],
   }),
-  loader: ({ params }) => {
-    // Only one sample book for now.
+  loader: ({ params }): { book: Book } => {
     if (params.bookId !== SAMPLE_BOOK.id) throw notFound();
     return { book: SAMPLE_BOOK };
   },
