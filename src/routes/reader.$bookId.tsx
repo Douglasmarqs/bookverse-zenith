@@ -64,10 +64,8 @@ function GuardedReaderPage() {
   return <ReaderPage />;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const _routeEnd = createFileRoute("/reader/$bookId")({
-  component: GuardedReaderPage,
-});
+
+
 
 const THEME_STYLES = {
   light: {
