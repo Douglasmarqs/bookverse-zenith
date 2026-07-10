@@ -21,6 +21,7 @@ import {
   type ReadingProgress,
 } from "@/lib/reader-store";
 import { ReaderSettingsPanel } from "@/components/reader/settings-panel";
+import { useRequireAuth } from "@/hooks/use-require-auth";
 
 export const Route = createFileRoute("/reader/$bookId")({
   head: () => ({
@@ -43,7 +44,29 @@ export const Route = createFileRoute("/reader/$bookId")({
       </Link>
     </div>
   ),
-  component: ReaderPage,
+  component: GuardedReaderPage,
+});
+
+function GuardedReaderPage() {
+  const { state } = useRequireAuth();
+  if (state !== "authenticated") {
+    return (
+      <div className="mx-auto grid min-h-[calc(100vh-8rem)] max-w-md place-items-center px-6 text-center">
+        <div>
+          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-gold/30 border-t-gold" />
+          <p className="mt-4 text-sm text-muted-foreground">
+            {state === "loading" ? "Verificando sua sessão…" : "Redirecionando para o login…"}
+          </p>
+        </div>
+      </div>
+    );
+  }
+  return <ReaderPage />;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _routeEnd = createFileRoute("/reader/$bookId")({
+  component: GuardedReaderPage,
 });
 
 const THEME_STYLES = {
