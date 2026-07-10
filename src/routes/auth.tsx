@@ -9,6 +9,9 @@ import {
 } from "../lib/firebase";
 
 export const Route = createFileRoute("/auth")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    redirect: typeof search.redirect === "string" ? search.redirect : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Entrar — BookVerse" },
@@ -16,6 +19,7 @@ export const Route = createFileRoute("/auth")({
         name: "description",
         content: "Entre na sua conta BookVerse para sincronizar sua biblioteca e progresso em qualquer dispositivo.",
       },
+      { name: "robots", content: "noindex" },
     ],
   }),
   component: AuthPage,
@@ -26,6 +30,8 @@ type Mode = "signin" | "signup";
 function AuthPage() {
   const navigate = useNavigate();
   const router = useRouter();
+  const search = Route.useSearch();
+  const redirectTo = search.redirect || "/";
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -36,9 +42,14 @@ function AuthPage() {
 
   useEffect(() => {
     return subscribeAuth((u) => {
-      setAlreadyAuthed(!!u && !u.isAnonymous);
+      const authed = !!u && !u.isAnonymous;
+      setAlreadyAuthed(authed);
+      if (authed) {
+        router.invalidate();
+        navigate({ to: redirectTo, replace: true });
+      }
     });
-  }, []);
+  }, [navigate, redirectTo, router]);
 
   async function handleEmail(e: React.FormEvent) {
     e.preventDefault();
@@ -51,7 +62,7 @@ function AuthPage() {
         await signInWithEmail(email, password);
       }
       router.invalidate();
-      navigate({ to: "/" });
+      navigate({ to: redirectTo, replace: true });
     } catch (err: unknown) {
       setError(friendlyError(err));
     } finally {
@@ -65,7 +76,7 @@ function AuthPage() {
     try {
       await signInWithGoogle();
       router.invalidate();
-      navigate({ to: "/" });
+      navigate({ to: redirectTo, replace: true });
     } catch (err: unknown) {
       setError(friendlyError(err));
     } finally {
