@@ -10,6 +10,15 @@ import {
   getAuth,
   onAuthStateChanged,
   signInAnonymously,
+  signInWithPopup,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut as fbSignOut,
+  GoogleAuthProvider,
+  EmailAuthProvider,
+  linkWithPopup,
+  linkWithCredential,
+  updateProfile,
   type Auth,
   type User,
 } from "firebase/auth";
@@ -49,7 +58,7 @@ export function getFirebase(): { app: FirebaseApp; auth: Auth; db: Firestore } |
   return { app: _app!, auth: _auth!, db: _db! };
 }
 
-/** Ensures a signed-in user (anonymous by default) and resolves with the uid. */
+/** Ensures a signed-in user (anonymous by default) and resolves with the user. */
 export function ensureUser(): Promise<User | null> {
   const fb = getFirebase();
   if (!fb) return Promise.resolve(null);
@@ -68,4 +77,101 @@ export function ensureUser(): Promise<User | null> {
       resolve(null);
     });
   });
+}
+
+/** Subscribe to auth state changes. */
+export function subscribeAuth(cb: (user: User | null) => void): () => void {
+  const fb = getFirebase();
+  if (!fb) {
+    cb(null);
+    return () => {};
+  }
+  return onAuthStateChanged(fb.auth, cb);
+}
+
+/**
+ * Sign in with Google. If the current user is anonymous, links the Google
+ * credential to preserve uid and progress. Falls back to plain sign-in when
+ * the Google account is already linked to another user.
+ */
+export async function signInWithGoogle(): Promise<User> {
+  const fb = getFirebase();
+  if (!fb) throw new Error("Firebase not initialized");
+  const provider = new GoogleAuthProvider();
+  const current = fb.auth.currentUser;
+  if (current?.isAnonymous) {
+    try {
+      const cred = await linkWithPopup(current, provider);
+      return cred.user;
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code;
+      if (code === "auth/credential-already-in-use" || code === "auth/email-already-in-use") {
+        // Existing account owns this Google identity — sign in normally.
+        const cred = await signInWithPopup(fb.auth, provider);
+        return cred.user;
+      }
+      throw err;
+    }
+  }
+  const cred = await signInWithPopup(fb.auth, provider);
+  return cred.user;
+}
+
+/**
+ * Sign in with email/password. If anonymous, tries to link credentials to
+ * preserve uid; falls back to normal sign-in when the account already exists.
+ */
+export async function signInWithEmail(email: string, password: string): Promise<User> {
+  const fb = getFirebase();
+  if (!fb) throw new Error("Firebase not initialized");
+  const current = fb.auth.currentUser;
+  if (current?.isAnonymous) {
+    const credential = EmailAuthProvider.credential(email, password);
+    try {
+      const cred = await linkWithCredential(current, credential);
+      return cred.user;
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code;
+      if (code === "auth/credential-already-in-use" || code === "auth/email-already-in-use") {
+        const cred = await signInWithEmailAndPassword(fb.auth, email, password);
+        return cred.user;
+      }
+      throw err;
+    }
+  }
+  const cred = await signInWithEmailAndPassword(fb.auth, email, password);
+  return cred.user;
+}
+
+/**
+ * Sign up with email/password. Upgrades an anonymous account by linking the
+ * new credential; keeps existing uid and Firestore data.
+ */
+export async function signUpWithEmail(
+  email: string,
+  password: string,
+  displayName?: string,
+): Promise<User> {
+  const fb = getFirebase();
+  if (!fb) throw new Error("Firebase not initialized");
+  const current = fb.auth.currentUser;
+  let user: User;
+  if (current?.isAnonymous) {
+    const credential = EmailAuthProvider.credential(email, password);
+    const cred = await linkWithCredential(current, credential);
+    user = cred.user;
+  } else {
+    const cred = await createUserWithEmailAndPassword(fb.auth, email, password);
+    user = cred.user;
+  }
+  if (displayName && displayName.trim()) {
+    await updateProfile(user, { displayName: displayName.trim() });
+  }
+  return user;
+}
+
+export async function signOut(): Promise<void> {
+  const fb = getFirebase();
+  if (!fb) return;
+  await fbSignOut(fb.auth);
 }
