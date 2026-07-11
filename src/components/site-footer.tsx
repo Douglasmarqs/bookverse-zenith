@@ -1,4 +1,6 @@
+import { Link } from "@tanstack/react-router";
 import { BookOpen } from "lucide-react";
+import { openLumiPanel } from "@/lib/lumi-panel-store";
 
 export function SiteFooter() {
   return (
@@ -21,19 +23,51 @@ export function SiteFooter() {
         <div>
           <h4 className="font-display text-sm font-medium text-foreground">Explorar</h4>
           <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
-            <li>Descobrir</li>
-            <li>Ranking</li>
-            <li>Desafios</li>
-            <li>Autores</li>
+            <li>
+              <Link to="/descobrir" search={{ q: undefined, categoria: undefined }} className="hover:text-gold">
+                Descobrir
+              </Link>
+            </li>
+            <li>
+              <Link to="/ranking" className="hover:text-gold">
+                Ranking
+              </Link>
+            </li>
+            <li>
+              <Link to="/desafios" className="hover:text-gold">
+                Desafios
+              </Link>
+            </li>
+            <li>
+              <button onClick={() => openLumiPanel()} className="hover:text-gold">
+                Fale com a Lumi
+              </button>
+            </li>
           </ul>
         </div>
         <div>
           <h4 className="font-display text-sm font-medium text-foreground">BookVerse</h4>
           <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
-            <li>Sobre</li>
-            <li>Privacidade</li>
-            <li>Termos</li>
-            <li>Contato</li>
+            <li>
+              <Link to="/sobre" className="hover:text-gold">
+                Sobre
+              </Link>
+            </li>
+            <li>
+              <Link to="/privacidade" className="hover:text-gold">
+                Privacidade
+              </Link>
+            </li>
+            <li>
+              <Link to="/termos" className="hover:text-gold">
+                Termos
+              </Link>
+            </li>
+            <li>
+              <Link to="/contato" className="hover:text-gold">
+                Contato
+              </Link>
+            </li>
           </ul>
         </div>
       </div>

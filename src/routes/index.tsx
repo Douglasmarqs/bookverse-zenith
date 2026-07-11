@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -20,6 +21,13 @@ import b3 from "@/assets/book-3.jpg";
 import b4 from "@/assets/book-4.jpg";
 import b5 from "@/assets/book-5.jpg";
 import b6 from "@/assets/book-6.jpg";
+import { BookCover } from "@/components/book-cover";
+import { LumiButton } from "@/components/lumi-panel";
+import { subscribeRanking, type RankingRow } from "@/lib/ranking";
+import { subscribeUserProfile } from "@/lib/user-profile";
+import { subscribeLibrary } from "@/lib/library";
+import { subscribeAuth } from "@/lib/firebase";
+import type { User } from "firebase/auth";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -65,6 +73,27 @@ const CATEGORIES = [
 ];
 
 function Home() {
+  const [homeUser, setHomeUser] = useState<User | null>(null);
+  const [challengeStats, setChallengeStats] = useState({ booksCompleted: 0, libraryCount: 0, xp: 0 });
+
+  useEffect(() => subscribeAuth(setHomeUser), []);
+  useEffect(() => {
+    if (!homeUser || homeUser.isAnonymous) {
+      setChallengeStats({ booksCompleted: 0, libraryCount: 0, xp: 0 });
+      return;
+    }
+    const unsubProfile = subscribeUserProfile(homeUser.uid, (p) =>
+      setChallengeStats((s) => ({ ...s, booksCompleted: p?.booksCompleted ?? 0, xp: p?.xp ?? 0 })),
+    );
+    const unsubLibrary = subscribeLibrary(homeUser.uid, (entries) =>
+      setChallengeStats((s) => ({ ...s, libraryCount: entries.length })),
+    );
+    return () => {
+      unsubProfile();
+      unsubLibrary();
+    };
+  }, [homeUser]);
+
   return (
     <div className="relative">
       {/* HERO */}
@@ -136,9 +165,10 @@ function Home() {
           <div className="relative flex items-center justify-center">
             <div className="glass-plate relative w-full max-w-sm rounded-3xl p-6 [box-shadow:var(--shadow-plate)]">
               <div className="relative">
-                <img
-                  src={b1}
-                  alt=""
+                <BookCover
+                  title="A Casa dos Espíritos"
+                  author="Isabel Allende"
+                  fallbackSrc={b1}
                   width={800}
                   height={1200}
                   className="book-shadow mx-auto aspect-[2/3] w-56 rounded-md object-cover"
@@ -176,6 +206,7 @@ function Home() {
         eyebrow="Continue lendo"
         title="Retome de onde parou"
         action="Ver tudo"
+        actionTo="/biblioteca"
       >
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {CONTINUE.map((book) => (
@@ -189,6 +220,7 @@ function Home() {
         eyebrow="Em alta"
         title="O que a comunidade está lendo"
         action="Descobrir"
+        actionTo="/descobrir"
         icon={<Flame className="h-4 w-4" />}
       >
         <div className="-mx-5 flex snap-x snap-mandatory gap-5 overflow-x-auto px-5 pb-4 md:-mx-8 md:px-8 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -202,12 +234,14 @@ function Home() {
       <Section eyebrow="Explorar" title="Por categoria">
         <div className="flex flex-wrap gap-2.5">
           {CATEGORIES.map((c) => (
-            <button
+            <Link
               key={c}
+              to="/descobrir"
+              search={{ categoria: c, q: undefined }}
               className="rounded-full border border-border bg-secondary/40 px-4 py-2 text-sm text-foreground/85 transition hover:border-gold/40 hover:text-gold"
             >
               {c}
-            </button>
+            </Link>
           ))}
         </div>
       </Section>
@@ -221,11 +255,29 @@ function Home() {
       </section>
 
       {/* CHALLENGES */}
-      <Section eyebrow="Desafios" title="Metas que valem uma medalha" icon={<Trophy className="h-4 w-4" />}>
+      <Section
+        eyebrow="Desafios"
+        title="Metas que valem uma medalha"
+        action="Ver desafios"
+        actionTo="/desafios"
+        icon={<Trophy className="h-4 w-4" />}
+      >
         <div className="grid gap-4 md:grid-cols-3">
-          <ChallengeCard title="12 livros em 2026" progress={35} pill="Anual" />
-          <ChallengeCard title="Semana clássica" progress={70} pill="Semanal" />
-          <ChallengeCard title="Streak de 30 dias" progress={53} pill="Streak" />
+          <ChallengeCard
+            title="12 livros em 2026"
+            progress={Math.min(100, Math.round((challengeStats.booksCompleted / 12) * 100))}
+            pill="Anual"
+          />
+          <ChallengeCard
+            title="Monte sua estante"
+            progress={Math.min(100, Math.round((challengeStats.libraryCount / 5) * 100))}
+            pill="Biblioteca"
+          />
+          <ChallengeCard
+            title="1000 XP"
+            progress={Math.min(100, Math.round((challengeStats.xp / 1000) * 100))}
+            pill="Streak"
+          />
         </div>
       </Section>
 
@@ -245,16 +297,17 @@ function Home() {
               </p>
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link
-                  to="/"
+                  to="/auth"
+                  search={{ redirect: undefined }}
                   className="inline-flex items-center gap-2 rounded-full bg-gold px-6 py-3.5 text-sm font-medium text-primary-foreground"
                 >
                   Começar grátis <ArrowUpRight className="h-4 w-4" />
                 </Link>
                 <Link
-                  to="/"
+                  to="/sobre"
                   className="inline-flex items-center rounded-full border border-border px-6 py-3.5 text-sm font-medium"
                 >
-                  Comparar planos
+                  Saiba mais
                 </Link>
               </div>
             </div>
@@ -279,12 +332,14 @@ function Section({
   eyebrow,
   title,
   action,
+  actionTo,
   icon,
   children,
 }: {
   eyebrow: string;
   title: string;
   action?: string;
+  actionTo?: "/descobrir" | "/biblioteca" | "/desafios";
   icon?: React.ReactNode;
   children: React.ReactNode;
 }) {
@@ -300,10 +355,13 @@ function Section({
             {title}
           </h2>
         </div>
-        {action && (
-          <button className="shrink-0 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-gold transition">
+        {action && actionTo && (
+          <Link
+            to={actionTo}
+            className="shrink-0 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-gold transition"
+          >
             {action} <ArrowRight className="h-3.5 w-3.5" />
-          </button>
+          </Link>
         )}
       </header>
       {children}
@@ -313,13 +371,16 @@ function Section({
 
 function BookCard({ book, rank }: { book: Book; rank?: number }) {
   return (
-    <button className="group relative w-40 shrink-0 snap-start text-left sm:w-44">
+    <Link
+      to="/descobrir"
+      search={{ q: book.title, categoria: undefined }}
+      className="group relative w-40 shrink-0 snap-start text-left sm:w-44"
+    >
       <div className="relative">
-        <img
-          src={book.cover}
-          alt={book.title}
-          width={800}
-          height={1200}
+        <BookCover
+          title={book.title}
+          author={book.author}
+          fallbackSrc={book.cover}
           loading="lazy"
           className="book-shadow aspect-[2/3] w-full rounded-md object-cover transition-transform duration-500 group-hover:-translate-y-1"
         />
@@ -333,22 +394,19 @@ function BookCard({ book, rank }: { book: Book; rank?: number }) {
         <p className="truncate font-display text-[15px] font-medium">{book.title}</p>
         <p className="mt-0.5 truncate text-xs text-muted-foreground">{book.author}</p>
       </div>
-    </button>
+    </Link>
   );
 }
 
 function ContinueCard({ book }: { book: Book }) {
-  return (
-    <Link
-      to="/reader/$bookId"
-      params={{ bookId: "casa-espiritos" }}
-      className="group grid grid-cols-[auto_1fr] items-center gap-5 rounded-2xl border border-border/60 bg-card/60 p-4 text-left transition hover:border-gold/40 hover:bg-card"
-    >
-      <img
-        src={book.cover}
-        alt={book.title}
-        width={800}
-        height={1200}
+  const hasReader = book.title === "A Casa dos Espíritos";
+
+  const inner = (
+    <>
+      <BookCover
+        title={book.title}
+        author={book.author}
+        fallbackSrc={book.cover}
         loading="lazy"
         className="book-shadow h-28 w-20 rounded-md object-cover"
       />
@@ -363,53 +421,89 @@ function ContinueCard({ book }: { book: Book }) {
             <span className="font-medium text-gold">{book.tag}</span>
           </div>
           <div className="mt-2 h-1 overflow-hidden rounded-full bg-secondary">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-gold to-gold-soft"
-              style={{ width: book.tag }}
-            />
+            <div className="h-full w-2/3 rounded-full bg-gradient-to-r from-gold to-gold-soft" />
           </div>
         </div>
       </div>
+    </>
+  );
+
+  const className =
+    "group grid grid-cols-[auto_1fr] items-center gap-5 rounded-2xl border border-border/60 bg-card/60 p-4 text-left transition hover:border-gold/40 hover:bg-card";
+
+  if (hasReader) {
+    return (
+      <Link to="/reader/$bookId" params={{ bookId: "casa-espiritos" }} className={className}>
+        {inner}
+      </Link>
+    );
+  }
+
+  return (
+    <Link to="/descobrir" search={{ q: book.title, categoria: undefined }} className={className}>
+      {inner}
     </Link>
   );
 }
 
 function RankingCard() {
-  const rows = [
-    { name: "Marina C.", xp: "48.320", pos: 1 },
-    { name: "Você", xp: "42.108", pos: 2, me: true },
-    { name: "Rafael T.", xp: "39.740", pos: 3 },
-    { name: "Léa V.", xp: "35.902", pos: 4 },
-  ];
+  const [rows, setRows] = useState<RankingRow[] | null | undefined>(undefined);
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => subscribeAuth(setUser), []);
+  useEffect(() => subscribeRanking(4, setRows), []);
+
   return (
     <div className="glass-plate rounded-3xl p-7">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.28em] text-gold">Ranking semanal</p>
+          <p className="text-[11px] uppercase tracking-[0.28em] text-gold">Ranking</p>
           <h3 className="mt-2 font-display text-2xl font-medium">Entre os leitores</h3>
         </div>
         <Trophy className="h-6 w-6 text-gold" />
       </div>
-      <ul className="mt-6 divide-y divide-border/60">
-        {rows.map((r) => (
-          <li
-            key={r.name}
-            className={`grid grid-cols-[auto_1fr_auto] items-center gap-4 py-3.5 ${
-              r.me ? "text-foreground" : "text-foreground/85"
-            }`}
-          >
-            <span
-              className={`grid h-8 w-8 place-items-center rounded-full text-sm font-medium ${
-                r.me ? "bg-gold text-primary-foreground" : "bg-secondary text-foreground/70"
-              }`}
-            >
-              {r.pos}
-            </span>
-            <span className={`truncate ${r.me ? "font-medium" : ""}`}>{r.name}</span>
-            <span className="text-sm tabular-nums text-muted-foreground">{r.xp} XP</span>
-          </li>
-        ))}
-      </ul>
+
+      {rows === undefined ? (
+        <p className="mt-6 text-sm text-muted-foreground">Carregando…</p>
+      ) : !rows || rows.length === 0 ? (
+        <p className="mt-6 text-sm text-muted-foreground">
+          Ainda ninguém pontuou — leia um capítulo e seja o primeiro do ranking!
+        </p>
+      ) : (
+        <ul className="mt-6 divide-y divide-border/60">
+          {rows.map((r) => {
+            const me = user && !user.isAnonymous && r.uid === user.uid;
+            return (
+              <li
+                key={r.uid}
+                className={`grid grid-cols-[auto_1fr_auto] items-center gap-4 py-3.5 ${
+                  me ? "text-foreground" : "text-foreground/85"
+                }`}
+              >
+                <span
+                  className={`grid h-8 w-8 place-items-center rounded-full text-sm font-medium ${
+                    me ? "bg-gold text-primary-foreground" : "bg-secondary text-foreground/70"
+                  }`}
+                >
+                  {r.pos}
+                </span>
+                <span className={`truncate ${me ? "font-medium" : ""}`}>
+                  {me ? "Você" : r.displayName}
+                </span>
+                <span className="text-sm tabular-nums text-muted-foreground">
+                  {r.xp.toLocaleString("pt-BR")} XP
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <Link
+        to="/ranking"
+        className="mt-5 inline-flex items-center gap-1.5 text-sm text-gold hover:underline"
+      >
+        Ver ranking completo <ArrowRight className="h-3.5 w-3.5" />
+      </Link>
     </div>
   );
 }
@@ -439,9 +533,7 @@ function AICard() {
             </li>
           ))}
         </ul>
-        <button className="mt-6 inline-flex items-center gap-2 rounded-full bg-foreground/95 px-5 py-2.5 text-sm font-medium text-background hover:bg-foreground">
-          <Sparkles className="h-3.5 w-3.5" /> Conhecer a IA
-        </button>
+        <LumiButton />
       </div>
     </div>
   );
@@ -477,9 +569,9 @@ function ChallengeCard({
           />
         </div>
       </div>
-      <div className="mt-5 flex items-center gap-2 text-xs text-muted-foreground">
-        <Bookmark className="h-3.5 w-3.5" /> 3 livros contam para essa meta
-      </div>
+      <Link to="/desafios" className="mt-5 flex items-center gap-2 text-xs text-muted-foreground hover:text-gold">
+        <Bookmark className="h-3.5 w-3.5" /> Ver detalhes
+      </Link>
     </div>
   );
 }

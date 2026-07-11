@@ -8,6 +8,7 @@ import {
   Settings2,
   Cloud,
   CloudOff,
+  Sparkles,
 } from "lucide-react";
 
 import { SAMPLE_BOOK, type Book } from "@/lib/sample-book";
@@ -22,6 +23,8 @@ import {
 } from "@/lib/reader-store";
 import { ReaderSettingsPanel } from "@/components/reader/settings-panel";
 import { useRequireAuth } from "@/hooks/use-require-auth";
+import { openLumiPanel } from "@/lib/lumi-panel-store";
+import { awardXp, incrementBooksCompleted } from "@/lib/user-profile";
 
 export const Route = createFileRoute("/reader/$bookId")({
   head: () => ({
@@ -48,8 +51,8 @@ export const Route = createFileRoute("/reader/$bookId")({
 });
 
 function GuardedReaderPage() {
-  const { state } = useRequireAuth();
-  if (state !== "authenticated") {
+  const { state, user } = useRequireAuth();
+  if (state !== "authenticated" || !user) {
     return (
       <div className="mx-auto grid min-h-[calc(100vh-8rem)] max-w-md place-items-center px-6 text-center">
         <div>
@@ -61,7 +64,7 @@ function GuardedReaderPage() {
       </div>
     );
   }
-  return <ReaderPage />;
+  return <ReaderPage uid={user.uid} />;
 }
 
 
@@ -91,7 +94,7 @@ const THEME_STYLES = {
   },
 } as const;
 
-function ReaderPage() {
+function ReaderPage({ uid }: { uid: string }) {
   const { book } = Route.useLoaderData();
   const [settings, setSettings] = useState<ReaderSettings>(DEFAULT_SETTINGS);
   const [chapterIndex, setChapterIndex] = useState(0);
@@ -150,6 +153,12 @@ function ReaderPage() {
   const goto = useCallback(
     (i: number) => {
       const clamped = Math.max(0, Math.min(book.chapters.length - 1, i));
+      if (clamped > chapterIndex) {
+        void awardXp(uid, 20);
+        if (clamped === book.chapters.length - 1) {
+          void incrementBooksCompleted(uid);
+        }
+      }
       setChapterIndex(clamped);
       setScrollRatio(0);
       requestAnimationFrame(() => {
@@ -159,7 +168,7 @@ function ReaderPage() {
       queueSave({ chapterIndex: clamped, scrollRatio: 0, updatedAt: Date.now() });
       setTocOpen(false);
     },
-    [book.chapters.length, queueSave],
+    [book.chapters.length, chapterIndex, queueSave, uid],
   );
 
   const theme = THEME_STYLES[settings.theme];
@@ -228,6 +237,20 @@ function ReaderPage() {
           </span>
           <IconBtn theme={theme} onClick={() => setTocOpen(true)} label="Sumário">
             <List className="h-4 w-4" />
+          </IconBtn>
+          <IconBtn
+            theme={theme}
+            onClick={() =>
+              openLumiPanel({
+                bookTitle: book.title,
+                bookAuthor: book.author,
+                chapterTitle: chapter.title,
+                chapterExcerpt: chapter.paragraphs.slice(0, 3).join(" "),
+              })
+            }
+            label="Perguntar à Lumi"
+          >
+            <Sparkles className="h-4 w-4" />
           </IconBtn>
           <IconBtn theme={theme} onClick={() => setPanelOpen(true)} label="Ajustes">
             <Settings2 className="h-4 w-4" />

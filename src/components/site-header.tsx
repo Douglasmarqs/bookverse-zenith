@@ -1,15 +1,16 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Search, Menu, X, BookOpen, LogOut, User as UserIcon } from "lucide-react";
 import type { User } from "firebase/auth";
 import { signOut, subscribeAuth } from "../lib/firebase";
+import { ensureUserProfile } from "../lib/user-profile";
+import { openLumiPanel } from "../lib/lumi-panel-store";
 
 const NAV = [
-  { label: "Início", to: "/" },
-  { label: "Descobrir", to: "/" },
-  { label: "Minha biblioteca", to: "/" },
-  { label: "Ranking", to: "/" },
-  { label: "IA", to: "/" },
+  { label: "Início", to: "/" as const },
+  { label: "Descobrir", to: "/descobrir" as const },
+  { label: "Minha biblioteca", to: "/biblioteca" as const },
+  { label: "Ranking", to: "/ranking" as const },
 ];
 
 export function SiteHeader() {
@@ -17,6 +18,9 @@ export function SiteHeader() {
   const [open, setOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchValue, setSearchValue] = useState("");
+  const navigate = useNavigate();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
@@ -25,7 +29,21 @@ export function SiteHeader() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  useEffect(() => subscribeAuth(setUser), []);
+  useEffect(
+    () =>
+      subscribeAuth((u) => {
+        setUser(u);
+        if (u && !u.isAnonymous) void ensureUserProfile(u);
+      }),
+    [],
+  );
+
+  function submitSearch(e: React.FormEvent) {
+    e.preventDefault();
+    const q = searchValue.trim();
+    setSearchOpen(false);
+    navigate({ to: "/descobrir", search: { q: q || undefined, categoria: undefined } });
+  }
 
   const isSignedIn = !!user && !user.isAnonymous;
   const initial =
@@ -67,11 +85,34 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
+          <div className="relative hidden md:block">
+            {searchOpen ? (
+              <form onSubmit={submitSearch} className="flex items-center">
+                <input
+                  autoFocus
+                  value={searchValue}
+                  onChange={(e) => setSearchValue(e.target.value)}
+                  onBlur={() => !searchValue && setSearchOpen(false)}
+                  placeholder="Buscar livros, autores…"
+                  className="h-10 w-56 rounded-full border border-gold/40 bg-secondary/40 px-4 text-sm outline-none"
+                />
+              </form>
+            ) : (
+              <button
+                aria-label="Buscar"
+                onClick={() => setSearchOpen(true)}
+                className="grid h-10 w-10 place-items-center rounded-full border border-border/60 text-foreground/80 hover:text-gold hover:border-gold/40 transition"
+              >
+                <Search className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
           <button
-            aria-label="Buscar"
-            className="hidden md:grid h-10 w-10 place-items-center rounded-full border border-border/60 text-foreground/80 hover:text-gold hover:border-gold/40 transition"
+            onClick={() => openLumiPanel()}
+            className="hidden lg:inline-flex items-center rounded-full px-4 py-2 text-sm text-foreground/75 transition-colors hover:text-foreground"
           >
-            <Search className="h-4 w-4" />
+            IA
           </button>
 
           {isSignedIn ? (
@@ -117,6 +158,7 @@ export function SiteHeader() {
           ) : (
             <Link
               to="/auth"
+              search={{ redirect: undefined }}
               className="hidden md:inline-flex items-center rounded-full bg-gold px-5 py-2.5 text-sm font-medium text-primary-foreground transition-transform hover:scale-[1.02] active:scale-[0.98]"
             >
               Entrar
@@ -136,6 +178,20 @@ export function SiteHeader() {
       {open && (
         <div className="lg:hidden border-t border-border/60 bg-background/95 backdrop-blur-xl animate-in fade-in slide-in-from-top-2">
           <div className="mx-auto flex max-w-7xl flex-col gap-1 px-5 py-4">
+            <form
+              onSubmit={(e) => {
+                submitSearch(e);
+                setOpen(false);
+              }}
+              className="mb-2"
+            >
+              <input
+                value={searchValue}
+                onChange={(e) => setSearchValue(e.target.value)}
+                placeholder="Buscar livros, autores…"
+                className="w-full rounded-full border border-border bg-secondary/40 px-4 py-3 text-sm outline-none focus:border-gold/60"
+              />
+            </form>
             {NAV.map((item) => (
               <Link
                 key={item.label}
@@ -146,6 +202,15 @@ export function SiteHeader() {
                 {item.label}
               </Link>
             ))}
+            <button
+              onClick={() => {
+                setOpen(false);
+                openLumiPanel();
+              }}
+              className="rounded-lg px-3 py-3 text-left text-sm hover:bg-secondary"
+            >
+              IA
+            </button>
             {isSignedIn ? (
               <button
                 onClick={() => {
@@ -159,6 +224,7 @@ export function SiteHeader() {
             ) : (
               <Link
                 to="/auth"
+                search={{ redirect: undefined }}
                 onClick={() => setOpen(false)}
                 className="mt-2 inline-flex items-center justify-center rounded-full bg-gold px-5 py-3 text-sm font-medium text-primary-foreground"
               >
