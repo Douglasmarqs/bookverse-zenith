@@ -79,11 +79,15 @@ function Home() {
   const [homeUser, setHomeUser] = useState<User | null>(null);
   const [challengeStats, setChallengeStats] = useState({ booksCompleted: 0, libraryCount: 0, xp: 0 });
   const [publicDomainPicks, setPublicDomainPicks] = useState<PublicDomainSummary[]>([]);
+  const [bestsellers, setBestsellers] = useState<OpenLibraryBook[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     searchPublicDomainBooks("Machado de Assis", 6).then((r) => {
       if (!cancelled) setPublicDomainPicks(r);
+    });
+    trendingBooks("weekly", 10).then((r) => {
+      if (!cancelled) setBestsellers(r);
     });
     return () => {
       cancelled = true;
