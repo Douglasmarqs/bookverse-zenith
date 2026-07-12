@@ -8,6 +8,7 @@ import { openLumiPanel } from "../lib/lumi-panel-store";
 
 const NAV = [
   { label: "Início", to: "/" as const },
+  { label: "Catálogo", to: "/catalogo" as const },
   { label: "Descobrir", to: "/descobrir" as const },
   { label: "Minha biblioteca", to: "/biblioteca" as const },
   { label: "Ranking", to: "/ranking" as const },
