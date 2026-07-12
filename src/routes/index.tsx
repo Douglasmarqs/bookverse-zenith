@@ -29,6 +29,7 @@ import { subscribeUserProfile } from "@/lib/user-profile";
 import { subscribeLibrary } from "@/lib/library";
 import { subscribeAuth } from "@/lib/firebase";
 import { searchPublicDomainBooks, gutenbergReaderId, type PublicDomainSummary } from "@/lib/public-domain";
+import { trendingBooks, type OpenLibraryBook } from "@/lib/open-library";
 import type { User } from "firebase/auth";
 
 export const Route = createFileRoute("/")({
