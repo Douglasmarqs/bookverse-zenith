@@ -208,6 +208,56 @@ function DescobrirPage() {
         </div>
       )}
 
+      {(openLibraryLoading || openLibrary.length > 0) && (
+        <div className="mt-12">
+          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-gold">
+            <Flame className="h-3.5 w-3.5" />
+            {search.q || search.categoria ? "Open Library — resultados" : "Open Library — tendências da semana"}
+          </div>
+          {openLibraryLoading ? (
+            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Buscando…
+            </div>
+          ) : (
+            <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 lg:grid-cols-6">
+              {openLibrary.map((book, i) => {
+                const key = `${book.title}::${book.author}`;
+                const isAdded = added.has(key);
+                return (
+                  <div key={book.workKey + i} className="group">
+                    {book.cover ? (
+                      <img
+                        src={book.cover}
+                        alt={book.title}
+                        loading="lazy"
+                        className="book-shadow aspect-[2/3] w-full rounded-md object-cover"
+                      />
+                    ) : (
+                      <div className="book-shadow grid aspect-[2/3] w-full place-items-center rounded-md bg-secondary p-3 text-center">
+                        <span className="font-display text-xs text-foreground/70">{book.title}</span>
+                      </div>
+                    )}
+                    <p className="mt-2.5 truncate font-display text-sm font-medium">{book.title}</p>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">{book.author}</p>
+                    <button
+                      onClick={() => handleAdd(book)}
+                      disabled={isAdded}
+                      className="mt-2 inline-flex items-center gap-1 rounded-full border border-border/60 px-2.5 py-1 text-[11px] hover:border-gold/40 hover:text-gold disabled:opacity-60"
+                    >
+                      {isAdded ? (
+                        <><Check className="h-3 w-3" /> Na biblioteca</>
+                      ) : (
+                        <><Plus className="h-3 w-3" /> Adicionar</>
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="mt-10">
         <p className="text-[11px] uppercase tracking-[0.28em] text-muted-foreground">
           Catálogo geral — capa e sinopse reais, leitura via loja/parceiro
