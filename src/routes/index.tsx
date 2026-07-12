@@ -248,6 +248,42 @@ function Home() {
         </div>
       </Section>
 
+      {/* BESTSELLERS — Open Library trending */}
+      {bestsellers.length > 0 && (
+        <Section
+          eyebrow="Bestsellers"
+          title="O que está bombando esta semana"
+          action="Ver catálogo"
+          actionTo="/catalogo"
+          icon={<Sparkles className="h-4 w-4" />}
+        >
+          <div className="-mx-5 flex snap-x snap-mandatory gap-5 overflow-x-auto px-5 pb-4 md:-mx-8 md:px-8 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {bestsellers.map((book, i) => (
+              <Link
+                key={book.workKey + i}
+                to="/catalogo"
+                className="group w-40 shrink-0 snap-start sm:w-44"
+              >
+                {book.cover ? (
+                  <img
+                    src={book.cover}
+                    alt={book.title}
+                    loading="lazy"
+                    className="book-shadow aspect-[2/3] w-full rounded-md object-cover transition-transform duration-500 group-hover:-translate-y-1"
+                  />
+                ) : (
+                  <div className="book-shadow grid aspect-[2/3] w-full place-items-center rounded-md bg-secondary p-3 text-center">
+                    <span className="font-display text-xs text-foreground/70">{book.title}</span>
+                  </div>
+                )}
+                <p className="mt-4 truncate font-display text-[15px] font-medium">{book.title}</p>
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">{book.author}</p>
+              </Link>
+            ))}
+          </div>
+        </Section>
+      )}
+
       {/* PUBLIC DOMAIN — real, full text, read now */}
       {publicDomainPicks.length > 0 && (
         <Section
