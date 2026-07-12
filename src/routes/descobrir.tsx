@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Search, Plus, Check, ExternalLink, Loader2, WifiOff, BookOpenCheck } from "lucide-react";
+import { Search, Plus, Check, ExternalLink, Loader2, WifiOff, BookOpenCheck, Flame } from "lucide-react";
 import { searchBooks, type BookMeta } from "@/lib/google-books";
 import { searchPublicDomainBooks, gutenbergReaderId, type PublicDomainSummary } from "@/lib/public-domain";
+import { searchOpenLibrary, trendingBooks, type OpenLibraryBook } from "@/lib/open-library";
 import { addToLibrary } from "@/lib/library";
 import { subscribeAuth } from "@/lib/firebase";
 import type { User } from "firebase/auth";
