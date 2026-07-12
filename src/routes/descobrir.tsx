@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Search, Plus, Check, ExternalLink, Loader2, WifiOff, BookOpenCheck } from "lucide-react";
+import { Search, Plus, Check, ExternalLink, Loader2, WifiOff, BookOpenCheck, Flame } from "lucide-react";
 import { searchBooks, type BookMeta } from "@/lib/google-books";
 import { searchPublicDomainBooks, gutenbergReaderId, type PublicDomainSummary } from "@/lib/public-domain";
+import { searchOpenLibrary, trendingBooks, type OpenLibraryBook } from "@/lib/open-library";
 import { addToLibrary } from "@/lib/library";
 import { subscribeAuth } from "@/lib/firebase";
 import type { User } from "firebase/auth";
@@ -45,6 +46,8 @@ function DescobrirPage() {
   const [networkError, setNetworkError] = useState(false);
   const [publicDomain, setPublicDomain] = useState<PublicDomainSummary[]>([]);
   const [publicDomainLoading, setPublicDomainLoading] = useState(false);
+  const [openLibrary, setOpenLibrary] = useState<OpenLibraryBook[]>([]);
+  const [openLibraryLoading, setOpenLibraryLoading] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [added, setAdded] = useState<Set<string>>(new Set());
 
@@ -58,8 +61,6 @@ function DescobrirPage() {
     let cancelled = false;
     setLoading(true);
     setNetworkError(false);
-    // Nunca deixamos a página vazia: sem busca/categoria, mostramos uma
-    // seleção padrão para a página nunca parecer "quebrada" ao abrir.
     const effectiveQuery = search.q ?? (search.categoria ? "" : DEFAULT_QUERY);
     searchBooks(effectiveQuery, { category: search.categoria }).then(({ results, networkError }) => {
       if (cancelled) return;
@@ -80,6 +81,21 @@ function DescobrirPage() {
       if (cancelled) return;
       setPublicDomain(r);
       setPublicDomainLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [search.q, search.categoria]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setOpenLibraryLoading(true);
+    const q = search.q ?? search.categoria;
+    const p = q ? searchOpenLibrary(q, 12) : trendingBooks("weekly", 12);
+    p.then((r) => {
+      if (cancelled) return;
+      setOpenLibrary(r);
+      setOpenLibraryLoading(false);
     });
     return () => {
       cancelled = true;
@@ -187,6 +203,56 @@ function DescobrirPage() {
                   </span>
                 </Link>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {(openLibraryLoading || openLibrary.length > 0) && (
+        <div className="mt-12">
+          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-gold">
+            <Flame className="h-3.5 w-3.5" />
+            {search.q || search.categoria ? "Open Library — resultados" : "Open Library — tendências da semana"}
+          </div>
+          {openLibraryLoading ? (
+            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Buscando…
+            </div>
+          ) : (
+            <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 lg:grid-cols-6">
+              {openLibrary.map((book, i) => {
+                const key = `${book.title}::${book.author}`;
+                const isAdded = added.has(key);
+                return (
+                  <div key={book.workKey + i} className="group">
+                    {book.cover ? (
+                      <img
+                        src={book.cover}
+                        alt={book.title}
+                        loading="lazy"
+                        className="book-shadow aspect-[2/3] w-full rounded-md object-cover"
+                      />
+                    ) : (
+                      <div className="book-shadow grid aspect-[2/3] w-full place-items-center rounded-md bg-secondary p-3 text-center">
+                        <span className="font-display text-xs text-foreground/70">{book.title}</span>
+                      </div>
+                    )}
+                    <p className="mt-2.5 truncate font-display text-sm font-medium">{book.title}</p>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">{book.author}</p>
+                    <button
+                      onClick={() => handleAdd(book)}
+                      disabled={isAdded}
+                      className="mt-2 inline-flex items-center gap-1 rounded-full border border-border/60 px-2.5 py-1 text-[11px] hover:border-gold/40 hover:text-gold disabled:opacity-60"
+                    >
+                      {isAdded ? (
+                        <><Check className="h-3 w-3" /> Na biblioteca</>
+                      ) : (
+                        <><Plus className="h-3 w-3" /> Adicionar</>
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
