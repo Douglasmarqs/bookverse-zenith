@@ -16,6 +16,7 @@ import { Route as PrivacidadeRouteImport } from './routes/privacidade'
 import { Route as DescobrirRouteImport } from './routes/descobrir'
 import { Route as DesafiosRouteImport } from './routes/desafios'
 import { Route as ContatoRouteImport } from './routes/contato'
+import { Route as CatalogoRouteImport } from './routes/catalogo'
 import { Route as BibliotecaRouteImport } from './routes/biblioteca'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
@@ -56,6 +57,11 @@ const ContatoRoute = ContatoRouteImport.update({
   path: '/contato',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CatalogoRoute = CatalogoRouteImport.update({
+  id: '/catalogo',
+  path: '/catalogo',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BibliotecaRoute = BibliotecaRouteImport.update({
   id: '/biblioteca',
   path: '/biblioteca',
@@ -81,6 +87,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/biblioteca': typeof BibliotecaRoute
+  '/catalogo': typeof CatalogoRoute
   '/contato': typeof ContatoRoute
   '/desafios': typeof DesafiosRoute
   '/descobrir': typeof DescobrirRoute
@@ -94,6 +101,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/biblioteca': typeof BibliotecaRoute
+  '/catalogo': typeof CatalogoRoute
   '/contato': typeof ContatoRoute
   '/desafios': typeof DesafiosRoute
   '/descobrir': typeof DescobrirRoute
@@ -108,6 +116,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/biblioteca': typeof BibliotecaRoute
+  '/catalogo': typeof CatalogoRoute
   '/contato': typeof ContatoRoute
   '/desafios': typeof DesafiosRoute
   '/descobrir': typeof DescobrirRoute
@@ -123,6 +132,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/biblioteca'
+    | '/catalogo'
     | '/contato'
     | '/desafios'
     | '/descobrir'
@@ -136,6 +146,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/biblioteca'
+    | '/catalogo'
     | '/contato'
     | '/desafios'
     | '/descobrir'
@@ -149,6 +160,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/biblioteca'
+    | '/catalogo'
     | '/contato'
     | '/desafios'
     | '/descobrir'
@@ -163,6 +175,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
   BibliotecaRoute: typeof BibliotecaRoute
+  CatalogoRoute: typeof CatalogoRoute
   ContatoRoute: typeof ContatoRoute
   DesafiosRoute: typeof DesafiosRoute
   DescobrirRoute: typeof DescobrirRoute
@@ -224,6 +237,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ContatoRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/catalogo': {
+      id: '/catalogo'
+      path: '/catalogo'
+      fullPath: '/catalogo'
+      preLoaderRoute: typeof CatalogoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/biblioteca': {
       id: '/biblioteca'
       path: '/biblioteca'
@@ -259,6 +279,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
   BibliotecaRoute: BibliotecaRoute,
+  CatalogoRoute: CatalogoRoute,
   ContatoRoute: ContatoRoute,
   DesafiosRoute: DesafiosRoute,
   DescobrirRoute: DescobrirRoute,
