@@ -46,6 +46,8 @@ function DescobrirPage() {
   const [networkError, setNetworkError] = useState(false);
   const [publicDomain, setPublicDomain] = useState<PublicDomainSummary[]>([]);
   const [publicDomainLoading, setPublicDomainLoading] = useState(false);
+  const [openLibrary, setOpenLibrary] = useState<OpenLibraryBook[]>([]);
+  const [openLibraryLoading, setOpenLibraryLoading] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [added, setAdded] = useState<Set<string>>(new Set());
 
@@ -59,8 +61,6 @@ function DescobrirPage() {
     let cancelled = false;
     setLoading(true);
     setNetworkError(false);
-    // Nunca deixamos a página vazia: sem busca/categoria, mostramos uma
-    // seleção padrão para a página nunca parecer "quebrada" ao abrir.
     const effectiveQuery = search.q ?? (search.categoria ? "" : DEFAULT_QUERY);
     searchBooks(effectiveQuery, { category: search.categoria }).then(({ results, networkError }) => {
       if (cancelled) return;
@@ -81,6 +81,21 @@ function DescobrirPage() {
       if (cancelled) return;
       setPublicDomain(r);
       setPublicDomainLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [search.q, search.categoria]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setOpenLibraryLoading(true);
+    const q = search.q ?? search.categoria;
+    const p = q ? searchOpenLibrary(q, 12) : trendingBooks("weekly", 12);
+    p.then((r) => {
+      if (cancelled) return;
+      setOpenLibrary(r);
+      setOpenLibraryLoading(false);
     });
     return () => {
       cancelled = true;
