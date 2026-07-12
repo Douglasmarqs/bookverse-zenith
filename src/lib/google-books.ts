@@ -105,27 +105,54 @@ export async function fetchBookMeta(
   }
 }
 
+/** Maps our (Portuguese) category chips to query terms that actually return
+ * results from Google Books — the `subject:` operator only matches Google's
+ * internal (mostly English) subject taxonomy, so a literal `subject:Ficção`
+ * matches almost nothing. Plain keywords in the free-text query work far
+ * better and still bias results toward the right shelf. */
+const CATEGORY_QUERY: Record<string, string> = {
+  "Ficção": "ficção",
+  "Clássicos": "clássicos da literatura",
+  "Ficção científica": "ficção científica",
+  "Poesia": "poesia",
+  "Ensaios": "ensaios",
+  "Filosofia": "filosofia",
+  "Biografias": "biografia",
+  "Romance": "romance",
+  "Mistério": "mistério suspense",
+};
+
+export interface BookSearchResult {
+  results: BookMeta[];
+  /** True when the request itself failed (network/CORS/quota) — distinct
+   * from a request that succeeded but matched nothing. */
+  networkError: boolean;
+}
+
 /** Full-text search across Google Books — used by the "Descobrir" catalog. */
 export async function searchBooks(
   query: string,
   opts: { category?: string; maxResults?: number } = {},
-): Promise<BookMeta[]> {
+): Promise<BookSearchResult> {
   const trimmed = query.trim();
-  if (!trimmed && !opts.category) return [];
+  const categoryTerm = opts.category ? CATEGORY_QUERY[opts.category] ?? opts.category : "";
 
   const parts: string[] = [];
   if (trimmed) parts.push(trimmed);
-  if (opts.category) parts.push(`subject:${opts.category}`);
+  if (categoryTerm && categoryTerm !== trimmed) parts.push(categoryTerm);
+
+  const q = parts.join(" ").trim();
+  if (!q) return { results: [], networkError: false };
 
   try {
     const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(
-      parts.join(" "),
-    )}&maxResults=${opts.maxResults ?? 20}&printType=books&langRestrict=pt`;
+      q,
+    )}&maxResults=${opts.maxResults ?? 24}&printType=books`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Google Books ${res.status}`);
     const data = await res.json();
     const items = (data.items ?? []) as any[];
-    return items
+    const results = items
       .filter((it) => it.volumeInfo?.title)
       .map((it) => {
         const info = it.volumeInfo;
@@ -140,8 +167,9 @@ export async function searchBooks(
           categories: info.categories,
         } satisfies BookMeta;
       });
+    return { results, networkError: false };
   } catch (err) {
     console.warn("[google-books] search failed", err);
-    return [];
+    return { results: [], networkError: true };
   }
 }

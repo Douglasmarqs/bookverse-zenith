@@ -9,7 +9,14 @@
  */
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
+import { initializeApp, getApps } from "firebase-admin/app";
 import Anthropic from "@anthropic-ai/sdk";
+
+if (getApps().length === 0) {
+  initializeApp();
+}
+
+export { searchPublicDomainBooks, getPublicDomainBook } from "./public-domain";
 
 const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
 

@@ -44,6 +44,13 @@ function isBrowser() {
   return typeof window !== "undefined";
 }
 
+/** True once the app has a non-empty apiKey — i.e. GOOGLE_API_KEY was set at
+ * build time. Use this to show an actionable message instead of letting
+ * every auth/Firestore call fail silently one by one. */
+export function isFirebaseConfigured(): boolean {
+  return !!firebaseConfig.apiKey;
+}
+
 export function getFirebase(): { app: FirebaseApp; auth: Auth; db: Firestore } | null {
   if (!isBrowser()) return null;
   if (!firebaseConfig.apiKey) {

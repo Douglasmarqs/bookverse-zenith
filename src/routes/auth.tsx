@@ -6,6 +6,7 @@ import {
   signInWithGoogle,
   signUpWithEmail,
   subscribeAuth,
+  isFirebaseConfigured,
 } from "../lib/firebase";
 
 export const Route = createFileRoute("/auth")({
@@ -39,6 +40,7 @@ function AuthPage() {
   const [loading, setLoading] = useState<null | "email" | "google">(null);
   const [error, setError] = useState<string | null>(null);
   const [alreadyAuthed, setAlreadyAuthed] = useState(false);
+  const [configMissing] = useState(() => !isFirebaseConfigured());
 
   useEffect(() => {
     return subscribeAuth((u) => {
@@ -101,6 +103,15 @@ function AuthPage() {
           </p>
         </div>
 
+        {configMissing && (
+          <div className="mb-4 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <strong>Login indisponível:</strong> a chave do Firebase (
+            <code className="font-mono">GOOGLE_API_KEY</code>) não foi configurada neste
+            deploy. Nenhuma conta pode ser criada até isso ser resolvido — veja{" "}
+            <code className="font-mono">DEPLOY.md</code> no projeto.
+          </div>
+        )}
+
         {alreadyAuthed && (
           <div className="mb-4 rounded-xl border border-gold/30 bg-gold/5 px-4 py-3 text-sm">
             Você já está autenticado.{" "}
@@ -113,7 +124,7 @@ function AuthPage() {
 
         <button
           onClick={handleGoogle}
-          disabled={loading !== null}
+          disabled={loading !== null || configMissing}
           className="flex w-full items-center justify-center gap-3 rounded-full border border-border bg-background px-5 py-3 text-sm font-medium transition hover:border-gold/40 hover:bg-secondary/50 disabled:opacity-60"
         >
           {loading === "google" ? (
@@ -169,7 +180,7 @@ function AuthPage() {
 
           <button
             type="submit"
-            disabled={loading !== null}
+            disabled={loading !== null || configMissing}
             className="flex w-full items-center justify-center gap-2 rounded-full bg-gold px-5 py-3 text-sm font-medium text-primary-foreground transition-transform hover:scale-[1.01] active:scale-[0.99] disabled:opacity-60"
           >
             {loading === "email" && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -227,6 +238,10 @@ function GoogleIcon() {
 
 function friendlyError(err: unknown): string {
   const code = (err as { code?: string })?.code ?? "";
+  const message = (err as { message?: string })?.message ?? "";
+  if (!code && message.includes("Firebase not initialized")) {
+    return "O login está indisponível neste deploy (Firebase não configurado). Avise quem administra o projeto.";
+  }
   const map: Record<string, string> = {
     "auth/invalid-email": "E-mail inválido.",
     "auth/invalid-credential": "E-mail ou senha incorretos.",
@@ -237,6 +252,17 @@ function friendlyError(err: unknown): string {
     "auth/popup-closed-by-user": "Janela fechada antes de concluir.",
     "auth/popup-blocked": "Pop-up bloqueado pelo navegador.",
     "auth/network-request-failed": "Falha de rede. Tente novamente.",
+    "auth/unauthorized-domain":
+      "Este domínio não está autorizado no Firebase Auth (adicione-o em Authentication → Settings → Authorized domains).",
+    "auth/operation-not-allowed":
+      "O provedor de login (Google ou E-mail/Senha) não está habilitado no Firebase Console.",
+    "auth/api-key-not-valid.-please-pass-a-valid-api-key.":
+      "A chave de API do Firebase configurada é inválida.",
+    "auth/invalid-api-key": "A chave de API do Firebase configurada é inválida.",
+    "auth/configuration-not-found":
+      "A configuração de Authentication não foi encontrada — confirme se o Authentication está ativado no Firebase Console.",
+    "auth/admin-restricted-operation":
+      "Login anônimo/automático está desabilitado no Firebase Console.",
   };
   return map[code] ?? "Não foi possível concluir. Tente novamente.";
 }

@@ -20,6 +20,7 @@ import "@fontsource/inter/700.css";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { isFirebaseConfigured } from "../lib/firebase";
 import { SiteHeader } from "../components/site-header";
 import { SiteFooter } from "../components/site-footer";
 import { LumiPanel } from "../components/lumi-panel";
@@ -128,12 +129,24 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+function ConfigBanner() {
+  if (isFirebaseConfigured()) return null;
+  return (
+    <div className="bg-destructive/15 px-4 py-2 text-center text-xs text-destructive">
+      Este deploy está sem a chave <code className="font-mono">GOOGLE_API_KEY</code> do Firebase —
+      login, biblioteca e ranking ficam indisponíveis até isso ser configurado (veja
+      DEPLOY.md).
+    </div>
+  );
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   return (
     <QueryClientProvider client={queryClient}>
       <div className="flex min-h-screen flex-col">
+        <ConfigBanner />
         <SiteHeader />
         <main className="flex-1">
           <Outlet />

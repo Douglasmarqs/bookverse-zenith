@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Search, Plus, Check, ExternalLink, Loader2 } from "lucide-react";
+import { Search, Plus, Check, ExternalLink, Loader2, WifiOff, BookOpenCheck } from "lucide-react";
 import { searchBooks, type BookMeta } from "@/lib/google-books";
+import { searchPublicDomainBooks, gutenbergReaderId, type PublicDomainSummary } from "@/lib/public-domain";
 import { addToLibrary } from "@/lib/library";
 import { subscribeAuth } from "@/lib/firebase";
 import type { User } from "firebase/auth";
@@ -18,6 +19,8 @@ const CATEGORIES = [
   "Romance",
   "Mistério",
 ];
+
+const DEFAULT_QUERY = "mais vendidos literatura";
 
 export const Route = createFileRoute("/descobrir")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -39,6 +42,9 @@ function DescobrirPage() {
   const [query, setQuery] = useState(search.q ?? "");
   const [results, setResults] = useState<BookMeta[]>([]);
   const [loading, setLoading] = useState(false);
+  const [networkError, setNetworkError] = useState(false);
+  const [publicDomain, setPublicDomain] = useState<PublicDomainSummary[]>([]);
+  const [publicDomainLoading, setPublicDomainLoading] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [added, setAdded] = useState<Set<string>>(new Set());
 
@@ -51,11 +57,29 @@ function DescobrirPage() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    searchBooks(search.q ?? "", { category: search.categoria }).then((r) => {
-      if (!cancelled) {
-        setResults(r);
-        setLoading(false);
-      }
+    setNetworkError(false);
+    // Nunca deixamos a página vazia: sem busca/categoria, mostramos uma
+    // seleção padrão para a página nunca parecer "quebrada" ao abrir.
+    const effectiveQuery = search.q ?? (search.categoria ? "" : DEFAULT_QUERY);
+    searchBooks(effectiveQuery, { category: search.categoria }).then(({ results, networkError }) => {
+      if (cancelled) return;
+      setResults(results);
+      setNetworkError(networkError);
+      setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [search.q, search.categoria]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setPublicDomainLoading(true);
+    const effectiveQuery = search.q ?? search.categoria ?? DEFAULT_QUERY;
+    searchPublicDomainBooks(effectiveQuery, 8).then((r) => {
+      if (cancelled) return;
+      setPublicDomain(r);
+      setPublicDomainLoading(false);
     });
     return () => {
       cancelled = true;
@@ -126,16 +150,68 @@ function DescobrirPage() {
         })}
       </div>
 
+      {(publicDomainLoading || publicDomain.length > 0) && (
+        <div className="mt-10">
+          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-gold">
+            <BookOpenCheck className="h-3.5 w-3.5" /> Domínio público — leia agora, texto completo
+          </div>
+          {publicDomainLoading ? (
+            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Buscando…
+            </div>
+          ) : (
+            <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 lg:grid-cols-4">
+              {publicDomain.map((book) => (
+                <Link
+                  key={book.id}
+                  to="/reader/$bookId"
+                  params={{ bookId: gutenbergReaderId(book.id) }}
+                  className="group"
+                >
+                  {book.cover ? (
+                    <img
+                      src={book.cover}
+                      alt={book.title}
+                      loading="lazy"
+                      className="book-shadow aspect-[2/3] w-full rounded-md object-cover transition-transform group-hover:-translate-y-1"
+                    />
+                  ) : (
+                    <div className="book-shadow grid aspect-[2/3] w-full place-items-center rounded-md bg-secondary p-3 text-center">
+                      <span className="font-display text-xs text-foreground/70">{book.title}</span>
+                    </div>
+                  )}
+                  <p className="mt-3 truncate font-display text-sm font-medium">{book.title}</p>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">{book.author}</p>
+                  <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-gold">
+                    <BookOpenCheck className="h-3 w-3" /> Ler agora
+                  </span>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="mt-10">
+        <p className="text-[11px] uppercase tracking-[0.28em] text-muted-foreground">
+          Catálogo geral — capa e sinopse reais, leitura via loja/parceiro
+        </p>
         {loading ? (
           <div className="flex items-center gap-2 py-16 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Buscando livros…
           </div>
+        ) : networkError ? (
+          <div className="flex flex-col items-center gap-3 py-16 text-center text-sm text-muted-foreground">
+            <WifiOff className="h-5 w-5" />
+            <p>
+              Não conseguimos falar com o Google Books agora (rede bloqueada ou instável).
+              <br />
+              Verifique sua conexão e tente novamente.
+            </p>
+          </div>
         ) : results.length === 0 ? (
           <p className="py-16 text-sm text-muted-foreground">
-            {search.q || search.categoria
-              ? "Nenhum livro encontrado. Tente outro termo ou categoria."
-              : "Digite um termo ou escolha uma categoria para começar."}
+            Nenhum livro encontrado para essa busca. Tente outro termo ou categoria.
           </p>
         ) : (
           <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:grid-cols-3 lg:grid-cols-5">

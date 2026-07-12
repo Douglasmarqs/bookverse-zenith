@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "deploy": "npm run build && firebase deploy --only functions:askLumi",
+    "deploy": "npm run build && firebase deploy --only functions:askLumi,functions:searchPublicDomainBooks,functions:getPublicDomainBook",
     "logs": "firebase functions:log"
   },
   "dependencies": {

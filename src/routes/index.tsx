@@ -4,6 +4,7 @@ import {
   ArrowRight,
   ArrowUpRight,
   BookMarked,
+  BookOpenCheck,
   Bookmark,
   Flame,
   Sparkles,
@@ -27,6 +28,7 @@ import { subscribeRanking, type RankingRow } from "@/lib/ranking";
 import { subscribeUserProfile } from "@/lib/user-profile";
 import { subscribeLibrary } from "@/lib/library";
 import { subscribeAuth } from "@/lib/firebase";
+import { searchPublicDomainBooks, gutenbergReaderId, type PublicDomainSummary } from "@/lib/public-domain";
 import type { User } from "firebase/auth";
 
 export const Route = createFileRoute("/")({
@@ -75,6 +77,17 @@ const CATEGORIES = [
 function Home() {
   const [homeUser, setHomeUser] = useState<User | null>(null);
   const [challengeStats, setChallengeStats] = useState({ booksCompleted: 0, libraryCount: 0, xp: 0 });
+  const [publicDomainPicks, setPublicDomainPicks] = useState<PublicDomainSummary[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    searchPublicDomainBooks("Machado de Assis", 6).then((r) => {
+      if (!cancelled) setPublicDomainPicks(r);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => subscribeAuth(setHomeUser), []);
   useEffect(() => {
@@ -229,6 +242,46 @@ function Home() {
           ))}
         </div>
       </Section>
+
+      {/* PUBLIC DOMAIN — real, full text, read now */}
+      {publicDomainPicks.length > 0 && (
+        <Section
+          eyebrow="Domínio público"
+          title="Leia agora, texto completo e gratuito"
+          action="Ver mais"
+          actionTo="/descobrir"
+          icon={<BookOpenCheck className="h-4 w-4" />}
+        >
+          <div className="grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 lg:grid-cols-6">
+            {publicDomainPicks.map((book) => (
+              <Link
+                key={book.id}
+                to="/reader/$bookId"
+                params={{ bookId: gutenbergReaderId(book.id) }}
+                className="group"
+              >
+                {book.cover ? (
+                  <img
+                    src={book.cover}
+                    alt={book.title}
+                    loading="lazy"
+                    className="book-shadow aspect-[2/3] w-full rounded-md object-cover transition-transform group-hover:-translate-y-1"
+                  />
+                ) : (
+                  <div className="book-shadow grid aspect-[2/3] w-full place-items-center rounded-md bg-secondary p-3 text-center">
+                    <span className="font-display text-xs text-foreground/70">{book.title}</span>
+                  </div>
+                )}
+                <p className="mt-2.5 truncate font-display text-sm font-medium">{book.title}</p>
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">{book.author}</p>
+                <span className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-gold">
+                  <BookOpenCheck className="h-3 w-3" /> Ler agora
+                </span>
+              </Link>
+            ))}
+          </div>
+        </Section>
+      )}
 
       {/* CATEGORIES */}
       <Section eyebrow="Explorar" title="Por categoria">

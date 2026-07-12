@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 
 import { SAMPLE_BOOK, type Book } from "@/lib/sample-book";
+import { getPublicDomainBook, parseGutenbergReaderId } from "@/lib/public-domain";
 import {
   loadProgressRemote,
   loadSettings,
@@ -34,9 +35,13 @@ export const Route = createFileRoute("/reader/$bookId")({
       { name: "robots", content: "noindex" },
     ],
   }),
-  loader: ({ params }): { book: Book } => {
-    if (params.bookId !== SAMPLE_BOOK.id) throw notFound();
-    return { book: SAMPLE_BOOK };
+  loader: ({
+    params,
+  }): { source: "sample"; book: Book } | { source: "gutenberg"; gutenbergId: number } => {
+    if (params.bookId === SAMPLE_BOOK.id) return { source: "sample", book: SAMPLE_BOOK };
+    const gutenbergId = parseGutenbergReaderId(params.bookId);
+    if (gutenbergId !== null) return { source: "gutenberg", gutenbergId };
+    throw notFound();
   },
   notFoundComponent: () => (
     <div className="mx-auto max-w-md px-6 py-32 text-center">
@@ -52,6 +57,8 @@ export const Route = createFileRoute("/reader/$bookId")({
 
 function GuardedReaderPage() {
   const { state, user } = useRequireAuth();
+  const loaderData = Route.useLoaderData();
+
   if (state !== "authenticated" || !user) {
     return (
       <div className="mx-auto grid min-h-[calc(100vh-8rem)] max-w-md place-items-center px-6 text-center">
@@ -64,7 +71,68 @@ function GuardedReaderPage() {
       </div>
     );
   }
-  return <ReaderPage uid={user.uid} />;
+
+  if (loaderData.source === "sample") {
+    return <ReaderPage uid={user.uid} book={loaderData.book} />;
+  }
+  return <GutenbergBookLoader uid={user.uid} gutenbergId={loaderData.gutenbergId} />;
+}
+
+function GutenbergBookLoader({ uid, gutenbergId }: { uid: string; gutenbergId: number }) {
+  const [book, setBook] = useState<Book | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setBook(null);
+    setError(null);
+    getPublicDomainBook(gutenbergId)
+      .then((b) => {
+        if (!cancelled) setBook(b);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.warn("[reader] failed to load public domain book", err);
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Não foi possível carregar este livro agora.",
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [gutenbergId]);
+
+  if (error) {
+    return (
+      <div className="mx-auto max-w-md px-6 py-32 text-center">
+        <h2 className="font-display text-3xl">Não foi possível abrir este livro</h2>
+        <p className="mt-3 text-muted-foreground">{error}</p>
+        <Link
+          to="/descobrir"
+          search={{ q: undefined, categoria: undefined }}
+          className="mt-6 inline-block rounded-full bg-gold px-5 py-2.5 text-sm font-medium text-primary-foreground"
+        >
+          Voltar a Descobrir
+        </Link>
+      </div>
+    );
+  }
+
+  if (!book) {
+    return (
+      <div className="mx-auto grid min-h-[calc(100vh-8rem)] max-w-md place-items-center px-6 text-center">
+        <div>
+          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-gold/30 border-t-gold" />
+          <p className="mt-4 text-sm text-muted-foreground">Baixando o livro…</p>
+        </div>
+      </div>
+    );
+  }
+
+  return <ReaderPage uid={uid} book={book} />;
 }
 
 
@@ -94,8 +162,7 @@ const THEME_STYLES = {
   },
 } as const;
 
-function ReaderPage({ uid }: { uid: string }) {
-  const { book } = Route.useLoaderData();
+function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   const [settings, setSettings] = useState<ReaderSettings>(DEFAULT_SETTINGS);
   const [chapterIndex, setChapterIndex] = useState(0);
   const [scrollRatio, setScrollRatio] = useState(0);
