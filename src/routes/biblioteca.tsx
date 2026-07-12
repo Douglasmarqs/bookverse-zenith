@@ -26,7 +26,12 @@ function GuardedBibliotecaPage() {
   if (state !== "authenticated" || !user) {
     return (
       <div className="mx-auto grid min-h-[calc(100vh-8rem)] max-w-md place-items-center px-6 text-center">
-        <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-gold/30 border-t-gold" />
+        <div>
+          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-gold/30 border-t-gold" />
+          <p className="mt-4 text-sm text-muted-foreground">
+            {state === "loading" ? "Verificando sua sessão…" : "Redirecionando para o login…"}
+          </p>
+        </div>
       </div>
     );
   }
