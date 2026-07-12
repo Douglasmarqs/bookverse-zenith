@@ -397,7 +397,7 @@ function Section({
   eyebrow: string;
   title: string;
   action?: string;
-  actionTo?: "/descobrir" | "/biblioteca" | "/desafios";
+  actionTo?: "/descobrir" | "/biblioteca" | "/desafios" | "/catalogo";
   icon?: React.ReactNode;
   children: React.ReactNode;
 }) {
