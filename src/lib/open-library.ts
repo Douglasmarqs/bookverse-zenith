@@ -56,15 +56,6 @@ function storage(): Storage | null {
   }
 }
 
-function readPersistent<T>(key: string): T | undefined {
-interface CacheEntry<T> {
-  v: number;
-  t: number; // stored-at timestamp (ms)
-  ttl: number;
-  data: T;
-}
-
-const memCache = new Map<string, OpenLibraryBook[]>();
 /** Timestamp (ms) until which the in-memory / persisted entry is considered
  * fresh. If `now > freshUntil`, the entry is served stale-while-revalidate:
  * returned immediately, then refreshed in the background. */
