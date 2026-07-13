@@ -52,10 +52,19 @@ function CatalogoPage() {
     let cancelled = false;
     (async () => {
       const [tr, best, pd, ...shelfResults] = await Promise.all([
-        trendingBooks("weekly", 12),
-        booksBySubject("bestsellers", 12),
+        trendingBooks("weekly", 12, {
+          onUpdate: (r) => !cancelled && setTrending(r),
+        }),
+        booksBySubject("bestsellers", 12, {
+          onUpdate: (r) => !cancelled && setBestsellers(r),
+        }),
         searchPublicDomainBooks("classic literature", 12),
-        ...SHELVES.map((s) => booksBySubject(s.subject, 10)),
+        ...SHELVES.map((s) =>
+          booksBySubject(s.subject, 10, {
+            onUpdate: (r) =>
+              !cancelled && setShelves((prev) => ({ ...prev, [s.key]: r })),
+          }),
+        ),
       ]);
       if (cancelled) return;
       setTrending(tr);
