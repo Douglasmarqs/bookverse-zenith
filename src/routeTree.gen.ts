@@ -21,6 +21,7 @@ import { Route as BibliotecaRouteImport } from './routes/biblioteca'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ReaderBookIdRouteImport } from './routes/reader.$bookId'
+import { Route as LivroSlugRouteImport } from './routes/livro.$slug'
 
 const TermosRoute = TermosRouteImport.update({
   id: '/termos',
@@ -82,6 +83,11 @@ const ReaderBookIdRoute = ReaderBookIdRouteImport.update({
   path: '/reader/$bookId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LivroSlugRoute = LivroSlugRouteImport.update({
+  id: '/livro/$slug',
+  path: '/livro/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -95,6 +101,7 @@ export interface FileRoutesByFullPath {
   '/ranking': typeof RankingRoute
   '/sobre': typeof SobreRoute
   '/termos': typeof TermosRoute
+  '/livro/$slug': typeof LivroSlugRoute
   '/reader/$bookId': typeof ReaderBookIdRoute
 }
 export interface FileRoutesByTo {
@@ -109,6 +116,7 @@ export interface FileRoutesByTo {
   '/ranking': typeof RankingRoute
   '/sobre': typeof SobreRoute
   '/termos': typeof TermosRoute
+  '/livro/$slug': typeof LivroSlugRoute
   '/reader/$bookId': typeof ReaderBookIdRoute
 }
 export interface FileRoutesById {
@@ -124,6 +132,7 @@ export interface FileRoutesById {
   '/ranking': typeof RankingRoute
   '/sobre': typeof SobreRoute
   '/termos': typeof TermosRoute
+  '/livro/$slug': typeof LivroSlugRoute
   '/reader/$bookId': typeof ReaderBookIdRoute
 }
 export interface FileRouteTypes {
@@ -140,6 +149,7 @@ export interface FileRouteTypes {
     | '/ranking'
     | '/sobre'
     | '/termos'
+    | '/livro/$slug'
     | '/reader/$bookId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -154,6 +164,7 @@ export interface FileRouteTypes {
     | '/ranking'
     | '/sobre'
     | '/termos'
+    | '/livro/$slug'
     | '/reader/$bookId'
   id:
     | '__root__'
@@ -168,6 +179,7 @@ export interface FileRouteTypes {
     | '/ranking'
     | '/sobre'
     | '/termos'
+    | '/livro/$slug'
     | '/reader/$bookId'
   fileRoutesById: FileRoutesById
 }
@@ -183,6 +195,7 @@ export interface RootRouteChildren {
   RankingRoute: typeof RankingRoute
   SobreRoute: typeof SobreRoute
   TermosRoute: typeof TermosRoute
+  LivroSlugRoute: typeof LivroSlugRoute
   ReaderBookIdRoute: typeof ReaderBookIdRoute
 }
 
@@ -272,6 +285,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReaderBookIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/livro/$slug': {
+      id: '/livro/$slug'
+      path: '/livro/$slug'
+      fullPath: '/livro/$slug'
+      preLoaderRoute: typeof LivroSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -287,6 +307,7 @@ const rootRouteChildren: RootRouteChildren = {
   RankingRoute: RankingRoute,
   SobreRoute: SobreRoute,
   TermosRoute: TermosRoute,
+  LivroSlugRoute: LivroSlugRoute,
   ReaderBookIdRoute: ReaderBookIdRoute,
 }
 export const routeTree = rootRouteImport
