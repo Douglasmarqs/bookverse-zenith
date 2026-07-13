@@ -22,6 +22,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ReaderBookIdRouteImport } from './routes/reader.$bookId'
 import { Route as LivroSlugRouteImport } from './routes/livro.$slug'
+import { Route as LivroSlugRouteImport } from './routes/livro.$slug'
 
 const TermosRoute = TermosRouteImport.update({
   id: '/termos',
