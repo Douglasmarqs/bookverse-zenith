@@ -88,11 +88,6 @@ const LivroSlugRoute = LivroSlugRouteImport.update({
   path: '/livro/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
-const LivroSlugRoute = LivroSlugRouteImport.update({
-  id: '/livro/$slug',
-  path: '/livro/$slug',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
