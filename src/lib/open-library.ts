@@ -61,14 +61,7 @@ function storage(): Storage | null {
  * returned immediately, then refreshed in the background. */
 const freshUntil = new Map<string, number>();
 
-function storage(): Storage | null {
-  if (typeof window === "undefined") return null;
-  try {
-    return window.localStorage;
-  } catch {
-    return null;
-  }
-}
+
 
 /** Reads the raw persistent entry — including expired ones, so callers can
  * implement stale-while-revalidate. Returns undefined only when the entry is
