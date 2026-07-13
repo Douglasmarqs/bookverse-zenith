@@ -57,18 +57,43 @@ function storage(): Storage | null {
 }
 
 function readPersistent<T>(key: string): T | undefined {
+interface CacheEntry<T> {
+  v: number;
+  t: number; // stored-at timestamp (ms)
+  ttl: number;
+  data: T;
+}
+
+const memCache = new Map<string, OpenLibraryBook[]>();
+/** Timestamp (ms) until which the in-memory / persisted entry is considered
+ * fresh. If `now > freshUntil`, the entry is served stale-while-revalidate:
+ * returned immediately, then refreshed in the background. */
+const freshUntil = new Map<string, number>();
+
+function storage(): Storage | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+/** Reads the raw persistent entry — including expired ones, so callers can
+ * implement stale-while-revalidate. Returns undefined only when the entry is
+ * missing, malformed, or from an older schema version. */
+function readPersistentEntry<T>(key: string): CacheEntry<T> | undefined {
   const s = storage();
   if (!s) return undefined;
   try {
     const raw = s.getItem(CACHE_PREFIX + key);
     if (!raw) return undefined;
     const entry = JSON.parse(raw) as CacheEntry<T>;
-    if (entry.v !== CACHE_VERSION) return undefined;
-    if (Date.now() - entry.t > entry.ttl) {
+    if (entry.v !== CACHE_VERSION) {
       s.removeItem(CACHE_PREFIX + key);
       return undefined;
     }
-    return entry.data;
+    return entry;
   } catch {
     return undefined;
   }
@@ -102,6 +127,7 @@ const inflight = new Map<string, Promise<OpenLibraryBook[]>>();
 /** Force a full refresh — clears memory + persistent caches. */
 export function invalidateOpenLibraryCache(): void {
   memCache.clear();
+  freshUntil.clear();
   inflight.clear();
   const s = storage();
   if (!s) return;
@@ -126,20 +152,66 @@ async function cachedFetchJson(url: string): Promise<any | null> {
   }
 }
 
-/** Shared cache runner: returns memory → persistent → network, dedupes
- * concurrent callers, and writes results back to both cache layers. */
+export interface CacheOpts {
+  /** Called when a background stale-while-revalidate refresh produces new
+   * data. Consumers can use this to update their UI after the initial stale
+   * render. Not invoked when data was already fresh. */
+  onUpdate?: (results: OpenLibraryBook[]) => void;
+}
+
+function scheduleRevalidate(
+  key: string,
+  ttl: number,
+  loader: () => Promise<OpenLibraryBook[]>,
+  onUpdate?: (results: OpenLibraryBook[]) => void,
+) {
+  if (inflight.has(key)) {
+    if (onUpdate) inflight.get(key)!.then((r) => r.length > 0 && onUpdate(r));
+    return;
+  }
+  const p = loader()
+    .then((results) => {
+      if (results.length > 0) {
+        memCache.set(key, results);
+        freshUntil.set(key, Date.now() + ttl);
+        writePersistent(key, results, ttl);
+        onUpdate?.(results);
+      }
+      return results;
+    })
+    .finally(() => inflight.delete(key));
+  inflight.set(key, p);
+}
+
+/** Shared cache runner with stale-while-revalidate semantics:
+ *   1. Memory hit + still fresh → return immediately, no network.
+ *   2. Memory hit but stale → return stale, refresh in background.
+ *   3. Persistent hit (fresh or stale) → hydrate memory, return; if stale,
+ *      also refresh in background.
+ *   4. No cache → fetch, dedupe concurrent callers, cache result.
+ */
 async function withCache(
   key: string,
   ttl: number,
   loader: () => Promise<OpenLibraryBook[]>,
+  opts: CacheOpts = {},
 ): Promise<OpenLibraryBook[]> {
-  const mem = memCache.get(key);
-  if (mem) return mem;
+  const now = Date.now();
 
-  const persisted = readPersistent<OpenLibraryBook[]>(key);
+  const mem = memCache.get(key);
+  if (mem) {
+    const fresh = (freshUntil.get(key) ?? 0) > now;
+    if (!fresh) scheduleRevalidate(key, ttl, loader, opts.onUpdate);
+    return mem;
+  }
+
+  const persisted = readPersistentEntry<OpenLibraryBook[]>(key);
   if (persisted) {
-    memCache.set(key, persisted);
-    return persisted;
+    memCache.set(key, persisted.data);
+    freshUntil.set(key, persisted.t + persisted.ttl);
+    const fresh = persisted.t + persisted.ttl > now;
+    if (!fresh) scheduleRevalidate(key, ttl, loader, opts.onUpdate);
+    return persisted.data;
   }
 
   const existing = inflight.get(key);
@@ -150,7 +222,10 @@ async function withCache(
       memCache.set(key, results);
       // Only cache non-empty results — an empty array usually means the API
       // failed transiently, and we don't want to pin that for hours.
-      if (results.length > 0) writePersistent(key, results, ttl);
+      if (results.length > 0) {
+        freshUntil.set(key, Date.now() + ttl);
+        writePersistent(key, results, ttl);
+      }
       return results;
     })
     .finally(() => {
@@ -159,6 +234,7 @@ async function withCache(
   inflight.set(key, p);
   return p;
 }
+
 
 // ---------------------------------------------------------------------------
 // Public API
