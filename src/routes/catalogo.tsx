@@ -197,46 +197,61 @@ function OpenLibraryCard({ book, rank }: { book: OpenLibraryBook; rank?: number 
     setAdded(true);
   }
 
+  const slug = `${book.title}-${book.author}`
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+    .slice(0, 140) || "livro";
+
   return (
     <div className="group relative w-40 shrink-0 snap-start sm:w-44">
-      <div className="relative">
-        {book.cover ? (
-          <img
-            src={book.cover}
-            alt={book.title}
-            loading="lazy"
-            className="book-shadow aspect-[2/3] w-full rounded-md object-cover transition-transform duration-500 group-hover:-translate-y-1"
-          />
-        ) : (
-          <div className="book-shadow grid aspect-[2/3] w-full place-items-center rounded-md bg-secondary p-3 text-center">
-            <span className="font-display text-xs text-foreground/70">{book.title}</span>
-          </div>
-        )}
-        {rank !== undefined && (
-          <span className="absolute -bottom-3 -left-2 font-display text-5xl font-semibold text-gold/90 [text-shadow:0_4px_12px_rgba(0,0,0,0.7)]">
-            {rank}
-          </span>
-        )}
-      </div>
-      <div className="mt-4 min-w-0">
-        <p className="truncate font-display text-[15px] font-medium">{book.title}</p>
-        <p className="mt-0.5 truncate text-xs text-muted-foreground">{book.author}</p>
-        <button
-          onClick={add}
-          disabled={added}
-          className="mt-2 inline-flex items-center gap-1 rounded-full border border-border/60 px-2.5 py-1 text-[11px] hover:border-gold/40 hover:text-gold disabled:opacity-60"
-        >
-          {added ? (
-            <>
-              <Check className="h-3 w-3" /> Na biblioteca
-            </>
+      <Link
+        to="/livro/$slug"
+        params={{ slug }}
+        search={{ title: book.title, author: book.author }}
+        className="block"
+      >
+        <div className="relative">
+          {book.cover ? (
+            <img
+              src={book.cover}
+              alt={book.title}
+              loading="lazy"
+              className="book-shadow aspect-[2/3] w-full rounded-md object-cover transition-transform duration-500 group-hover:-translate-y-1"
+            />
           ) : (
-            <>
-              <Plus className="h-3 w-3" /> Adicionar
-            </>
+            <div className="book-shadow grid aspect-[2/3] w-full place-items-center rounded-md bg-secondary p-3 text-center">
+              <span className="font-display text-xs text-foreground/70">{book.title}</span>
+            </div>
           )}
-        </button>
-      </div>
+          {rank !== undefined && (
+            <span className="absolute -bottom-3 -left-2 font-display text-5xl font-semibold text-gold/90 [text-shadow:0_4px_12px_rgba(0,0,0,0.7)]">
+              {rank}
+            </span>
+          )}
+        </div>
+        <div className="mt-4 min-w-0">
+          <p className="truncate font-display text-[15px] font-medium">{book.title}</p>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">{book.author}</p>
+        </div>
+      </Link>
+      <button
+        onClick={add}
+        disabled={added}
+        className="mt-2 inline-flex items-center gap-1 rounded-full border border-border/60 px-2.5 py-1 text-[11px] hover:border-gold/40 hover:text-gold disabled:opacity-60"
+      >
+        {added ? (
+          <>
+            <Check className="h-3 w-3" /> Na biblioteca
+          </>
+        ) : (
+          <>
+            <Plus className="h-3 w-3" /> Adicionar
+          </>
+        )}
+      </button>
     </div>
   );
 }
