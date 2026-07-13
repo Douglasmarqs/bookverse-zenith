@@ -86,7 +86,11 @@ function Home() {
     searchPublicDomainBooks("Machado de Assis", 6).then((r) => {
       if (!cancelled) setPublicDomainPicks(r);
     });
-    trendingBooks("weekly", 10).then((r) => {
+    trendingBooks("weekly", 10, {
+      onUpdate: (r) => {
+        if (!cancelled) setBestsellers(r);
+      },
+    }).then((r) => {
       if (!cancelled) setBestsellers(r);
     });
     return () => {

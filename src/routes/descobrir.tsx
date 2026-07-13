@@ -91,7 +91,12 @@ function DescobrirPage() {
     let cancelled = false;
     setOpenLibraryLoading(true);
     const q = search.q ?? search.categoria;
-    const p = q ? searchOpenLibrary(q, 12) : trendingBooks("weekly", 12);
+    const onUpdate = (r: OpenLibraryBook[]) => {
+      if (!cancelled) setOpenLibrary(r);
+    };
+    const p = q
+      ? searchOpenLibrary(q, 12, { onUpdate })
+      : trendingBooks("weekly", 12, { onUpdate });
     p.then((r) => {
       if (cancelled) return;
       setOpenLibrary(r);
