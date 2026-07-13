@@ -228,70 +228,89 @@ async function withCache(
 export async function booksBySubject(
   subject: string,
   limit = 12,
+  opts: CacheOpts = {},
 ): Promise<OpenLibraryBook[]> {
-  return withCache(`subject:${subject}:${limit}`, TTL.subject, async () => {
-    const data = await cachedFetchJson(
-      `https://openlibrary.org/subjects/${encodeURIComponent(subject)}.json?limit=${limit}`,
-    );
-    if (!data) return [];
-    const works = (data.works ?? []) as any[];
-    return works
-      .filter((w) => w.title && w.key)
-      .map((w) => ({
-        title: w.title as string,
-        author:
-          (w.authors?.map((a: any) => a.name).join(", ") as string) ?? "Autor desconhecido",
-        cover: w.cover_id ? COVER(w.cover_id) : null,
-        workKey: w.key as string,
-        firstPublishYear: w.first_publish_year,
-      }));
-  });
+  return withCache(
+    `subject:${subject}:${limit}`,
+    TTL.subject,
+    async () => {
+      const data = await cachedFetchJson(
+        `https://openlibrary.org/subjects/${encodeURIComponent(subject)}.json?limit=${limit}`,
+      );
+      if (!data) return [];
+      const works = (data.works ?? []) as any[];
+      return works
+        .filter((w) => w.title && w.key)
+        .map((w) => ({
+          title: w.title as string,
+          author:
+            (w.authors?.map((a: any) => a.name).join(", ") as string) ?? "Autor desconhecido",
+          cover: w.cover_id ? COVER(w.cover_id) : null,
+          workKey: w.key as string,
+          firstPublishYear: w.first_publish_year,
+        }));
+    },
+    opts,
+  );
 }
 
 /** Trending titles ("hourly" | "daily" | "weekly" | "monthly" | "yearly"). */
 export async function trendingBooks(
   window: "daily" | "weekly" | "monthly" | "yearly" = "weekly",
   limit = 12,
+  opts: CacheOpts = {},
 ): Promise<OpenLibraryBook[]> {
-  return withCache(`trending:${window}:${limit}`, TTL.trending, async () => {
-    const data = await cachedFetchJson(
-      `https://openlibrary.org/trending/${window}.json?limit=${limit}`,
-    );
-    if (!data) return [];
-    const works = (data.works ?? []) as any[];
-    return works
-      .filter((w) => w.title && w.key)
-      .map((w) => ({
-        title: w.title as string,
-        author: (w.author_name?.join(", ") as string) ?? "Autor desconhecido",
-        cover: w.cover_i ? COVER(w.cover_i) : null,
-        workKey: w.key as string,
-        firstPublishYear: w.first_publish_year,
-      }));
-  });
+  return withCache(
+    `trending:${window}:${limit}`,
+    TTL.trending,
+    async () => {
+      const data = await cachedFetchJson(
+        `https://openlibrary.org/trending/${window}.json?limit=${limit}`,
+      );
+      if (!data) return [];
+      const works = (data.works ?? []) as any[];
+      return works
+        .filter((w) => w.title && w.key)
+        .map((w) => ({
+          title: w.title as string,
+          author: (w.author_name?.join(", ") as string) ?? "Autor desconhecido",
+          cover: w.cover_i ? COVER(w.cover_i) : null,
+          workKey: w.key as string,
+          firstPublishYear: w.first_publish_year,
+        }));
+    },
+    opts,
+  );
 }
 
 /** Free-text search — used by the "Descobrir" search field. */
 export async function searchOpenLibrary(
   query: string,
   limit = 24,
+  opts: CacheOpts = {},
 ): Promise<OpenLibraryBook[]> {
   const q = query.trim();
   if (!q) return [];
-  return withCache(`search:${q.toLowerCase()}:${limit}`, TTL.search, async () => {
-    const data = await cachedFetchJson(
-      `https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=${limit}&fields=key,title,author_name,cover_i,first_publish_year`,
-    );
-    if (!data) return [];
-    const docs = (data.docs ?? []) as any[];
-    return docs
-      .filter((d) => d.title && d.key)
-      .map((d) => ({
-        title: d.title as string,
-        author: (d.author_name?.join(", ") as string) ?? "Autor desconhecido",
-        cover: d.cover_i ? COVER(d.cover_i) : null,
-        workKey: d.key as string,
-        firstPublishYear: d.first_publish_year,
-      }));
-  });
+  return withCache(
+    `search:${q.toLowerCase()}:${limit}`,
+    TTL.search,
+    async () => {
+      const data = await cachedFetchJson(
+        `https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=${limit}&fields=key,title,author_name,cover_i,first_publish_year`,
+      );
+      if (!data) return [];
+      const docs = (data.docs ?? []) as any[];
+      return docs
+        .filter((d) => d.title && d.key)
+        .map((d) => ({
+          title: d.title as string,
+          author: (d.author_name?.join(", ") as string) ?? "Autor desconhecido",
+          cover: d.cover_i ? COVER(d.cover_i) : null,
+          workKey: d.key as string,
+          firstPublishYear: d.first_publish_year,
+        }));
+    },
+    opts,
+  );
 }
+
