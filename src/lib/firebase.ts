@@ -51,6 +51,31 @@ export function isFirebaseConfigured(): boolean {
   return !!firebaseConfig.apiKey;
 }
 
+/**
+ * Masked, non-secret view of the apiKey actually baked into this build.
+ * The apiKey is a public identifier (see header comment), so exposing a
+ * masked form on-screen carries no security risk — it's purely diagnostic,
+ * so build/env-var problems can be confirmed from a screenshot of the
+ * running site instead of hopping between Vercel/Google Cloud dashboards.
+ */
+export function getFirebaseKeyDebugInfo(): {
+  present: boolean;
+  length: number;
+  masked: string;
+  hasWhitespace: boolean;
+  hasQuotes: boolean;
+} {
+  const raw = firebaseConfig.apiKey;
+  const trimmed = raw.trim();
+  return {
+    present: !!raw,
+    length: raw.length,
+    masked: raw ? `${raw.slice(0, 6)}…${raw.slice(-4)}` : "(vazio)",
+    hasWhitespace: raw !== trimmed,
+    hasQuotes: raw.startsWith('"') || raw.endsWith('"') || raw.startsWith("'") || raw.endsWith("'"),
+  };
+}
+
 export function getFirebase(): { app: FirebaseApp; auth: Auth; db: Firestore } | null {
   if (!isBrowser()) return null;
   if (!firebaseConfig.apiKey) {
