@@ -1,5 +1,62 @@
 # Diagnóstico rápido — capas, catálogo e login
 
+## 🆕 Atualização — corrigido: "adiciono um livro e fica carregando" + botões sem reação
+
+Você relatou que adicionar livros ficava travado em "carregando" e que
+vários botões pareciam não fazer nada. Encontrei bugs reais — não era só
+achismo. Resumo:
+
+### O bug principal: `Promise.all` travando a página inteira
+
+Na aba **Catálogo**, os quatro carregamentos da página (em alta,
+bestsellers, domínio público, prateleiras por assunto) rodavam num único
+`Promise.all([...])`. Se **qualquer um** desses falhasse (uma instabilidade
+pontual na API do Open Library, por exemplo), a promessa inteira rejeitava
+e a linha que tira a página do estado "carregando" nunca era executada —
+a página ficava com o spinner girando pra sempre, mesmo que os outros três
+carregamentos tivessem dado certo. Troquei para `Promise.allSettled` +
+`try/finally`, então agora **cada seção aparece com o que conseguiu
+carregar**, e a página nunca mais fica presa no "carregando".
+
+### O bug dos botões "sem função": nenhum tratamento de erro
+
+Todos os botões de **"Adicionar"/"Salvar" na biblioteca** (em Descobrir,
+Catálogo e na página de detalhes do livro) chamavam `addToLibrary(...)`
+sem `try/catch`. Quando essa chamada falhava por qualquer motivo (rede
+instável, regra do Firestore, timeout), duas coisas aconteciam dependendo
+da página:
+- Na página de detalhes do livro, o botão tinha um estado de "Salvando…"
+  que **nunca voltava ao normal** — ficava girando pra sempre.
+- Em Descobrir/Catálogo, o clique simplesmente não fazia nada visível —
+  parecia um botão morto.
+
+Agora:
+- **Toda** operação de biblioteca (adicionar, remover, mudar status) tem
+  `try/catch/finally` — o botão sempre volta ao normal, sucesso ou erro.
+- Erros aparecem como uma notificação (toast) na tela, em vez de falhar em
+  silêncio. Adicionei o componente de notificação (`sonner`, que já estava
+  instalado no projeto mas nunca tinha sido ativado) no layout principal.
+- `addToLibrary`, `markAsReading`, `removeFromLibrary` e
+  `setLibraryStatus` agora têm um **limite de tempo real** (a leitura
+  opcional cai para um valor padrão em 5s; a gravação, se travar de
+  verdade, retorna um erro claro em até 10s) — nada mais fica girando
+  indefinidamente, nem quando a rede está ruim.
+- O mesmo tratamento foi aplicado ao perfil do usuário (XP, criação de
+  perfil no primeiro login) e ao progresso de leitura salvo no servidor.
+
+### Reforço extra
+
+Adicionei um limite de 10s também no Ranking e em "Minha biblioteca": se a
+conexão em tempo real do Firestore não responder nem com sucesso nem com
+erro (situação rara, mas possível em redes muito instáveis), a página sai
+do "carregando" sozinha em vez de esperar para sempre.
+
+Se depois de publicar esta versão *ainda* sobrar algum botão específico
+sem reação, me diga exatamente qual — meu palpite é que os acima cobrem os
+casos reais, mas com um alvo exato eu vou direto na causa.
+
+---
+
 ## 🆕 Atualização — leitura conectada à biblioteca, catálogo à prova de bloqueio, tela de login nova
 
 Resumo do que mudou nesta leva e **o que você precisa fazer manualmente**

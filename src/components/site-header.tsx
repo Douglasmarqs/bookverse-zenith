@@ -5,6 +5,7 @@ import type { User } from "firebase/auth";
 import { signOut, subscribeAuth } from "../lib/firebase";
 import { ensureUserProfile } from "../lib/user-profile";
 import { openLumiPanel } from "../lib/lumi-panel-store";
+import { toast } from "sonner";
 
 const NAV = [
   { label: "Início", to: "/" as const },
@@ -47,20 +48,21 @@ export function SiteHeader() {
   }
 
   const isSignedIn = !!user && !user.isAnonymous;
-  const initial =
-    (user?.displayName || user?.email || "?").trim().charAt(0).toUpperCase() || "U";
+  const initial = (user?.displayName || user?.email || "?").trim().charAt(0).toUpperCase() || "U";
 
   async function handleSignOut() {
     setMenuOpen(false);
-    await signOut();
+    try {
+      await signOut();
+    } catch {
+      toast.error("Não foi possível sair agora. Tente novamente.");
+    }
   }
 
   return (
     <header
       className={`sticky top-0 z-50 transition-all duration-500 ${
-        scrolled
-          ? "border-b border-border/60 backdrop-blur-xl bg-background/70"
-          : "bg-transparent"
+        scrolled ? "border-b border-border/60 backdrop-blur-xl bg-background/70" : "bg-transparent"
       }`}
     >
       <div className="mx-auto grid max-w-7xl grid-cols-[auto_1fr_auto] items-center gap-4 px-5 py-4 md:px-8">
@@ -139,12 +141,8 @@ export function SiteHeader() {
                   onMouseLeave={() => setMenuOpen(false)}
                 >
                   <div className="px-3 py-2">
-                    <p className="truncate text-sm font-medium">
-                      {user?.displayName || "Leitor"}
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {user?.email}
-                    </p>
+                    <p className="truncate text-sm font-medium">{user?.displayName || "Leitor"}</p>
+                    <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
                   </div>
                   <div className="my-1 h-px bg-border/60" />
                   <button

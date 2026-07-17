@@ -7,6 +7,7 @@
 
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { ensureUser, getFirebase } from "./firebase";
+import { withDeadline, withFallback } from "./async-utils";
 
 export type ReaderTheme = "light" | "sepia" | "dark";
 export type ReaderFont = "serif" | "sans";
@@ -78,25 +79,25 @@ export const loadProgress = loadProgressLocal;
  * Loads progress with a Firestore fallback. Returns the newest of remote/local
  * (by `updatedAt`) and reconciles both caches.
  */
-export async function loadProgressRemote(
-  bookId: string,
-): Promise<ReadingProgress | null> {
+export async function loadProgressRemote(bookId: string): Promise<ReadingProgress | null> {
   const local = loadProgressLocal(bookId);
   const fb = getFirebase();
   if (!fb) return local;
   try {
-    const user = await ensureUser();
+    const user = await withFallback(ensureUser(), 5000, null);
     if (!user) return local;
     const ref = doc(fb.db, "users", user.uid, "progress", bookId);
-    const snap = await getDoc(ref);
-    const remote = snap.exists() ? (snap.data() as ReadingProgress) : null;
+    const snap = await withFallback(getDoc(ref), 5000, null);
+    const remote = snap?.exists() ? (snap.data() as ReadingProgress) : null;
     if (remote && (!local || remote.updatedAt > local.updatedAt)) {
       localStorage.setItem(progressKey(bookId), JSON.stringify(remote));
       return remote;
     }
     if (local && (!remote || local.updatedAt > (remote?.updatedAt ?? 0))) {
-      // Push newer local up to remote.
-      await setDoc(ref, local, { merge: true });
+      // Push newer local up to remote — best effort, don't block on it.
+      void withDeadline(setDoc(ref, local, { merge: true }), 8000, "timeout").catch((err) =>
+        console.warn("[reader] push local progress failed", err),
+      );
     }
     return local ?? remote;
   } catch (err) {
@@ -115,13 +116,13 @@ async function writeRemote(bookId: string, p: ReadingProgress): Promise<void> {
   const fb = getFirebase();
   if (!fb) return;
   try {
-    const user = await ensureUser();
+    const user = await withFallback(ensureUser(), 5000, null);
     if (!user) return;
     const ref = doc(fb.db, "users", user.uid, "progress", bookId);
-    await setDoc(
-      ref,
-      { ...p, bookId, uid: user.uid, syncedAt: Date.now() },
-      { merge: true },
+    await withDeadline(
+      setDoc(ref, { ...p, bookId, uid: user.uid, syncedAt: Date.now() }, { merge: true }),
+      8000,
+      "timeout",
     );
   } catch (err) {
     console.warn("[reader] writeRemote failed", err);

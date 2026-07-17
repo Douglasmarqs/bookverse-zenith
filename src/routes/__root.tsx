@@ -24,12 +24,15 @@ import { isFirebaseConfigured } from "../lib/firebase";
 import { SiteHeader } from "../components/site-header";
 import { SiteFooter } from "../components/site-footer";
 import { LumiPanel } from "../components/lumi-panel";
+import { Toaster } from "../components/ui/sonner";
 
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="max-w-md text-center">
-        <p className="font-display text-sm uppercase tracking-[0.3em] text-gold">Capítulo perdido</p>
+        <p className="font-display text-sm uppercase tracking-[0.3em] text-gold">
+          Capítulo perdido
+        </p>
         <h1 className="mt-4 font-display text-7xl font-semibold">404</h1>
         <p className="mt-4 text-muted-foreground">
           A página que você procura não faz parte desta biblioteca.
@@ -57,7 +60,9 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="max-w-md text-center">
-        <h1 className="font-display text-3xl font-semibold">Uma página se soltou da encadernação</h1>
+        <h1 className="font-display text-3xl font-semibold">
+          Uma página se soltou da encadernação
+        </h1>
         <p className="mt-3 text-muted-foreground">
           Algo saiu do lugar. Tente novamente ou volte à página inicial.
         </p>
@@ -134,8 +139,7 @@ function ConfigBanner() {
   return (
     <div className="bg-destructive/15 px-4 py-2 text-center text-xs text-destructive">
       Este deploy está sem a chave <code className="font-mono">GOOGLE_API_KEY</code> do Firebase —
-      login, biblioteca e ranking ficam indisponíveis até isso ser configurado (veja
-      DEPLOY.md).
+      login, biblioteca e ranking ficam indisponíveis até isso ser configurado (veja DEPLOY.md).
     </div>
   );
 }
@@ -153,6 +157,7 @@ function RootComponent() {
         </main>
         <SiteFooter />
         <LumiPanel />
+        <Toaster position="bottom-center" theme="dark" richColors />
       </div>
     </QueryClientProvider>
   );

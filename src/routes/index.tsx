@@ -72,23 +72,29 @@ function Home() {
 
   useEffect(() => {
     let cancelled = false;
-    searchPublicDomainBooks("Machado de Assis", 6).then((r) => {
-      if (!cancelled) setPublicDomainPicks(r);
-    });
+    searchPublicDomainBooks("Machado de Assis", 6)
+      .then((r) => {
+        if (!cancelled) setPublicDomainPicks(r);
+      })
+      .catch(() => {});
     trendingBooks("weekly", 10, {
       onUpdate: (r) => {
         if (!cancelled) setBestsellers(r);
       },
-    }).then((r) => {
-      if (!cancelled) setBestsellers(r);
-    });
+    })
+      .then((r) => {
+        if (!cancelled) setBestsellers(r);
+      })
+      .catch(() => {});
     booksBySubject("bestsellers", 10, {
       onUpdate: (r) => {
         if (!cancelled) setSubjectBestsellers(r);
       },
-    }).then((r) => {
-      if (!cancelled) setSubjectBestsellers(r);
-    });
+    })
+      .then((r) => {
+        if (!cancelled) setSubjectBestsellers(r);
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };

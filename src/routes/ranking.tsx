@@ -22,6 +22,13 @@ function RankingPage() {
   useEffect(() => subscribeAuth(setUser), []);
   useEffect(() => subscribeRanking(50, setRows), []);
 
+  // Safety net: if Firestore's realtime listener never calls back at all
+  // (fully offline/blocked, no cache), stop showing "Carregando…" forever.
+  useEffect(() => {
+    const timer = setTimeout(() => setRows((r) => (r === undefined ? null : r)), 10000);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <div className="mx-auto max-w-3xl px-5 py-12 md:px-8">
       <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-gold">

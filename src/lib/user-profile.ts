@@ -18,6 +18,7 @@ import {
 } from "firebase/firestore";
 import type { User } from "firebase/auth";
 import { getFirebase } from "./firebase";
+import { withDeadline, withFallback } from "./async-utils";
 
 export interface UserProfile {
   uid: string;
@@ -30,44 +31,58 @@ export interface UserProfile {
   updatedAt?: unknown;
 }
 
+const READ_TIMEOUT_MS = 5000;
+const WRITE_TIMEOUT_MS = 10000;
+
 /**
  * Creates the user's profile doc on first sign-in (real account, not
  * anonymous) and keeps display fields fresh. Safe to call on every auth
- * state change — it only writes when something actually changed.
+ * state change — it only writes when something actually changed. Never
+ * throws — this is called fire-and-forget from the header on every auth
+ * change, so failures are logged, not surfaced.
  */
 export async function ensureUserProfile(user: User): Promise<void> {
   if (user.isAnonymous) return;
   const fb = getFirebase();
   if (!fb) return;
 
-  const ref = doc(fb.db, "users", user.uid);
-  const snap = await getDoc(ref);
+  try {
+    const ref = doc(fb.db, "users", user.uid);
+    const snap = await withFallback(getDoc(ref), READ_TIMEOUT_MS, null);
+    if (!snap) return; // couldn't confirm either way within the deadline — skip, try again next auth event
 
-  if (!snap.exists()) {
-    await setDoc(ref, {
-      uid: user.uid,
-      displayName: user.displayName || user.email?.split("@")[0] || "Leitor",
-      email: user.email ?? null,
-      photoURL: user.photoURL ?? null,
-      xp: 0,
-      booksCompleted: 0,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    return;
-  }
+    if (!snap.exists()) {
+      await withDeadline(
+        setDoc(ref, {
+          uid: user.uid,
+          displayName: user.displayName || user.email?.split("@")[0] || "Leitor",
+          email: user.email ?? null,
+          photoURL: user.photoURL ?? null,
+          xp: 0,
+          booksCompleted: 0,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }),
+        WRITE_TIMEOUT_MS,
+        "timeout",
+      );
+      return;
+    }
 
-  const data = snap.data();
-  const patch: Record<string, unknown> = {};
-  if (user.displayName && data.displayName !== user.displayName) {
-    patch.displayName = user.displayName;
-  }
-  if (user.photoURL && data.photoURL !== user.photoURL) {
-    patch.photoURL = user.photoURL;
-  }
-  if (Object.keys(patch).length > 0) {
-    patch.updatedAt = serverTimestamp();
-    await setDoc(ref, patch, { merge: true });
+    const data = snap.data();
+    const patch: Record<string, unknown> = {};
+    if (user.displayName && data.displayName !== user.displayName) {
+      patch.displayName = user.displayName;
+    }
+    if (user.photoURL && data.photoURL !== user.photoURL) {
+      patch.photoURL = user.photoURL;
+    }
+    if (Object.keys(patch).length > 0) {
+      patch.updatedAt = serverTimestamp();
+      await withDeadline(setDoc(ref, patch, { merge: true }), WRITE_TIMEOUT_MS, "timeout");
+    }
+  } catch (err) {
+    console.warn("[user-profile] ensureUserProfile failed", err);
   }
 }
 
@@ -77,10 +92,10 @@ export async function awardXp(uid: string, amount: number): Promise<void> {
   if (!fb || amount <= 0) return;
   const ref = doc(fb.db, "users", uid);
   try {
-    await setDoc(
-      ref,
-      { xp: increment(amount), updatedAt: serverTimestamp() },
-      { merge: true },
+    await withDeadline(
+      setDoc(ref, { xp: increment(amount), updatedAt: serverTimestamp() }, { merge: true }),
+      WRITE_TIMEOUT_MS,
+      "timeout",
     );
   } catch (err) {
     console.warn("[user-profile] awardXp failed", err);
@@ -92,10 +107,10 @@ export async function incrementBooksCompleted(uid: string): Promise<void> {
   if (!fb) return;
   const ref = doc(fb.db, "users", uid);
   try {
-    await setDoc(
-      ref,
-      { booksCompleted: increment(1), updatedAt: serverTimestamp() },
-      { merge: true },
+    await withDeadline(
+      setDoc(ref, { booksCompleted: increment(1), updatedAt: serverTimestamp() }, { merge: true }),
+      WRITE_TIMEOUT_MS,
+      "timeout",
     );
   } catch (err) {
     console.warn("[user-profile] incrementBooksCompleted failed", err);

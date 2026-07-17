@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { ArrowLeft, BookOpen, Check, Loader2, Plus, Star } from "lucide-react";
+import { toast } from "sonner";
 import { z } from "zod";
 import { fetchBookMeta, type BookMeta } from "@/lib/google-books";
 import { addToLibrary } from "@/lib/library";
@@ -44,9 +45,13 @@ function LivroDetalhesPage() {
   useEffect(() => {
     let cancelled = false;
     setMeta(undefined);
-    fetchBookMeta(title, author || undefined).then((m) => {
-      if (!cancelled) setMeta(m);
-    });
+    fetchBookMeta(title, author || undefined)
+      .then((m) => {
+        if (!cancelled) setMeta(m);
+      })
+      .catch(() => {
+        if (!cancelled) setMeta(null);
+      });
     return () => {
       cancelled = true;
     };
@@ -58,21 +63,32 @@ function LivroDetalhesPage() {
 
   async function handleAdd() {
     if (!user || user.isAnonymous) {
-      navigate({ to: "/auth", search: { redirect: window.location.pathname + window.location.search } });
+      navigate({
+        to: "/auth",
+        search: { redirect: window.location.pathname + window.location.search },
+      });
       return;
     }
     setSaving(true);
-    await addToLibrary(
-      user.uid,
-      {
-        title: meta?.title ?? title,
-        author: resolvedAuthor,
-        cover: meta?.cover ?? null,
-      },
-      "quero-ler",
-    );
-    setAdded(true);
-    setSaving(false);
+    try {
+      await addToLibrary(
+        user.uid,
+        {
+          title: meta?.title ?? title,
+          author: resolvedAuthor,
+          cover: meta?.cover ?? null,
+        },
+        "quero-ler",
+      );
+      setAdded(true);
+      toast.success("Adicionado à sua biblioteca.");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Não foi possível adicionar este livro agora.",
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (

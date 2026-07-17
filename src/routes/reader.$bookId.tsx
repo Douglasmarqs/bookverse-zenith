@@ -234,7 +234,9 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
         void awardXp(uid, 20);
         if (clamped === book.chapters.length - 1) {
           void incrementBooksCompleted(uid);
-          void setLibraryStatus(uid, slugFor(book.title, book.author), "concluido");
+          void setLibraryStatus(uid, slugFor(book.title, book.author), "concluido").catch((err) =>
+            console.warn("[reader] failed to mark book as completed in library", err),
+          );
         }
       }
       setChapterIndex(clamped);

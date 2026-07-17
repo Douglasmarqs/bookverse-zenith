@@ -11,6 +11,7 @@ import {
   Flame,
 } from "lucide-react";
 import { searchBooks, type BookMeta } from "@/lib/google-books";
+import { toast } from "sonner";
 import {
   searchPublicDomainBooks,
   gutenbergReaderId,
@@ -65,6 +66,8 @@ function DescobrirPage() {
   const [user, setUser] = useState<User | null>(null);
   const [added, setAdded] = useState<Set<string>>(new Set());
   const [addedPublicDomain, setAddedPublicDomain] = useState<Set<number>>(new Set());
+  const [saving, setSaving] = useState<Set<string>>(new Set());
+  const [savingPublicDomain, setSavingPublicDomain] = useState<Set<number>>(new Set());
 
   useEffect(() => subscribeAuth(setUser), []);
 
@@ -77,14 +80,18 @@ function DescobrirPage() {
     setLoading(true);
     setNetworkError(false);
     const effectiveQuery = search.q ?? (search.categoria ? "" : DEFAULT_QUERY);
-    searchBooks(effectiveQuery, { category: search.categoria }).then(
-      ({ results, networkError }) => {
+    searchBooks(effectiveQuery, { category: search.categoria })
+      .then(({ results, networkError }) => {
         if (cancelled) return;
         setResults(results);
         setNetworkError(networkError);
-        setLoading(false);
-      },
-    );
+      })
+      .catch(() => {
+        if (!cancelled) setNetworkError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
     return () => {
       cancelled = true;
     };
@@ -94,11 +101,14 @@ function DescobrirPage() {
     let cancelled = false;
     setPublicDomainLoading(true);
     const effectiveQuery = search.q ?? search.categoria ?? DEFAULT_QUERY;
-    searchPublicDomainBooks(effectiveQuery, 8).then((r) => {
-      if (cancelled) return;
-      setPublicDomain(r);
-      setPublicDomainLoading(false);
-    });
+    searchPublicDomainBooks(effectiveQuery, 8)
+      .then((r) => {
+        if (!cancelled) setPublicDomain(r);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setPublicDomainLoading(false);
+      });
     return () => {
       cancelled = true;
     };
@@ -115,10 +125,12 @@ function DescobrirPage() {
       ? searchOpenLibrary(q, 12, { onUpdate })
       : trendingBooks("weekly", 12, { onUpdate });
     p.then((r) => {
-      if (cancelled) return;
-      setOpenLibrary(r);
-      setOpenLibraryLoading(false);
-    });
+      if (!cancelled) setOpenLibrary(r);
+    })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setOpenLibraryLoading(false);
+      });
     return () => {
       cancelled = true;
     };
@@ -135,8 +147,23 @@ function DescobrirPage() {
       return;
     }
     const key = `${book.title}::${book.author}`;
-    await addToLibrary(user.uid, book, "quero-ler");
-    setAdded((s) => new Set(s).add(key));
+    if (saving.has(key)) return;
+    setSaving((s) => new Set(s).add(key));
+    try {
+      await addToLibrary(user.uid, book, "quero-ler");
+      setAdded((s) => new Set(s).add(key));
+      toast.success("Adicionado à sua biblioteca.");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Não foi possível adicionar este livro agora.",
+      );
+    } finally {
+      setSaving((s) => {
+        const next = new Set(s);
+        next.delete(key);
+        return next;
+      });
+    }
   }
 
   async function handleAddPublicDomain(book: PublicDomainSummary) {
@@ -144,17 +171,30 @@ function DescobrirPage() {
       navigate({ to: "/auth", search: { redirect: "/descobrir" } });
       return;
     }
-    await addToLibrary(
-      user.uid,
-      {
-        title: book.title,
-        author: book.author,
-        cover: book.cover,
-        readerId: gutenbergReaderId(book.id),
-      },
-      "quero-ler",
-    );
-    setAddedPublicDomain((s) => new Set(s).add(book.id));
+    if (savingPublicDomain.has(book.id)) return;
+    setSavingPublicDomain((s) => new Set(s).add(book.id));
+    try {
+      await addToLibrary(
+        user.uid,
+        {
+          title: book.title,
+          author: book.author,
+          cover: book.cover,
+          readerId: gutenbergReaderId(book.id),
+        },
+        "quero-ler",
+      );
+      setAddedPublicDomain((s) => new Set(s).add(book.id));
+      toast.success("Salvo na sua biblioteca.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Não foi possível salvar este livro agora.");
+    } finally {
+      setSavingPublicDomain((s) => {
+        const next = new Set(s);
+        next.delete(book.id);
+        return next;
+      });
+    }
   }
 
   return (
@@ -219,6 +259,7 @@ function DescobrirPage() {
             <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 lg:grid-cols-4">
               {publicDomain.map((book) => {
                 const isAdded = addedPublicDomain.has(book.id);
+                const isSaving = savingPublicDomain.has(book.id);
                 return (
                   <div key={book.id} className="group">
                     <Link to="/reader/$bookId" params={{ bookId: gutenbergReaderId(book.id) }}>
@@ -252,10 +293,12 @@ function DescobrirPage() {
                       </Link>
                       <button
                         onClick={() => handleAddPublicDomain(book)}
-                        disabled={isAdded}
+                        disabled={isAdded || isSaving}
                         className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 text-[11px] hover:border-gold/40 hover:text-gold disabled:opacity-60"
                       >
-                        {isAdded ? (
+                        {isSaving ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : isAdded ? (
                           <>
                             <Check className="h-3 w-3" /> Salvo
                           </>
@@ -291,6 +334,7 @@ function DescobrirPage() {
               {openLibrary.map((book, i) => {
                 const key = `${book.title}::${book.author}`;
                 const isAdded = added.has(key);
+                const isSaving = saving.has(key);
                 return (
                   <div key={book.workKey + i} className="group">
                     {book.cover ? (
@@ -311,10 +355,12 @@ function DescobrirPage() {
                     <p className="mt-0.5 truncate text-xs text-muted-foreground">{book.author}</p>
                     <button
                       onClick={() => handleAdd(book)}
-                      disabled={isAdded}
+                      disabled={isAdded || isSaving}
                       className="mt-2 inline-flex items-center gap-1 rounded-full border border-border/60 px-2.5 py-1 text-[11px] hover:border-gold/40 hover:text-gold disabled:opacity-60"
                     >
-                      {isAdded ? (
+                      {isSaving ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : isAdded ? (
                         <>
                           <Check className="h-3 w-3" /> Na biblioteca
                         </>
@@ -358,6 +404,7 @@ function DescobrirPage() {
             {results.map((book) => {
               const key = `${book.title}::${book.author}`;
               const isAdded = added.has(key);
+              const isSaving = saving.has(key);
               return (
                 <div key={key} className="group">
                   <div className="relative">
@@ -382,10 +429,12 @@ function DescobrirPage() {
                     <div className="mt-2 flex items-center gap-2">
                       <button
                         onClick={() => handleAdd(book)}
-                        disabled={isAdded}
+                        disabled={isAdded || isSaving}
                         className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2.5 py-1 text-[11px] hover:border-gold/40 hover:text-gold disabled:opacity-60"
                       >
-                        {isAdded ? (
+                        {isSaving ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : isAdded ? (
                           <>
                             <Check className="h-3 w-3" /> Na biblioteca
                           </>

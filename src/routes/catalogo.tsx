@@ -8,6 +8,7 @@ import {
   type PublicDomainSummary,
 } from "@/lib/public-domain";
 import { addToLibrary } from "@/lib/library";
+import { toast } from "sonner";
 import { subscribeAuth } from "@/lib/firebase";
 import { LanguageBadge } from "@/components/language-badge";
 import type { User } from "firebase/auth";
@@ -57,28 +58,36 @@ function CatalogoPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [tr, best, pd, ...shelfResults] = await Promise.all([
-        trendingBooks("weekly", 12, {
-          onUpdate: (r) => !cancelled && setTrending(r),
-        }),
-        booksBySubject("bestsellers", 12, {
-          onUpdate: (r) => !cancelled && setBestsellers(r),
-        }),
-        searchPublicDomainBooks("classic literature", 12),
-        ...SHELVES.map((s) =>
-          booksBySubject(s.subject, 10, {
-            onUpdate: (r) => !cancelled && setShelves((prev) => ({ ...prev, [s.key]: r })),
+      try {
+        const [tr, best, pd, ...shelfResults] = await Promise.allSettled([
+          trendingBooks("weekly", 12, {
+            onUpdate: (r) => !cancelled && setTrending(r),
           }),
-        ),
-      ]);
-      if (cancelled) return;
-      setTrending(tr);
-      setBestsellers(best);
-      setPublicDomain(pd);
-      const map: Record<string, OpenLibraryBook[]> = {};
-      SHELVES.forEach((s, i) => (map[s.key] = shelfResults[i]));
-      setShelves(map);
-      setLoading(false);
+          booksBySubject("bestsellers", 12, {
+            onUpdate: (r) => !cancelled && setBestsellers(r),
+          }),
+          searchPublicDomainBooks("classic literature", 12),
+          ...SHELVES.map((s) =>
+            booksBySubject(s.subject, 10, {
+              onUpdate: (r) => !cancelled && setShelves((prev) => ({ ...prev, [s.key]: r })),
+            }),
+          ),
+        ]);
+        if (cancelled) return;
+        if (tr.status === "fulfilled") setTrending(tr.value);
+        if (best.status === "fulfilled") setBestsellers(best.value);
+        if (pd.status === "fulfilled") setPublicDomain(pd.value);
+        const map: Record<string, OpenLibraryBook[]> = {};
+        SHELVES.forEach((s, i) => {
+          const r = shelfResults[i];
+          if (r.status === "fulfilled") map[s.key] = r.value;
+        });
+        setShelves((prev) => ({ ...prev, ...map }));
+      } catch (err) {
+        console.warn("[catalogo] failed to load catalog data", err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     })();
     return () => {
       cancelled = true;
@@ -198,6 +207,7 @@ function OpenLibraryCard({ book, rank }: { book: OpenLibraryBook; rank?: number 
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
   const [added, setAdded] = useState(false);
+  const [saving, setSaving] = useState(false);
   useEffect(() => subscribeAuth(setUser), []);
 
   async function add(e: React.MouseEvent) {
@@ -207,8 +217,19 @@ function OpenLibraryCard({ book, rank }: { book: OpenLibraryBook; rank?: number 
       navigate({ to: "/auth", search: { redirect: "/catalogo" } });
       return;
     }
-    await addToLibrary(user.uid, book, "quero-ler");
-    setAdded(true);
+    if (saving) return;
+    setSaving(true);
+    try {
+      await addToLibrary(user.uid, book, "quero-ler");
+      setAdded(true);
+      toast.success("Adicionado à sua biblioteca.");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Não foi possível adicionar este livro agora.",
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
   const slug =
@@ -254,10 +275,12 @@ function OpenLibraryCard({ book, rank }: { book: OpenLibraryBook; rank?: number 
       </Link>
       <button
         onClick={add}
-        disabled={added}
+        disabled={added || saving}
         className="mt-2 inline-flex items-center gap-1 rounded-full border border-border/60 px-2.5 py-1 text-[11px] hover:border-gold/40 hover:text-gold disabled:opacity-60"
       >
-        {added ? (
+        {saving ? (
+          <Loader2 className="h-3 w-3 animate-spin" />
+        ) : added ? (
           <>
             <Check className="h-3 w-3" /> Na biblioteca
           </>
@@ -275,6 +298,7 @@ function PublicDomainCard({ book }: { book: PublicDomainSummary }) {
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
   const [added, setAdded] = useState(false);
+  const [saving, setSaving] = useState(false);
   useEffect(() => subscribeAuth(setUser), []);
 
   async function add(e: React.MouseEvent) {
@@ -284,17 +308,26 @@ function PublicDomainCard({ book }: { book: PublicDomainSummary }) {
       navigate({ to: "/auth", search: { redirect: "/catalogo" } });
       return;
     }
-    await addToLibrary(
-      user.uid,
-      {
-        title: book.title,
-        author: book.author,
-        cover: book.cover,
-        readerId: gutenbergReaderId(book.id),
-      },
-      "quero-ler",
-    );
-    setAdded(true);
+    if (saving) return;
+    setSaving(true);
+    try {
+      await addToLibrary(
+        user.uid,
+        {
+          title: book.title,
+          author: book.author,
+          cover: book.cover,
+          readerId: gutenbergReaderId(book.id),
+        },
+        "quero-ler",
+      );
+      setAdded(true);
+      toast.success("Salvo na sua biblioteca.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Não foi possível salvar este livro agora.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -328,10 +361,12 @@ function PublicDomainCard({ book }: { book: PublicDomainSummary }) {
         </Link>
         <button
           onClick={add}
-          disabled={added}
+          disabled={added || saving}
           className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 text-[11px] hover:border-gold/40 hover:text-gold disabled:opacity-60"
         >
-          {added ? (
+          {saving ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : added ? (
             <>
               <Check className="h-3 w-3" /> Salvo
             </>

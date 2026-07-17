@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Trash2, BookOpen, BookOpenCheck, ArrowUpRight } from "lucide-react";
+import { Trash2, BookOpen, BookOpenCheck, ArrowUpRight, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { useRequireAuth } from "@/hooks/use-require-auth";
 import {
   removeFromLibrary,
@@ -47,8 +48,51 @@ function GuardedBibliotecaPage() {
 
 function BibliotecaPage({ uid }: { uid: string }) {
   const [entries, setEntries] = useState<LibraryEntry[] | null>(null);
+  const [busy, setBusy] = useState<Set<string>>(new Set());
 
   useEffect(() => subscribeLibrary(uid, setEntries), [uid]);
+
+  // Safety net: if Firestore's realtime listener never calls back at all
+  // (fully offline/blocked, no cache), stop showing the spinner forever —
+  // fall back to the empty state instead.
+  useEffect(() => {
+    const timer = setTimeout(() => setEntries((e) => (e === null ? [] : e)), 10000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  async function handleStatusChange(id: string, status: LibraryStatus) {
+    if (busy.has(id)) return;
+    setBusy((s) => new Set(s).add(id));
+    try {
+      await setLibraryStatus(uid, id, status);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Não foi possível atualizar o status.");
+    } finally {
+      setBusy((s) => {
+        const next = new Set(s);
+        next.delete(id);
+        return next;
+      });
+    }
+  }
+
+  async function handleRemove(id: string) {
+    if (busy.has(id)) return;
+    setBusy((s) => new Set(s).add(id));
+    try {
+      await removeFromLibrary(uid, id);
+      toast.success("Livro removido da biblioteca.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Não foi possível remover este livro.");
+      setBusy((s) => {
+        const next = new Set(s);
+        next.delete(id);
+        return next;
+      });
+    }
+    // On success the entry disappears via the live subscription, so no
+    // need to clear `busy` for `id` in that branch.
+  }
 
   return (
     <div className="mx-auto max-w-7xl px-5 py-12 md:px-8">
@@ -113,10 +157,9 @@ function BibliotecaPage({ uid }: { uid: string }) {
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <select
                     value={entry.status}
-                    onChange={(e) =>
-                      setLibraryStatus(uid, entry.id, e.target.value as LibraryStatus)
-                    }
-                    className="rounded-full border border-border bg-background px-2.5 py-1 text-xs outline-none"
+                    disabled={busy.has(entry.id)}
+                    onChange={(e) => handleStatusChange(entry.id, e.target.value as LibraryStatus)}
+                    className="rounded-full border border-border bg-background px-2.5 py-1 text-xs outline-none disabled:opacity-60"
                   >
                     {(Object.keys(STATUS_LABEL) as LibraryStatus[]).map((s) => (
                       <option key={s} value={s}>
@@ -125,10 +168,16 @@ function BibliotecaPage({ uid }: { uid: string }) {
                     ))}
                   </select>
                   <button
-                    onClick={() => removeFromLibrary(uid, entry.id)}
-                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive"
+                    onClick={() => handleRemove(entry.id)}
+                    disabled={busy.has(entry.id)}
+                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive disabled:opacity-60"
                   >
-                    <Trash2 className="h-3 w-3" /> Remover
+                    {busy.has(entry.id) ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-3 w-3" />
+                    )}
+                    Remover
                   </button>
                 </div>
               </div>

@@ -1,6 +1,14 @@
 /**
  * Personal library — books a user has saved/started. Stored at
  * `users/{uid}/library/{bookSlug}`.
+ *
+ * Every write here is wrapped with `withDeadline` so a stalled network
+ * round-trip surfaces a clear error within a few seconds instead of
+ * leaving a button stuck on "Salvando…" forever. The optional read used to
+ * check for an existing entry is wrapped with `withFallback` instead —
+ * it's an optimization (preserve status/addedAt on repeat adds), not a
+ * requirement, so if it stalls we just proceed with a plain write rather
+ * than block the whole action on it.
  */
 import {
   collection,
@@ -14,6 +22,7 @@ import {
 } from "firebase/firestore";
 import { getFirebase } from "./firebase";
 import { awardXp } from "./user-profile";
+import { withDeadline, withFallback } from "./async-utils";
 import type { BookMeta } from "./google-books";
 
 export type LibraryStatus = "quero-ler" | "lendo" | "concluido";
@@ -28,6 +37,9 @@ export interface LibraryEntry extends BookMeta {
    * page instead. */
   readerId?: string | null;
 }
+
+const READ_TIMEOUT_MS = 5000;
+const WRITE_TIMEOUT_MS = 10000;
 
 export function slugFor(title: string, author?: string): string {
   return `${title}-${author ?? ""}`
@@ -44,6 +56,9 @@ export function slugFor(title: string, author?: string): string {
  * already-tracked title never downgrades its status (e.g. re-discovering a
  * finished book from "Descobrir" won't reset it back to "quero-ler") and
  * never resets `addedAt` — it's idempotent and safe to call repeatedly.
+ *
+ * Always settles within ~10s: resolves on success, throws a friendly Error
+ * on failure/timeout so the caller can show it to the user.
  */
 export async function addToLibrary(
   uid: string,
@@ -51,36 +66,49 @@ export async function addToLibrary(
   status: LibraryStatus = "quero-ler",
 ): Promise<void> {
   const fb = getFirebase();
-  if (!fb) return;
+  if (!fb) throw new Error("O login não está disponível neste ambiente agora.");
   const id = slugFor(book.title, book.author);
   const ref = doc(fb.db, "users", uid, "library", id);
-  const snap = await getDoc(ref);
 
-  if (snap.exists()) {
-    // Already tracked — refresh metadata (cover/readerId may have improved)
-    // but keep the existing status/addedAt untouched.
-    const existing = snap.data() as Partial<LibraryEntry>;
-    await setDoc(
-      ref,
-      {
-        title: book.title,
-        author: book.author,
-        cover: book.cover ?? existing.cover ?? null,
-        readerId: book.readerId ?? existing.readerId ?? null,
-      },
-      { merge: true },
+  // Best-effort read: if it stalls or fails, we just fall through to
+  // "create new" below instead of hanging the whole action on it.
+  const existing = await withFallback(getDoc(ref), READ_TIMEOUT_MS, null).catch(() => null);
+
+  if (existing && existing.exists()) {
+    const data = existing.data() as Partial<LibraryEntry>;
+    await withDeadline(
+      setDoc(
+        ref,
+        {
+          title: book.title,
+          author: book.author,
+          cover: book.cover ?? data.cover ?? null,
+          readerId: book.readerId ?? data.readerId ?? null,
+        },
+        { merge: true },
+      ),
+      WRITE_TIMEOUT_MS,
+      "Não foi possível atualizar este livro na biblioteca agora. Tente novamente.",
     );
     return;
   }
 
-  await setDoc(ref, {
-    title: book.title,
-    author: book.author,
-    cover: book.cover ?? null,
-    readerId: book.readerId ?? null,
-    status,
-    addedAt: serverTimestamp(),
-  });
+  await withDeadline(
+    setDoc(
+      ref,
+      {
+        title: book.title,
+        author: book.author,
+        cover: book.cover ?? null,
+        readerId: book.readerId ?? null,
+        status,
+        addedAt: serverTimestamp(),
+      },
+      { merge: true },
+    ),
+    WRITE_TIMEOUT_MS,
+    "Não foi possível adicionar este livro à biblioteca agora. Tente novamente.",
+  );
   void awardXp(uid, 5);
 }
 
@@ -88,7 +116,9 @@ export async function addToLibrary(
  * Called when a user opens a book in the reader. Upserts a library entry
  * with status "lendo" and the given `readerId` so it can be resumed later
  * from "Minha biblioteca" — this is what connects "reading" and "library"
- * into one flow. Never downgrades a book already marked "concluido".
+ * into one flow. Never downgrades a book already marked "concluido". Fails
+ * silently (logs only) — this runs automatically in the background and
+ * shouldn't interrupt reading if it can't reach Firestore.
  */
 export async function markAsReading(
   uid: string,
@@ -97,38 +127,54 @@ export async function markAsReading(
 ): Promise<void> {
   const fb = getFirebase();
   if (!fb) return;
-  const id = slugFor(book.title, book.author);
-  const ref = doc(fb.db, "users", uid, "library", id);
-  const snap = await getDoc(ref);
+  try {
+    const id = slugFor(book.title, book.author);
+    const ref = doc(fb.db, "users", uid, "library", id);
+    const existing = await withFallback(getDoc(ref), READ_TIMEOUT_MS, null).catch(() => null);
 
-  if (snap.exists()) {
-    const existing = snap.data() as Partial<LibraryEntry>;
-    const patch: Record<string, unknown> = {
-      title: book.title,
-      author: book.author,
-      cover: book.cover ?? existing.cover ?? null,
-      readerId,
-    };
-    if (existing.status !== "concluido") patch.status = "lendo";
-    await setDoc(ref, patch, { merge: true });
-    return;
+    if (existing && existing.exists()) {
+      const data = existing.data() as Partial<LibraryEntry>;
+      const patch: Record<string, unknown> = {
+        title: book.title,
+        author: book.author,
+        cover: book.cover ?? data.cover ?? null,
+        readerId,
+      };
+      if (data.status !== "concluido") patch.status = "lendo";
+      await withDeadline(setDoc(ref, patch, { merge: true }), WRITE_TIMEOUT_MS, "timeout");
+      return;
+    }
+
+    await withDeadline(
+      setDoc(
+        ref,
+        {
+          title: book.title,
+          author: book.author,
+          cover: book.cover ?? null,
+          readerId,
+          status: "lendo",
+          addedAt: serverTimestamp(),
+        },
+        { merge: true },
+      ),
+      WRITE_TIMEOUT_MS,
+      "timeout",
+    );
+    void awardXp(uid, 5);
+  } catch (err) {
+    console.warn("[library] markAsReading failed (non-blocking)", err);
   }
-
-  await setDoc(ref, {
-    title: book.title,
-    author: book.author,
-    cover: book.cover ?? null,
-    readerId,
-    status: "lendo",
-    addedAt: serverTimestamp(),
-  });
-  void awardXp(uid, 5);
 }
 
 export async function removeFromLibrary(uid: string, id: string): Promise<void> {
   const fb = getFirebase();
-  if (!fb) return;
-  await deleteDoc(doc(fb.db, "users", uid, "library", id));
+  if (!fb) throw new Error("O login não está disponível neste ambiente agora.");
+  await withDeadline(
+    deleteDoc(doc(fb.db, "users", uid, "library", id)),
+    WRITE_TIMEOUT_MS,
+    "Não foi possível remover este livro agora. Tente novamente.",
+  );
 }
 
 export async function setLibraryStatus(
@@ -137,12 +183,18 @@ export async function setLibraryStatus(
   status: LibraryStatus,
 ): Promise<void> {
   const fb = getFirebase();
-  if (!fb) return;
+  if (!fb) throw new Error("O login não está disponível neste ambiente agora.");
   const ref = doc(fb.db, "users", uid, "library", id);
-  const snap = await getDoc(ref);
-  const wasCompleted =
-    snap.exists() && (snap.data() as Partial<LibraryEntry>).status === "concluido";
-  await setDoc(ref, { status }, { merge: true });
+
+  const existing = await withFallback(getDoc(ref), READ_TIMEOUT_MS, null).catch(() => null);
+  const wasCompleted = !!existing && existing.exists() && existing.data().status === "concluido";
+
+  await withDeadline(
+    setDoc(ref, { status }, { merge: true }),
+    WRITE_TIMEOUT_MS,
+    "Não foi possível atualizar o status deste livro agora. Tente novamente.",
+  );
+
   // Only award the completion bonus on the actual transition into
   // "concluido" — otherwise toggling the dropdown back and forth would
   // farm XP indefinitely.
