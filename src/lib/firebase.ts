@@ -13,6 +13,7 @@ import {
   signInWithPopup,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
   signOut as fbSignOut,
   GoogleAuthProvider,
   EmailAuthProvider,
@@ -206,4 +207,11 @@ export async function signOut(): Promise<void> {
   const fb = getFirebase();
   if (!fb) return;
   await fbSignOut(fb.auth);
+}
+
+/** Sends a "reset your password" email via Firebase Auth. */
+export async function resetPassword(email: string): Promise<void> {
+  const fb = getFirebase();
+  if (!fb) throw new Error("Firebase not initialized");
+  await sendPasswordResetEmail(fb.auth, email);
 }

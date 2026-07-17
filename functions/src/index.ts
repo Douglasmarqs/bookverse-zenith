@@ -17,6 +17,7 @@ if (getApps().length === 0) {
 }
 
 export { searchPublicDomainBooks, getPublicDomainBook } from "./public-domain";
+export { searchGoogleBooks, getGoogleBookMeta } from "./google-books";
 
 const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
 

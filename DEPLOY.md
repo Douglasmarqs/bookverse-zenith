@@ -1,5 +1,99 @@
 # Diagnóstico rápido — capas, catálogo e login
 
+## 🆕 Atualização — leitura conectada à biblioteca, catálogo à prova de bloqueio, tela de login nova
+
+Resumo do que mudou nesta leva e **o que você precisa fazer manualmente**
+(não tenho como publicar Firebase/Vercel por aqui — só entrego o código).
+
+### O que foi corrigido/adicionado
+
+1. **Catálogo do Google Books agora passa por Cloud Function**
+   (`searchGoogleBooks` / `getGoogleBookMeta`, em `functions/src/google-books.ts`).
+   O erro "Não conseguimos falar com o Google Books agora" que você viu
+   acontece porque o navegador chama `googleapis.com` diretamente — e isso é
+   bloqueado por bloqueadores de anúncio/privacidade e por algumas redes
+   corporativas/escolares com muita frequência. Agora a chamada primeiro
+   passa pelo backend (Cloud Functions, que não tem esse problema de rede) e
+   só cai para a chamada direta do navegador como plano B. Isso deixa o
+   catálogo, as capas da home e a busca em `/descobrir` muito mais
+   confiáveis, mas **depende de você publicar as novas functions** (passo a
+   passo abaixo).
+
+2. **Ler um livro agora conecta automaticamente com "Minha biblioteca".**
+   Antes, adicionar um livro à biblioteca e conseguir realmente lê-lo eram
+   dois mundos separados — um livro salvo não tinha como abrir o leitor de
+   volta, e ler um livro não aparecia na biblioteca. Agora:
+   - Abrir qualquer livro no leitor (domínio público ou o livro de exemplo)
+     já marca automaticamente como "Lendo" na sua biblioteca.
+   - Terminar o último capítulo marca como "Concluído".
+   - Em "Minha biblioteca", cada item agora tem um botão — **"Continuar
+     lendo"** (abre o leitor) para livros com texto completo, ou **"Ver
+     detalhes"** para livros que são só catálogo (Google Books/Open Library,
+     sem texto completo disponível).
+   - Nos cartões de domínio público (`/descobrir` e `/catalogo`) agora
+     também tem um botão **"Salvar"** separado do "Ler agora", pra quem quer
+     só guardar pra depois sem abrir o leitor ainda.
+
+3. **Home real, sem dados de mentira.** A seção "Continue lendo" mostrava
+   3 livros fixos que não tinham nada a ver com sua conta. Agora ela mostra
+   os livros que *você* está lendo de verdade (ou um convite para começar,
+   se ainda não tiver nenhum). A prateleira "Em alta" também trocou de dados
+   inventados para o mesmo dado real de tendências semanais do Open Library
+   já usado em "Bestsellers".
+
+4. **Tela de login/cadastro refeita.** Layout novo em duas colunas (com
+   painel de destaque em telas maiores), mostrar/ocultar senha, confirmação
+   de senha e indicador de força no cadastro, checkbox obrigatório de
+   aceite dos Termos/Privacidade, e um fluxo de **"Esqueci minha senha"**
+   (envia e-mail de redefinição via Firebase Auth) que não existia antes.
+
+5. **Lumi (IA) não falha mais silenciosamente para quem nunca logou.**
+   Se alguém clicasse em "IA" no menu sem nunca ter entrado na conta, a
+   chamada falhava com uma mensagem genérica. Agora ela garante uma sessão
+   (mesmo anônima) antes de chamar a função, e mostra uma mensagem clara se
+   isso não for possível.
+
+6. **Arquivos de configuração do Firebase que faltavam.** O projeto nunca
+   teve `firebase.json`, `.firebaserc` nem `firestore.rules` no repositório
+   — ou seja, os comandos de `firebase deploy` do `functions/README.md`
+   não tinham como funcionar do zero. Agora existem os três, apontando para
+   o projeto `bookverse-8147a` (o mesmo já usado em `src/lib/firebase.ts`).
+
+7. **Etiqueta de idioma nos livros de domínio público.** A busca no
+   Gutenberg aceita português *e* inglês, e a aba "Catálogo" busca por
+   padrão o termo "classic literature" (em inglês) — então nem tudo que
+   aparece ali está em português. Agora cada capa mostra uma etiqueta
+   (ex: "Português" / "Inglês") no canto, antes de você clicar em "Ler
+   agora".
+
+### O que você precisa fazer para isso valer no site publicado
+
+1. **Publicar as Cloud Functions** (inclui as duas novas do Google Books):
+   ```
+   cd functions
+   npm install
+   npm run deploy
+   ```
+   Se for a primeira vez configurando Firebase neste diretório, rode antes
+   `firebase login` e confirme que o projeto é `bookverse-8147a`
+   (`firebase use bookverse-8147a` — o `.firebaserc` novo já deixa isso
+   automático).
+
+2. **Publicar as regras do Firestore** (novo `firestore.rules`, nunca
+   publicado antes):
+   ```
+   firebase deploy --only firestore:rules
+   ```
+
+3. **Redeploy do site (Vercel/onde estiver hospedado)** com este código —
+   sem isso, o site publicado continua com a versão antiga.
+
+Os itens 4–6 do checklist original abaixo (login, domínio autorizado,
+segredo `ANTHROPIC_API_KEY` da Lumi) continuam valendo exatamente como
+estavam — não mudaram nesta leva.
+
+---
+
 Se depois de aplicar esta versão os problemas abaixo continuarem, o mais
 provável é que o **build publicado não tenha essas mudanças ainda** (faltou
 recompilar/redeploy) ou que falte configuração fora do código (que eu não

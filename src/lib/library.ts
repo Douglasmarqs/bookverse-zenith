@@ -6,6 +6,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   onSnapshot,
   serverTimestamp,
   setDoc,
@@ -21,6 +22,11 @@ export interface LibraryEntry extends BookMeta {
   id: string;
   status: LibraryStatus;
   addedAt?: unknown;
+  /** Present when this title can be opened in the in-app reader (sample
+   * book or a public-domain Gutenberg title). Absent for catalog-only
+   * entries (Google Books / Open Library), which link out to a details
+   * page instead. */
+  readerId?: string | null;
 }
 
 export function slugFor(title: string, author?: string): string {
@@ -33,6 +39,12 @@ export function slugFor(title: string, author?: string): string {
     .slice(0, 140);
 }
 
+/**
+ * Adds a book to the library, or refreshes it if already tracked. Adding an
+ * already-tracked title never downgrades its status (e.g. re-discovering a
+ * finished book from "Descobrir" won't reset it back to "quero-ler") and
+ * never resets `addedAt` — it's idempotent and safe to call repeatedly.
+ */
 export async function addToLibrary(
   uid: string,
   book: BookMeta,
@@ -42,11 +54,72 @@ export async function addToLibrary(
   if (!fb) return;
   const id = slugFor(book.title, book.author);
   const ref = doc(fb.db, "users", uid, "library", id);
+  const snap = await getDoc(ref);
+
+  if (snap.exists()) {
+    // Already tracked — refresh metadata (cover/readerId may have improved)
+    // but keep the existing status/addedAt untouched.
+    const existing = snap.data() as Partial<LibraryEntry>;
+    await setDoc(
+      ref,
+      {
+        title: book.title,
+        author: book.author,
+        cover: book.cover ?? existing.cover ?? null,
+        readerId: book.readerId ?? existing.readerId ?? null,
+      },
+      { merge: true },
+    );
+    return;
+  }
+
   await setDoc(ref, {
     title: book.title,
     author: book.author,
-    cover: book.cover,
+    cover: book.cover ?? null,
+    readerId: book.readerId ?? null,
     status,
+    addedAt: serverTimestamp(),
+  });
+  void awardXp(uid, 5);
+}
+
+/**
+ * Called when a user opens a book in the reader. Upserts a library entry
+ * with status "lendo" and the given `readerId` so it can be resumed later
+ * from "Minha biblioteca" — this is what connects "reading" and "library"
+ * into one flow. Never downgrades a book already marked "concluido".
+ */
+export async function markAsReading(
+  uid: string,
+  book: { title: string; author: string; cover: string | null },
+  readerId: string,
+): Promise<void> {
+  const fb = getFirebase();
+  if (!fb) return;
+  const id = slugFor(book.title, book.author);
+  const ref = doc(fb.db, "users", uid, "library", id);
+  const snap = await getDoc(ref);
+
+  if (snap.exists()) {
+    const existing = snap.data() as Partial<LibraryEntry>;
+    const patch: Record<string, unknown> = {
+      title: book.title,
+      author: book.author,
+      cover: book.cover ?? existing.cover ?? null,
+      readerId,
+    };
+    if (existing.status !== "concluido") patch.status = "lendo";
+    await setDoc(ref, patch, { merge: true });
+    return;
+  }
+
+  await setDoc(ref, {
+    title: book.title,
+    author: book.author,
+    cover: book.cover ?? null,
+    readerId,
+    status: "lendo",
     addedAt: serverTimestamp(),
   });
   void awardXp(uid, 5);
@@ -66,16 +139,19 @@ export async function setLibraryStatus(
   const fb = getFirebase();
   if (!fb) return;
   const ref = doc(fb.db, "users", uid, "library", id);
+  const snap = await getDoc(ref);
+  const wasCompleted =
+    snap.exists() && (snap.data() as Partial<LibraryEntry>).status === "concluido";
   await setDoc(ref, { status }, { merge: true });
-  if (status === "concluido") {
+  // Only award the completion bonus on the actual transition into
+  // "concluido" — otherwise toggling the dropdown back and forth would
+  // farm XP indefinitely.
+  if (status === "concluido" && !wasCompleted) {
     void awardXp(uid, 50);
   }
 }
 
-export function subscribeLibrary(
-  uid: string,
-  cb: (entries: LibraryEntry[]) => void,
-): Unsubscribe {
+export function subscribeLibrary(uid: string, cb: (entries: LibraryEntry[]) => void): Unsubscribe {
   const fb = getFirebase();
   if (!fb) {
     cb([]);

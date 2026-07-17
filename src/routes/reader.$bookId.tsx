@@ -26,12 +26,16 @@ import { ReaderSettingsPanel } from "@/components/reader/settings-panel";
 import { useRequireAuth } from "@/hooks/use-require-auth";
 import { openLumiPanel } from "@/lib/lumi-panel-store";
 import { awardXp, incrementBooksCompleted } from "@/lib/user-profile";
+import { markAsReading, setLibraryStatus, slugFor } from "@/lib/library";
 
 export const Route = createFileRoute("/reader/$bookId")({
   head: () => ({
     meta: [
       { title: "Leitor — BookVerse" },
-      { name: "description", content: "Experiência de leitura imersiva, personalizável e sincronizada." },
+      {
+        name: "description",
+        content: "Experiência de leitura imersiva, personalizável e sincronizada.",
+      },
       { name: "robots", content: "noindex" },
     ],
   }),
@@ -46,8 +50,13 @@ export const Route = createFileRoute("/reader/$bookId")({
   notFoundComponent: () => (
     <div className="mx-auto max-w-md px-6 py-32 text-center">
       <h2 className="font-display text-3xl">Livro não encontrado</h2>
-      <p className="mt-3 text-muted-foreground">Este título não está disponível em sua biblioteca.</p>
-      <Link to="/" className="mt-6 inline-block rounded-full bg-gold px-5 py-2.5 text-sm font-medium text-primary-foreground">
+      <p className="mt-3 text-muted-foreground">
+        Este título não está disponível em sua biblioteca.
+      </p>
+      <Link
+        to="/"
+        className="mt-6 inline-block rounded-full bg-gold px-5 py-2.5 text-sm font-medium text-primary-foreground"
+      >
         Voltar
       </Link>
     </div>
@@ -94,9 +103,7 @@ function GutenbergBookLoader({ uid, gutenbergId }: { uid: string; gutenbergId: n
         if (!cancelled) {
           console.warn("[reader] failed to load public domain book", err);
           setError(
-            err instanceof Error
-              ? err.message
-              : "Não foi possível carregar este livro agora.",
+            err instanceof Error ? err.message : "Não foi possível carregar este livro agora.",
           );
         }
       });
@@ -135,9 +142,6 @@ function GutenbergBookLoader({ uid, gutenbergId }: { uid: string; gutenbergId: n
   return <ReaderPage uid={uid} book={book} />;
 }
 
-
-
-
 const THEME_STYLES = {
   light: {
     bg: "#F7F1E6",
@@ -173,6 +177,12 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
 
   const contentRef = useRef<HTMLDivElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Opening a book counts as "starting" it — track it in the library so it
+  // shows up under "Minha biblioteca" / "Continue lendo" and can be resumed.
+  useEffect(() => {
+    void markAsReading(uid, { title: book.title, author: book.author, cover: book.cover }, book.id);
+  }, [uid, book.id, book.title, book.author, book.cover]);
 
   // Hydrate settings + progress after mount (avoid SSR mismatch).
   useEffect(() => {
@@ -224,6 +234,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
         void awardXp(uid, 20);
         if (clamped === book.chapters.length - 1) {
           void incrementBooksCompleted(uid);
+          void setLibraryStatus(uid, slugFor(book.title, book.author), "concluido");
         }
       }
       setChapterIndex(clamped);
@@ -235,7 +246,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       queueSave({ chapterIndex: clamped, scrollRatio: 0, updatedAt: Date.now() });
       setTocOpen(false);
     },
-    [book.chapters.length, chapterIndex, queueSave, uid],
+    [book.chapters.length, book.title, book.author, chapterIndex, queueSave, uid],
   );
 
   const theme = THEME_STYLES[settings.theme];
@@ -246,8 +257,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     return Math.min(1, chapterIndex * per + scrollRatio * per);
   }, [book.chapters.length, chapterIndex, scrollRatio]);
 
-  const readerFontFamily =
-    settings.font === "serif" ? "var(--font-display)" : "var(--font-sans)";
+  const readerFontFamily = settings.font === "serif" ? "var(--font-display)" : "var(--font-sans)";
 
   const contentStyle: React.CSSProperties =
     settings.mode === "paginated"
@@ -443,7 +453,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
               <h3 className="mt-1 font-display text-lg font-medium">{book.title}</h3>
             </div>
             <ul className="flex-1 overflow-y-auto p-3">
-              {book.chapters.map((c: typeof book.chapters[number], i: number) => {
+              {book.chapters.map((c: (typeof book.chapters)[number], i: number) => {
                 const active = i === chapterIndex;
                 return (
                   <li key={c.id}>

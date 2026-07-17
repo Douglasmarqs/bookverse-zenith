@@ -1,9 +1,20 @@
 /**
  * Google Books integration — resolves real cover art and metadata for a
- * title/author pair. No API key required for basic volume search (subject to
- * Google's public quota); results are cached in-memory + sessionStorage so we
- * don't refetch the same title twice in a session.
+ * title/author pair.
+ *
+ * Requests go through the `getGoogleBookMeta` / `searchGoogleBooks` Cloud
+ * Functions first (server-side egress is reliable everywhere), and only
+ * fall back to a direct browser fetch if Firebase/Functions aren't
+ * available. This two-layer approach means the catalog keeps working even
+ * when the visitor's network/browser blocks direct calls to
+ * `googleapis.com` (a common side-effect of ad/privacy blockers and some
+ * corporate networks) — see DEPLOY.md item 2 for the original symptom.
+ *
+ * Results are cached in-memory + sessionStorage so we don't refetch the
+ * same title twice in a session.
  */
+import { getFunctions, httpsCallable } from "firebase/functions";
+import { getFirebase } from "./firebase";
 
 export interface BookMeta {
   title: string;
@@ -14,6 +25,9 @@ export interface BookMeta {
   averageRating?: number;
   ratingsCount?: number;
   categories?: string[];
+  /** Set when this title can be read in-app (public-domain full text).
+   * Points at the `/reader/$bookId` id — see `public-domain.ts`. */
+  readerId?: string | null;
 }
 
 const CACHE_PREFIX = "bookverse:gbooks:";
@@ -45,63 +59,16 @@ function writeSessionCache(key: string, value: BookMeta | null) {
 
 /** Upgrades a Google Books thumbnail to a larger, https, non-curl image. */
 function upgradeCoverUrl(url: string): string {
-  return url
-    .replace("http://", "https://")
-    .replace("zoom=1", "zoom=2")
-    .replace("&edge=curl", "");
+  return url.replace("http://", "https://").replace("zoom=1", "zoom=2").replace("&edge=curl", "");
 }
 
-/**
- * Looks up a single book's real cover + metadata by title (and optionally
- * author, which improves match accuracy). Returns null if nothing is found —
- * callers should fall back to a placeholder cover in that case.
- */
-export async function fetchBookMeta(
-  title: string,
-  author?: string,
-): Promise<BookMeta | null> {
-  const key = cacheKey(title, author);
-  if (memCache.has(key)) return memCache.get(key)!;
-
-  const cached = readSessionCache(key);
-  if (cached !== undefined) {
-    memCache.set(key, cached);
-    return cached;
-  }
-
+async function fetchWithTimeout(url: string, ms: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
   try {
-    const q = author ? `intitle:${title} inauthor:${author}` : `intitle:${title}`;
-    const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(
-      q,
-    )}&maxResults=1&printType=books`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Google Books ${res.status}`);
-    const data = await res.json();
-    const item = data.items?.[0];
-    const info = item?.volumeInfo;
-
-    const meta: BookMeta | null = info
-      ? {
-          title: info.title ?? title,
-          author: info.authors?.join(", ") ?? author ?? "",
-          cover: info.imageLinks?.thumbnail
-            ? upgradeCoverUrl(info.imageLinks.thumbnail)
-            : null,
-          description: info.description,
-          previewLink: info.previewLink,
-          averageRating: info.averageRating,
-          ratingsCount: info.ratingsCount,
-          categories: info.categories,
-        }
-      : null;
-
-    memCache.set(key, meta);
-    writeSessionCache(key, meta);
-    return meta;
-  } catch (err) {
-    console.warn("[google-books] lookup failed", err);
-    memCache.set(key, null);
-    return null;
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -111,15 +78,15 @@ export async function fetchBookMeta(
  * matches almost nothing. Plain keywords in the free-text query work far
  * better and still bias results toward the right shelf. */
 const CATEGORY_QUERY: Record<string, string> = {
-  "Ficção": "ficção",
-  "Clássicos": "clássicos da literatura",
+  Ficção: "ficção",
+  Clássicos: "clássicos da literatura",
   "Ficção científica": "ficção científica",
-  "Poesia": "poesia",
-  "Ensaios": "ensaios",
-  "Filosofia": "filosofia",
-  "Biografias": "biografia",
-  "Romance": "romance",
-  "Mistério": "mistério suspense",
+  Poesia: "poesia",
+  Ensaios: "ensaios",
+  Filosofia: "filosofia",
+  Biografias: "biografia",
+  Romance: "romance",
+  Mistério: "mistério suspense",
 };
 
 export interface BookSearchResult {
@@ -129,47 +96,175 @@ export interface BookSearchResult {
   networkError: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// Direct-fetch fallback (used only if the Cloud Function path is unavailable)
+// ---------------------------------------------------------------------------
+
+async function directFetchMeta(title: string, author?: string): Promise<BookMeta | null> {
+  const q = author ? `intitle:${title} inauthor:${author}` : `intitle:${title}`;
+  const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(
+    q,
+  )}&maxResults=1&printType=books`;
+  const res = await fetchWithTimeout(url, 8000);
+  if (!res.ok) throw new Error(`Google Books ${res.status}`);
+  const data = (await res.json()) as { items?: GoogleVolumeItem[] };
+  const info = data.items?.[0]?.volumeInfo;
+  return info
+    ? {
+        title: info.title ?? title,
+        author: info.authors?.join(", ") ?? author ?? "",
+        cover: info.imageLinks?.thumbnail ? upgradeCoverUrl(info.imageLinks.thumbnail) : null,
+        description: info.description,
+        previewLink: info.previewLink,
+        averageRating: info.averageRating,
+        ratingsCount: info.ratingsCount,
+        categories: info.categories,
+      }
+    : null;
+}
+
+interface GoogleVolumeInfo {
+  title?: string;
+  authors?: string[];
+  imageLinks?: { thumbnail?: string };
+  description?: string;
+  previewLink?: string;
+  averageRating?: number;
+  ratingsCount?: number;
+  categories?: string[];
+}
+
+interface GoogleVolumeItem {
+  volumeInfo?: GoogleVolumeInfo;
+}
+
+async function directSearchBooks(
+  query: string,
+  category?: string,
+  maxResults = 24,
+): Promise<BookMeta[]> {
+  const categoryTerm = category ? (CATEGORY_QUERY[category] ?? category) : "";
+  const parts: string[] = [];
+  if (query) parts.push(query);
+  if (categoryTerm && categoryTerm !== query) parts.push(categoryTerm);
+  const q = parts.join(" ").trim();
+  if (!q) return [];
+
+  const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(
+    q,
+  )}&maxResults=${maxResults}&printType=books`;
+  const res = await fetchWithTimeout(url, 8000);
+  if (!res.ok) throw new Error(`Google Books ${res.status}`);
+  const data = (await res.json()) as { items?: GoogleVolumeItem[] };
+  const items = data.items ?? [];
+  return items
+    .filter((it) => it.volumeInfo?.title)
+    .map((it) => {
+      const info = it.volumeInfo as GoogleVolumeInfo;
+      return {
+        title: info.title as string,
+        author: info.authors?.join(", ") ?? "Autor desconhecido",
+        cover: info.imageLinks?.thumbnail ? upgradeCoverUrl(info.imageLinks.thumbnail) : null,
+        description: info.description,
+        previewLink: info.previewLink,
+        averageRating: info.averageRating,
+        ratingsCount: info.ratingsCount,
+        categories: info.categories,
+      } satisfies BookMeta;
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Public API — Cloud Function first, direct fetch fallback
+// ---------------------------------------------------------------------------
+
+/**
+ * Looks up a single book's real cover + metadata by title (and optionally
+ * author, which improves match accuracy). Returns null if nothing is found —
+ * callers should fall back to a placeholder cover in that case.
+ */
+export async function fetchBookMeta(title: string, author?: string): Promise<BookMeta | null> {
+  const key = cacheKey(title, author);
+  if (memCache.has(key)) return memCache.get(key)!;
+
+  const cached = readSessionCache(key);
+  if (cached !== undefined) {
+    memCache.set(key, cached);
+    return cached;
+  }
+
+  let meta: BookMeta | null = null;
+  let resolved = false;
+
+  const fb = getFirebase();
+  if (fb) {
+    try {
+      const fn = httpsCallable<{ title: string; author?: string }, { meta: BookMeta | null }>(
+        getFunctions(fb.app),
+        "getGoogleBookMeta",
+      );
+      const res = await fn({ title, author });
+      meta = res.data.meta;
+      resolved = true;
+    } catch (err) {
+      console.warn(
+        "[google-books] cloud function lookup failed, falling back to direct fetch",
+        err,
+      );
+    }
+  }
+
+  if (!resolved) {
+    try {
+      meta = await directFetchMeta(title, author);
+    } catch (err) {
+      console.warn("[google-books] direct lookup failed", err);
+      meta = null;
+    }
+  }
+
+  memCache.set(key, meta);
+  writeSessionCache(key, meta);
+  return meta;
+}
+
 /** Full-text search across Google Books — used by the "Descobrir" catalog. */
 export async function searchBooks(
   query: string,
   opts: { category?: string; maxResults?: number } = {},
 ): Promise<BookSearchResult> {
   const trimmed = query.trim();
-  const categoryTerm = opts.category ? CATEGORY_QUERY[opts.category] ?? opts.category : "";
+  if (!trimmed && !opts.category) return { results: [], networkError: false };
 
-  const parts: string[] = [];
-  if (trimmed) parts.push(trimmed);
-  if (categoryTerm && categoryTerm !== trimmed) parts.push(categoryTerm);
-
-  const q = parts.join(" ").trim();
-  if (!q) return { results: [], networkError: false };
+  const fb = getFirebase();
+  if (fb) {
+    try {
+      const fn = httpsCallable<
+        { query: string; category?: string; maxResults?: number },
+        { results: BookMeta[]; error?: boolean }
+      >(getFunctions(fb.app), "searchGoogleBooks");
+      const res = await fn({
+        query: trimmed,
+        category: opts.category,
+        maxResults: opts.maxResults,
+      });
+      return {
+        results: res.data.results,
+        networkError: !!res.data.error && res.data.results.length === 0,
+      };
+    } catch (err) {
+      console.warn(
+        "[google-books] cloud function search failed, falling back to direct fetch",
+        err,
+      );
+    }
+  }
 
   try {
-    const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(
-      q,
-    )}&maxResults=${opts.maxResults ?? 24}&printType=books`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Google Books ${res.status}`);
-    const data = await res.json();
-    const items = (data.items ?? []) as any[];
-    const results = items
-      .filter((it) => it.volumeInfo?.title)
-      .map((it) => {
-        const info = it.volumeInfo;
-        return {
-          title: info.title as string,
-          author: (info.authors?.join(", ") as string) ?? "Autor desconhecido",
-          cover: info.imageLinks?.thumbnail ? upgradeCoverUrl(info.imageLinks.thumbnail) : null,
-          description: info.description,
-          previewLink: info.previewLink,
-          averageRating: info.averageRating,
-          ratingsCount: info.ratingsCount,
-          categories: info.categories,
-        } satisfies BookMeta;
-      });
+    const results = await directSearchBooks(trimmed, opts.category, opts.maxResults ?? 24);
     return { results, networkError: false };
   } catch (err) {
-    console.warn("[google-books] search failed", err);
+    console.warn("[google-books] direct search failed", err);
     return { results: [], networkError: true };
   }
 }

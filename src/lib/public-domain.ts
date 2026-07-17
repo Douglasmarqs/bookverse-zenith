@@ -17,6 +17,44 @@ export interface PublicDomainSummary {
   subjects: string[];
 }
 
+const LANGUAGE_LABELS: Record<string, string> = {
+  pt: "Português",
+  en: "Inglês",
+  es: "Espanhol",
+  fr: "Francês",
+  de: "Alemão",
+  it: "Italiano",
+  la: "Latim",
+  nl: "Neerlandês",
+  ru: "Russo",
+  ja: "Japonês",
+  zh: "Chinês",
+  el: "Grego",
+  eo: "Esperanto",
+  fi: "Finlandês",
+  he: "Hebraico",
+  hu: "Húngaro",
+  pl: "Polonês",
+  sv: "Sueco",
+  tl: "Tagalo",
+  ca: "Catalão",
+  cs: "Tcheco",
+  da: "Dinamarquês",
+  bg: "Búlgaro",
+  sr: "Sérvio",
+  nb: "Norueguês",
+  ro: "Romeno",
+};
+
+/** Human-readable label for a Gutenberg book's primary language — used to
+ * show a language badge on public-domain cards, since search results mix
+ * Portuguese and English (and occasionally other languages). */
+export function primaryLanguageLabel(languages: string[]): string {
+  const code = languages?.[0];
+  if (!code) return "Idioma desconhecido";
+  return LANGUAGE_LABELS[code] ?? code.toUpperCase();
+}
+
 export function gutenbergReaderId(id: number): string {
   return `gutenberg-${id}`;
 }
@@ -33,10 +71,10 @@ export async function searchPublicDomainBooks(
   const fb = getFirebase();
   if (!fb || !query.trim()) return [];
   try {
-    const fn = httpsCallable<{ query: string; maxResults?: number }, { results: PublicDomainSummary[] }>(
-      getFunctions(fb.app),
-      "searchPublicDomainBooks",
-    );
+    const fn = httpsCallable<
+      { query: string; maxResults?: number },
+      { results: PublicDomainSummary[] }
+    >(getFunctions(fb.app), "searchPublicDomainBooks");
     const res = await fn({ query, maxResults });
     return res.data.results ?? [];
   } catch (err) {
@@ -48,7 +86,10 @@ export async function searchPublicDomainBooks(
 export async function getPublicDomainBook(gutenbergId: number): Promise<Book> {
   const fb = getFirebase();
   if (!fb) throw new Error("Firebase não inicializado.");
-  const fn = httpsCallable<{ gutenbergId: number }, Book>(getFunctions(fb.app), "getPublicDomainBook");
+  const fn = httpsCallable<{ gutenbergId: number }, Book>(
+    getFunctions(fb.app),
+    "getPublicDomainBook",
+  );
   const res = await fn({ gutenbergId });
   return res.data;
 }

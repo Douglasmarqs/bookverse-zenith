@@ -1,14 +1,15 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Flame, Sparkles, Plus, Check, Loader2, BookOpenCheck } from "lucide-react";
+import { booksBySubject, trendingBooks, type OpenLibraryBook } from "@/lib/open-library";
 import {
-  booksBySubject,
-  trendingBooks,
-  type OpenLibraryBook,
-} from "@/lib/open-library";
-import { searchPublicDomainBooks, gutenbergReaderId, type PublicDomainSummary } from "@/lib/public-domain";
+  searchPublicDomainBooks,
+  gutenbergReaderId,
+  type PublicDomainSummary,
+} from "@/lib/public-domain";
 import { addToLibrary } from "@/lib/library";
 import { subscribeAuth } from "@/lib/firebase";
+import { LanguageBadge } from "@/components/language-badge";
 import type { User } from "firebase/auth";
 
 export const Route = createFileRoute("/catalogo")({
@@ -33,7 +34,12 @@ export const Route = createFileRoute("/catalogo")({
 const SHELVES: { key: string; subject: string; title: string; eyebrow: string }[] = [
   { key: "fiction", subject: "fiction", title: "Ficção contemporânea", eyebrow: "Ficção" },
   { key: "fantasy", subject: "fantasy", title: "Fantasia e magia", eyebrow: "Fantasia" },
-  { key: "mystery", subject: "mystery_and_detective_stories", title: "Mistério e suspense", eyebrow: "Mistério" },
+  {
+    key: "mystery",
+    subject: "mystery_and_detective_stories",
+    title: "Mistério e suspense",
+    eyebrow: "Mistério",
+  },
   { key: "scifi", subject: "science_fiction", title: "Ficção científica", eyebrow: "Sci-Fi" },
   { key: "romance", subject: "romance", title: "Romance", eyebrow: "Romance" },
   { key: "biography", subject: "biography", title: "Biografias marcantes", eyebrow: "Biografias" },
@@ -61,8 +67,7 @@ function CatalogoPage() {
         searchPublicDomainBooks("classic literature", 12),
         ...SHELVES.map((s) =>
           booksBySubject(s.subject, 10, {
-            onUpdate: (r) =>
-              !cancelled && setShelves((prev) => ({ ...prev, [s.key]: r })),
+            onUpdate: (r) => !cancelled && setShelves((prev) => ({ ...prev, [s.key]: r })),
           }),
         ),
       ]);
@@ -87,8 +92,8 @@ function CatalogoPage() {
         Um mundo de livros esperando por você
       </h1>
       <p className="mt-4 max-w-2xl text-muted-foreground">
-        Bestsellers, tendências da semana e prateleiras curadas por gênero — capa e metadados
-        reais via Open Library. Os títulos em domínio público podem ser lidos direto no app.
+        Bestsellers, tendências da semana e prateleiras curadas por gênero — capa e metadados reais
+        via Open Library. Os títulos em domínio público podem ser lidos direto no app.
       </p>
 
       {loading ? (
@@ -206,13 +211,14 @@ function OpenLibraryCard({ book, rank }: { book: OpenLibraryBook; rank?: number 
     setAdded(true);
   }
 
-  const slug = `${book.title}-${book.author}`
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "")
-    .slice(0, 140) || "livro";
+  const slug =
+    `${book.title}-${book.author}`
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "")
+      .slice(0, 140) || "livro";
 
   return (
     <div className="group relative w-40 shrink-0 snap-start sm:w-44">
@@ -266,29 +272,76 @@ function OpenLibraryCard({ book, rank }: { book: OpenLibraryBook; rank?: number 
 }
 
 function PublicDomainCard({ book }: { book: PublicDomainSummary }) {
+  const navigate = useNavigate();
+  const [user, setUser] = useState<User | null>(null);
+  const [added, setAdded] = useState(false);
+  useEffect(() => subscribeAuth(setUser), []);
+
+  async function add(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!user || user.isAnonymous) {
+      navigate({ to: "/auth", search: { redirect: "/catalogo" } });
+      return;
+    }
+    await addToLibrary(
+      user.uid,
+      {
+        title: book.title,
+        author: book.author,
+        cover: book.cover,
+        readerId: gutenbergReaderId(book.id),
+      },
+      "quero-ler",
+    );
+    setAdded(true);
+  }
+
   return (
-    <Link
-      to="/reader/$bookId"
-      params={{ bookId: gutenbergReaderId(book.id) }}
-      className="group w-40 shrink-0 snap-start sm:w-44"
-    >
-      {book.cover ? (
-        <img
-          src={book.cover}
-          alt={book.title}
-          loading="lazy"
-          className="book-shadow aspect-[2/3] w-full rounded-md object-cover transition-transform group-hover:-translate-y-1"
-        />
-      ) : (
-        <div className="book-shadow grid aspect-[2/3] w-full place-items-center rounded-md bg-secondary p-3 text-center">
-          <span className="font-display text-xs text-foreground/70">{book.title}</span>
+    <div className="group w-40 shrink-0 snap-start sm:w-44">
+      <Link to="/reader/$bookId" params={{ bookId: gutenbergReaderId(book.id) }}>
+        <div className="relative">
+          {book.cover ? (
+            <img
+              src={book.cover}
+              alt={book.title}
+              loading="lazy"
+              className="book-shadow aspect-[2/3] w-full rounded-md object-cover transition-transform group-hover:-translate-y-1"
+            />
+          ) : (
+            <div className="book-shadow grid aspect-[2/3] w-full place-items-center rounded-md bg-secondary p-3 text-center">
+              <span className="font-display text-xs text-foreground/70">{book.title}</span>
+            </div>
+          )}
+          <LanguageBadge languages={book.languages} />
         </div>
-      )}
-      <p className="mt-3 truncate font-display text-sm font-medium">{book.title}</p>
-      <p className="mt-0.5 truncate text-xs text-muted-foreground">{book.author}</p>
-      <span className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-gold">
-        <BookOpenCheck className="h-3 w-3" /> Ler agora
-      </span>
-    </Link>
+        <p className="mt-3 truncate font-display text-sm font-medium">{book.title}</p>
+        <p className="mt-0.5 truncate text-xs text-muted-foreground">{book.author}</p>
+      </Link>
+      <div className="mt-1.5 flex items-center gap-2">
+        <Link
+          to="/reader/$bookId"
+          params={{ bookId: gutenbergReaderId(book.id) }}
+          className="inline-flex items-center gap-1 text-[11px] font-medium text-gold"
+        >
+          <BookOpenCheck className="h-3 w-3" /> Ler agora
+        </Link>
+        <button
+          onClick={add}
+          disabled={added}
+          className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 text-[11px] hover:border-gold/40 hover:text-gold disabled:opacity-60"
+        >
+          {added ? (
+            <>
+              <Check className="h-3 w-3" /> Salvo
+            </>
+          ) : (
+            <>
+              <Plus className="h-3 w-3" /> Salvar
+            </>
+          )}
+        </button>
+      </div>
+    </div>
   );
 }

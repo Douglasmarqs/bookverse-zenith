@@ -1,0 +1,35 @@
+rules_version = '2';
+
+// BookVerse — Firestore security rules.
+//
+// Collections in use:
+//   users/{uid}                    profile + XP (read by anyone signed in,
+//                                   so the ranking can show other players'
+//                                   name/xp; written only by the owner)
+//   users/{uid}/library/{bookId}   personal library — owner-only
+//   users/{uid}/progress/{bookId}  reading progress — owner-only
+//   publicDomainBooks/{id}         Gutenberg text cache — Admin SDK only
+//                                  (Cloud Functions bypass these rules), so
+//                                  it's intentionally left with no client
+//                                  access below.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid;
+
+      match /library/{bookId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+      match /progress/{bookId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+
+    // Explicit default deny for anything else (documentation — this is
+    // already the implicit behavior when no rule above matches).
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -17,19 +17,19 @@ import {
 import heroImg from "@/assets/hero-library.jpg";
 import owl from "@/assets/owl-mascot.png";
 import b1 from "@/assets/book-1.jpg";
-import b2 from "@/assets/book-2.jpg";
-import b3 from "@/assets/book-3.jpg";
-import b4 from "@/assets/book-4.jpg";
-import b5 from "@/assets/book-5.jpg";
-import b6 from "@/assets/book-6.jpg";
 import { BookCover } from "@/components/book-cover";
+import { LanguageBadge } from "@/components/language-badge";
 import { LumiButton } from "@/components/lumi-panel";
 import { subscribeRanking, type RankingRow } from "@/lib/ranking";
 import { subscribeUserProfile } from "@/lib/user-profile";
-import { subscribeLibrary } from "@/lib/library";
+import { subscribeLibrary, slugFor, type LibraryEntry } from "@/lib/library";
 import { subscribeAuth } from "@/lib/firebase";
-import { searchPublicDomainBooks, gutenbergReaderId, type PublicDomainSummary } from "@/lib/public-domain";
-import { trendingBooks, type OpenLibraryBook } from "@/lib/open-library";
+import {
+  searchPublicDomainBooks,
+  gutenbergReaderId,
+  type PublicDomainSummary,
+} from "@/lib/public-domain";
+import { trendingBooks, booksBySubject, type OpenLibraryBook } from "@/lib/open-library";
 import type { User } from "firebase/auth";
 
 export const Route = createFileRoute("/")({
@@ -46,23 +46,6 @@ export const Route = createFileRoute("/")({
   component: Home,
 });
 
-type Book = { title: string; author: string; cover: string; tag?: string };
-
-const CONTINUE: Book[] = [
-  { title: "A Casa dos Espíritos", author: "Isabel Allende", cover: b1, tag: "48%" },
-  { title: "Meridiano de Sangue", author: "Cormac McCarthy", cover: b3, tag: "72%" },
-  { title: "Solaris", author: "Stanislaw Lem", cover: b6, tag: "12%" },
-];
-
-const TRENDING: Book[] = [
-  { title: "Cidades de Papel", author: "L. Marín", cover: b2 },
-  { title: "O Círculo", author: "Ana Torres", cover: b4 },
-  { title: "Herbário", author: "Julia Bäcker", cover: b2 },
-  { title: "A Constelação", author: "M. Vidal", cover: b6 },
-  { title: "Fogueira Interior", author: "R. Delgado", cover: b5 },
-  { title: "Espelho de Bronze", author: "Ivo Kalman", cover: b3 },
-];
-
 const CATEGORIES = [
   "Ficção literária",
   "Clássicos",
@@ -77,9 +60,15 @@ const CATEGORIES = [
 
 function Home() {
   const [homeUser, setHomeUser] = useState<User | null>(null);
-  const [challengeStats, setChallengeStats] = useState({ booksCompleted: 0, libraryCount: 0, xp: 0 });
+  const [challengeStats, setChallengeStats] = useState({
+    booksCompleted: 0,
+    libraryCount: 0,
+    xp: 0,
+  });
   const [publicDomainPicks, setPublicDomainPicks] = useState<PublicDomainSummary[]>([]);
   const [bestsellers, setBestsellers] = useState<OpenLibraryBook[]>([]);
+  const [subjectBestsellers, setSubjectBestsellers] = useState<OpenLibraryBook[]>([]);
+  const [continueReading, setContinueReading] = useState<LibraryEntry[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,6 +82,13 @@ function Home() {
     }).then((r) => {
       if (!cancelled) setBestsellers(r);
     });
+    booksBySubject("bestsellers", 10, {
+      onUpdate: (r) => {
+        if (!cancelled) setSubjectBestsellers(r);
+      },
+    }).then((r) => {
+      if (!cancelled) setSubjectBestsellers(r);
+    });
     return () => {
       cancelled = true;
     };
@@ -102,14 +98,16 @@ function Home() {
   useEffect(() => {
     if (!homeUser || homeUser.isAnonymous) {
       setChallengeStats({ booksCompleted: 0, libraryCount: 0, xp: 0 });
+      setContinueReading([]);
       return;
     }
     const unsubProfile = subscribeUserProfile(homeUser.uid, (p) =>
       setChallengeStats((s) => ({ ...s, booksCompleted: p?.booksCompleted ?? 0, xp: p?.xp ?? 0 })),
     );
-    const unsubLibrary = subscribeLibrary(homeUser.uid, (entries) =>
-      setChallengeStats((s) => ({ ...s, libraryCount: entries.length })),
-    );
+    const unsubLibrary = subscribeLibrary(homeUser.uid, (entries) => {
+      setChallengeStats((s) => ({ ...s, libraryCount: entries.length }));
+      setContinueReading(entries.filter((e) => e.status === "lendo").slice(0, 3));
+    });
     return () => {
       unsubProfile();
       unsubLibrary();
@@ -198,7 +196,9 @@ function Home() {
                 <div className="pointer-events-none absolute -inset-8 -z-10 rounded-full bg-gold/15 blur-3xl" />
               </div>
               <div className="mt-6 text-center">
-                <p className="text-[11px] uppercase tracking-[0.25em] text-gold">Destaque da semana</p>
+                <p className="text-[11px] uppercase tracking-[0.25em] text-gold">
+                  Destaque da semana
+                </p>
                 <h3 className="mt-2 font-display text-xl font-semibold">A Casa dos Espíritos</h3>
                 <p className="mt-1 text-sm text-muted-foreground">Isabel Allende</p>
                 <div className="mt-4 flex items-center justify-center gap-1 text-gold">
@@ -223,37 +223,60 @@ function Home() {
         <div className="hairline mx-auto max-w-7xl" />
       </section>
 
-      {/* CONTINUE READING */}
+      {/* CONTINUE READING — real data from the signed-in user's library */}
       <Section
         eyebrow="Continue lendo"
         title="Retome de onde parou"
         action="Ver tudo"
         actionTo="/biblioteca"
       >
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {CONTINUE.map((book) => (
-            <ContinueCard key={book.title} book={book} />
-          ))}
-        </div>
+        {continueReading.length > 0 ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {continueReading.map((entry) => (
+              <ContinueCard key={entry.id} entry={entry} />
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-border/60 p-10 text-center">
+            <p className="text-muted-foreground">
+              {homeUser && !homeUser.isAnonymous
+                ? "Você ainda não começou nenhuma leitura. Que tal escolher o próximo livro?"
+                : "Entre na sua conta para ver aqui os livros que você está lendo agora."}
+            </p>
+            <Link
+              to={homeUser && !homeUser.isAnonymous ? "/descobrir" : "/auth"}
+              search={
+                homeUser && !homeUser.isAnonymous
+                  ? { q: undefined, categoria: undefined }
+                  : { redirect: "/descobrir" }
+              }
+              className="mt-4 inline-flex items-center gap-2 rounded-full bg-gold px-5 py-2.5 text-sm font-medium text-primary-foreground"
+            >
+              {homeUser && !homeUser.isAnonymous ? "Descobrir livros" : "Entrar"}
+            </Link>
+          </div>
+        )}
       </Section>
 
-      {/* TRENDING RAIL */}
-      <Section
-        eyebrow="Em alta"
-        title="O que a comunidade está lendo"
-        action="Descobrir"
-        actionTo="/descobrir"
-        icon={<Flame className="h-4 w-4" />}
-      >
-        <div className="-mx-5 flex snap-x snap-mandatory gap-5 overflow-x-auto px-5 pb-4 md:-mx-8 md:px-8 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {TRENDING.map((book, i) => (
-            <BookCard key={book.title + i} book={book} rank={i + 1} />
-          ))}
-        </div>
-      </Section>
-
-      {/* BESTSELLERS — Open Library trending */}
+      {/* TRENDING RAIL — real Open Library weekly trending */}
       {bestsellers.length > 0 && (
+        <Section
+          eyebrow="Em alta"
+          title="O que a comunidade está lendo"
+          action="Descobrir"
+          actionTo="/descobrir"
+          icon={<Flame className="h-4 w-4" />}
+        >
+          <div className="-mx-5 flex snap-x snap-mandatory gap-5 overflow-x-auto px-5 pb-4 md:-mx-8 md:px-8 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {bestsellers.map((book, i) => (
+              <OpenLibraryBookCard key={book.workKey + i} book={book} rank={i + 1} />
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {/* BESTSELLERS — Open Library "bestsellers" subject shelf */}
+      {subjectBestsellers.length > 0 && (
         <Section
           eyebrow="Bestsellers"
           title="O que está bombando esta semana"
@@ -262,7 +285,7 @@ function Home() {
           icon={<Sparkles className="h-4 w-4" />}
         >
           <div className="-mx-5 flex snap-x snap-mandatory gap-5 overflow-x-auto px-5 pb-4 md:-mx-8 md:px-8 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {bestsellers.map((book, i) => (
+            {subjectBestsellers.map((book, i) => (
               <Link
                 key={book.workKey + i}
                 to="/catalogo"
@@ -305,18 +328,21 @@ function Home() {
                 params={{ bookId: gutenbergReaderId(book.id) }}
                 className="group"
               >
-                {book.cover ? (
-                  <img
-                    src={book.cover}
-                    alt={book.title}
-                    loading="lazy"
-                    className="book-shadow aspect-[2/3] w-full rounded-md object-cover transition-transform group-hover:-translate-y-1"
-                  />
-                ) : (
-                  <div className="book-shadow grid aspect-[2/3] w-full place-items-center rounded-md bg-secondary p-3 text-center">
-                    <span className="font-display text-xs text-foreground/70">{book.title}</span>
-                  </div>
-                )}
+                <div className="relative">
+                  {book.cover ? (
+                    <img
+                      src={book.cover}
+                      alt={book.title}
+                      loading="lazy"
+                      className="book-shadow aspect-[2/3] w-full rounded-md object-cover transition-transform group-hover:-translate-y-1"
+                    />
+                  ) : (
+                    <div className="book-shadow grid aspect-[2/3] w-full place-items-center rounded-md bg-secondary p-3 text-center">
+                      <span className="font-display text-xs text-foreground/70">{book.title}</span>
+                    </div>
+                  )}
+                  <LanguageBadge languages={book.languages} />
+                </div>
                 <p className="mt-2.5 truncate font-display text-sm font-medium">{book.title}</p>
                 <p className="mt-0.5 truncate text-xs text-muted-foreground">{book.author}</p>
                 <span className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-gold">
@@ -390,8 +416,8 @@ function Home() {
                 Sua biblioteca, elegante em qualquer dispositivo.
               </h2>
               <p className="mt-4 max-w-xl text-muted-foreground">
-                Sincronização em todos os aparelhos, leitor personalizável, IA literária e
-                progresso salvo automaticamente.
+                Sincronização em todos os aparelhos, leitor personalizável, IA literária e progresso
+                salvo automaticamente.
               </p>
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link
@@ -467,21 +493,27 @@ function Section({
   );
 }
 
-function BookCard({ book, rank }: { book: Book; rank?: number }) {
+function OpenLibraryBookCard({ book, rank }: { book: OpenLibraryBook; rank?: number }) {
   return (
     <Link
-      to="/descobrir"
-      search={{ q: book.title, categoria: undefined }}
+      to="/livro/$slug"
+      params={{ slug: slugFor(book.title, book.author) || "livro" }}
+      search={{ title: book.title, author: book.author }}
       className="group relative w-40 shrink-0 snap-start text-left sm:w-44"
     >
       <div className="relative">
-        <BookCover
-          title={book.title}
-          author={book.author}
-          fallbackSrc={book.cover}
-          loading="lazy"
-          className="book-shadow aspect-[2/3] w-full rounded-md object-cover transition-transform duration-500 group-hover:-translate-y-1"
-        />
+        {book.cover ? (
+          <img
+            src={book.cover}
+            alt={book.title}
+            loading="lazy"
+            className="book-shadow aspect-[2/3] w-full rounded-md object-cover transition-transform duration-500 group-hover:-translate-y-1"
+          />
+        ) : (
+          <div className="book-shadow grid aspect-[2/3] w-full place-items-center rounded-md bg-secondary p-3 text-center">
+            <span className="font-display text-xs text-foreground/70">{book.title}</span>
+          </div>
+        )}
         {rank !== undefined && (
           <span className="absolute -bottom-3 -left-2 font-display text-5xl font-semibold text-gold/90 [text-shadow:0_4px_12px_rgba(0,0,0,0.7)]">
             {rank}
@@ -496,31 +528,30 @@ function BookCard({ book, rank }: { book: Book; rank?: number }) {
   );
 }
 
-function ContinueCard({ book }: { book: Book }) {
-  const hasReader = book.title === "A Casa dos Espíritos";
-
+/** "Continue lendo" card backed by a real library entry — links straight
+ * into the reader when the title has in-app full text, or to its details
+ * page otherwise. */
+function ContinueCard({ entry }: { entry: LibraryEntry }) {
   const inner = (
     <>
-      <BookCover
-        title={book.title}
-        author={book.author}
-        fallbackSrc={book.cover}
-        loading="lazy"
-        className="book-shadow h-28 w-20 rounded-md object-cover"
-      />
+      {entry.cover ? (
+        <img
+          src={entry.cover}
+          alt={entry.title}
+          loading="lazy"
+          className="book-shadow h-28 w-20 rounded-md object-cover"
+        />
+      ) : (
+        <div className="book-shadow grid h-28 w-20 place-items-center rounded-md bg-secondary p-1 text-center">
+          <BookOpenCheck className="h-5 w-5 text-muted-foreground" />
+        </div>
+      )}
       <div className="min-w-0">
-        <p className="truncate font-display text-lg font-medium">{book.title}</p>
-        <p className="mt-0.5 truncate text-sm text-muted-foreground">{book.author}</p>
-        <div className="mt-4">
-          <div className="flex items-center justify-between text-xs">
-            <span className="inline-flex items-center gap-1 text-muted-foreground">
-              <Clock3 className="h-3 w-3" /> Cap. 12
-            </span>
-            <span className="font-medium text-gold">{book.tag}</span>
-          </div>
-          <div className="mt-2 h-1 overflow-hidden rounded-full bg-secondary">
-            <div className="h-full w-2/3 rounded-full bg-gradient-to-r from-gold to-gold-soft" />
-          </div>
+        <p className="truncate font-display text-lg font-medium">{entry.title}</p>
+        <p className="mt-0.5 truncate text-sm text-muted-foreground">{entry.author}</p>
+        <div className="mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-gold">
+          <Clock3 className="h-3 w-3" />
+          {entry.readerId ? "Continuar lendo" : "Ver detalhes"}
         </div>
       </div>
     </>
@@ -529,16 +560,21 @@ function ContinueCard({ book }: { book: Book }) {
   const className =
     "group grid grid-cols-[auto_1fr] items-center gap-5 rounded-2xl border border-border/60 bg-card/60 p-4 text-left transition hover:border-gold/40 hover:bg-card";
 
-  if (hasReader) {
+  if (entry.readerId) {
     return (
-      <Link to="/reader/$bookId" params={{ bookId: "casa-espiritos" }} className={className}>
+      <Link to="/reader/$bookId" params={{ bookId: entry.readerId }} className={className}>
         {inner}
       </Link>
     );
   }
 
   return (
-    <Link to="/descobrir" search={{ q: book.title, categoria: undefined }} className={className}>
+    <Link
+      to="/livro/$slug"
+      params={{ slug: slugFor(entry.title, entry.author) || "livro" }}
+      search={{ title: entry.title, author: entry.author }}
+      className={className}
+    >
       {inner}
     </Link>
   );
@@ -667,7 +703,10 @@ function ChallengeCard({
           />
         </div>
       </div>
-      <Link to="/desafios" className="mt-5 flex items-center gap-2 text-xs text-muted-foreground hover:text-gold">
+      <Link
+        to="/desafios"
+        className="mt-5 flex items-center gap-2 text-xs text-muted-foreground hover:text-gold"
+      >
         <Bookmark className="h-3.5 w-3.5" /> Ver detalhes
       </Link>
     </div>

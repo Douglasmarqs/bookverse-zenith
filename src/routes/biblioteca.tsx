@@ -1,8 +1,15 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Trash2, BookOpen } from "lucide-react";
+import { Trash2, BookOpen, BookOpenCheck, ArrowUpRight } from "lucide-react";
 import { useRequireAuth } from "@/hooks/use-require-auth";
-import { removeFromLibrary, setLibraryStatus, subscribeLibrary, type LibraryEntry, type LibraryStatus } from "@/lib/library";
+import {
+  removeFromLibrary,
+  setLibraryStatus,
+  slugFor,
+  subscribeLibrary,
+  type LibraryEntry,
+  type LibraryStatus,
+} from "@/lib/library";
 
 export const Route = createFileRoute("/biblioteca")({
   head: () => ({
@@ -82,23 +89,48 @@ function BibliotecaPage({ uid }: { uid: string }) {
               <div className="min-w-0">
                 <p className="truncate font-display text-base font-medium">{entry.title}</p>
                 <p className="mt-0.5 truncate text-sm text-muted-foreground">{entry.author}</p>
-                <select
-                  value={entry.status}
-                  onChange={(e) => setLibraryStatus(uid, entry.id, e.target.value as LibraryStatus)}
-                  className="mt-3 rounded-full border border-border bg-background px-2.5 py-1 text-xs outline-none"
-                >
-                  {(Object.keys(STATUS_LABEL) as LibraryStatus[]).map((s) => (
-                    <option key={s} value={s}>
-                      {STATUS_LABEL[s]}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  onClick={() => removeFromLibrary(uid, entry.id)}
-                  className="mt-3 ml-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive"
-                >
-                  <Trash2 className="h-3 w-3" /> Remover
-                </button>
+
+                {entry.readerId ? (
+                  <Link
+                    to="/reader/$bookId"
+                    params={{ bookId: entry.readerId }}
+                    className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-gold px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90"
+                  >
+                    <BookOpenCheck className="h-3 w-3" />
+                    {entry.status === "concluido" ? "Reler" : "Continuar lendo"}
+                  </Link>
+                ) : (
+                  <Link
+                    to="/livro/$slug"
+                    params={{ slug: slugFor(entry.title, entry.author) || "livro" }}
+                    search={{ title: entry.title, author: entry.author }}
+                    className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-border/60 px-3 py-1.5 text-xs hover:border-gold/40 hover:text-gold"
+                  >
+                    <ArrowUpRight className="h-3 w-3" /> Ver detalhes
+                  </Link>
+                )}
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <select
+                    value={entry.status}
+                    onChange={(e) =>
+                      setLibraryStatus(uid, entry.id, e.target.value as LibraryStatus)
+                    }
+                    className="rounded-full border border-border bg-background px-2.5 py-1 text-xs outline-none"
+                  >
+                    {(Object.keys(STATUS_LABEL) as LibraryStatus[]).map((s) => (
+                      <option key={s} value={s}>
+                        {STATUS_LABEL[s]}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => removeFromLibrary(uid, entry.id)}
+                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="h-3 w-3" /> Remover
+                  </button>
+                </div>
               </div>
             </div>
           ))}
