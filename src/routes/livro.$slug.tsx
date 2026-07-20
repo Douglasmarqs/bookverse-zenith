@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { ArrowLeft, BookOpen, Check, Loader2, Plus, Star } from "lucide-react";
 import { toast } from "sonner";
+import { describeFirestoreError } from "@/lib/async-utils";
 import { z } from "zod";
 import { fetchBookMeta, type BookMeta } from "@/lib/google-books";
 import { addToLibrary } from "@/lib/library";
@@ -83,9 +84,7 @@ function LivroDetalhesPage() {
       setAdded(true);
       toast.success("Adicionado à sua biblioteca.");
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Não foi possível adicionar este livro agora.",
-      );
+      toast.error(describeFirestoreError(err, "Não foi possível adicionar este livro agora."));
     } finally {
       setSaving(false);
     }

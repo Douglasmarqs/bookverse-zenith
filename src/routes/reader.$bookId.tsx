@@ -13,6 +13,7 @@ import {
 
 import { SAMPLE_BOOK, type Book } from "@/lib/sample-book";
 import { getPublicDomainBook, parseGutenbergReaderId } from "@/lib/public-domain";
+import { getEpubBook, isEpubReaderId } from "@/lib/epub-store";
 import {
   loadProgressRemote,
   loadSettings,
@@ -41,10 +42,14 @@ export const Route = createFileRoute("/reader/$bookId")({
   }),
   loader: ({
     params,
-  }): { source: "sample"; book: Book } | { source: "gutenberg"; gutenbergId: number } => {
+  }):
+    | { source: "sample"; book: Book }
+    | { source: "gutenberg"; gutenbergId: number }
+    | { source: "epub"; localId: string } => {
     if (params.bookId === SAMPLE_BOOK.id) return { source: "sample", book: SAMPLE_BOOK };
     const gutenbergId = parseGutenbergReaderId(params.bookId);
     if (gutenbergId !== null) return { source: "gutenberg", gutenbergId };
+    if (isEpubReaderId(params.bookId)) return { source: "epub", localId: params.bookId };
     throw notFound();
   },
   notFoundComponent: () => (
@@ -84,7 +89,69 @@ function GuardedReaderPage() {
   if (loaderData.source === "sample") {
     return <ReaderPage uid={user.uid} book={loaderData.book} />;
   }
+  if (loaderData.source === "epub") {
+    return <EpubBookLoader uid={user.uid} localId={loaderData.localId} />;
+  }
   return <GutenbergBookLoader uid={user.uid} gutenbergId={loaderData.gutenbergId} />;
+}
+
+function EpubBookLoader({ uid, localId }: { uid: string; localId: string }) {
+  const [book, setBook] = useState<Book | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setBook(null);
+    setError(null);
+    getEpubBook(localId)
+      .then((b) => {
+        if (cancelled) return;
+        if (!b) {
+          setError(
+            "Este EPUB não foi encontrado neste navegador. Arquivos importados ficam salvos apenas no dispositivo onde foram adicionados — importe-o novamente aqui.",
+          );
+          return;
+        }
+        setBook(b);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.warn("[reader] failed to load local epub", err);
+          setError("Não foi possível carregar este arquivo agora.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [localId]);
+
+  if (error) {
+    return (
+      <div className="mx-auto max-w-md px-6 py-32 text-center">
+        <h2 className="font-display text-3xl">Não foi possível abrir este livro</h2>
+        <p className="mt-3 text-muted-foreground">{error}</p>
+        <Link
+          to="/biblioteca"
+          className="mt-6 inline-block rounded-full bg-gold px-5 py-2.5 text-sm font-medium text-primary-foreground"
+        >
+          Voltar à biblioteca
+        </Link>
+      </div>
+    );
+  }
+
+  if (!book) {
+    return (
+      <div className="mx-auto grid min-h-[calc(100vh-8rem)] max-w-md place-items-center px-6 text-center">
+        <div>
+          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-gold/30 border-t-gold" />
+          <p className="mt-4 text-sm text-muted-foreground">Abrindo seu arquivo…</p>
+        </div>
+      </div>
+    );
+  }
+
+  return <ReaderPage uid={uid} book={book} />;
 }
 
 function GutenbergBookLoader({ uid, gutenbergId }: { uid: string; gutenbergId: number }) {

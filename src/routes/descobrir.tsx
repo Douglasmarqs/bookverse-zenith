@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { searchBooks, type BookMeta } from "@/lib/google-books";
 import { toast } from "sonner";
+import { describeFirestoreError } from "@/lib/async-utils";
 import {
   searchPublicDomainBooks,
   gutenbergReaderId,
@@ -154,9 +155,7 @@ function DescobrirPage() {
       setAdded((s) => new Set(s).add(key));
       toast.success("Adicionado à sua biblioteca.");
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Não foi possível adicionar este livro agora.",
-      );
+      toast.error(describeFirestoreError(err, "Não foi possível adicionar este livro agora."));
     } finally {
       setSaving((s) => {
         const next = new Set(s);
@@ -187,7 +186,7 @@ function DescobrirPage() {
       setAddedPublicDomain((s) => new Set(s).add(book.id));
       toast.success("Salvo na sua biblioteca.");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Não foi possível salvar este livro agora.");
+      toast.error(describeFirestoreError(err, "Não foi possível salvar este livro agora."));
     } finally {
       setSavingPublicDomain((s) => {
         const next = new Set(s);

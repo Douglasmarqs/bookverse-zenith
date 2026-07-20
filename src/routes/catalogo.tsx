@@ -9,6 +9,7 @@ import {
 } from "@/lib/public-domain";
 import { addToLibrary } from "@/lib/library";
 import { toast } from "sonner";
+import { describeFirestoreError } from "@/lib/async-utils";
 import { subscribeAuth } from "@/lib/firebase";
 import { LanguageBadge } from "@/components/language-badge";
 import type { User } from "firebase/auth";
@@ -224,9 +225,7 @@ function OpenLibraryCard({ book, rank }: { book: OpenLibraryBook; rank?: number 
       setAdded(true);
       toast.success("Adicionado à sua biblioteca.");
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Não foi possível adicionar este livro agora.",
-      );
+      toast.error(describeFirestoreError(err, "Não foi possível adicionar este livro agora."));
     } finally {
       setSaving(false);
     }
@@ -324,7 +323,7 @@ function PublicDomainCard({ book }: { book: PublicDomainSummary }) {
       setAdded(true);
       toast.success("Salvo na sua biblioteca.");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Não foi possível salvar este livro agora.");
+      toast.error(describeFirestoreError(err, "Não foi possível salvar este livro agora."));
     } finally {
       setSaving(false);
     }

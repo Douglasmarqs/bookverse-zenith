@@ -1,5 +1,86 @@
 # Diagnóstico rápido — capas, catálogo e login
 
+## 🆕 Atualização — resolve "Missing or insufficient permissions", leitura sem depender de Cloud Functions, e EPUB próprio
+
+### ⚠️ Ação mais importante: publicar as regras do Firestore (sem precisar de CLI)
+
+O erro **"Missing or insufficient permissions"** que apareceu na tela é o
+Firestore recusando a escrita porque as regras em `firestore.rules` (que eu
+já tinha criado numa atualização anterior) **ainda não foram publicadas no
+seu projeto**. Sem published rules, toda escrita (adicionar à biblioteca,
+XP, progresso de leitura) é recusada — por isso "adicionar" continuava sem
+efeito.
+
+Boa notícia: dá pra resolver isso **sem instalar nada**, direto pelo
+navegador:
+
+1. Acesse o [Firebase Console](https://console.firebase.google.com/) →
+   selecione o projeto `bookverse-8147a`.
+2. No menu lateral: **Firestore Database** → aba **Regras** (Rules).
+3. Apague o conteúdo atual e cole o conteúdo do arquivo `firestore.rules`
+   (na raiz deste projeto).
+4. Clique em **Publicar** (Publish).
+
+Pronto — sem CLI, sem terminal. Isso é o passo que resolve o erro da
+imagem. (Se preferir CLI: `firebase deploy --only firestore:rules`.)
+
+### Leitura agora funciona mesmo sem publicar as Cloud Functions
+
+Até esta atualização, abrir um livro de domínio público dependia 100% das
+Cloud Functions (`searchPublicDomainBooks`/`getPublicDomainBook`) estarem
+publicadas — se você ainda não tinha rodado `firebase deploy` dentro de
+`/functions`, a leitura simplesmente não funcionava, sem alternativa.
+
+Agora, seguindo o mesmo padrão que já existia para o Google Books: o app
+tenta a Cloud Function primeiro e, se ela não responder, busca o catálogo
+e o texto **direto do navegador** (Gutendex + Project Gutenberg). Ou seja,
+**ler um livro de domínio público já deve funcionar mesmo que você nunca
+tenha publicado nenhuma Cloud Function.** Publicar as functions continua
+sendo o caminho mais eficiente (cache no Firestore, sem depender de CORS
+de mirrors do Gutenberg), mas deixou de ser um bloqueio.
+
+### Sobre a API que você indicou (Gutendex)
+
+O link que você mandou é uma página de listagem sobre a API **Gutendex**
+— e ela já está integrada no projeto desde a atualização anterior (é
+exatamente o que alimenta a seção "Domínio público" em Descobrir, Catálogo
+e na Home, usando `gutendex.com` por baixo dos panos). Não precisa de nada
+adicional aí.
+
+### Novo: adicionar e ler seus próprios EPUBs
+
+Em **Minha biblioteca**, tem um botão **"Adicionar EPUB"**. Ele:
+- Lê o arquivo `.epub` inteiramente no navegador (sem enviar pra nenhum
+  servidor) usando a biblioteca `jszip`, extrai capítulos, capa, título e
+  autor, e guarda tudo localmente (IndexedDB do navegador).
+- Adiciona o livro à sua biblioteca com um clique em "Ler agora" na
+  notificação de sucesso, e abre no mesmo leitor usado para os outros
+  livros — mesmas configurações de fonte, tema, progresso salvo, etc.
+- **Importante:** como o texto fica salvo só no navegador onde você
+  importou, abrir esse mesmo livro em outro dispositivo/navegador vai
+  pedir para importar de novo lá (a *entrada* na biblioteca sincroniza
+  normalmente pelo Firestore, mas o *arquivo* em si é local — evita
+  precisar configurar Firebase Storage). Isso fica indicado com uma
+  etiqueta "Arquivo local (EPUB)" no card do livro.
+- Suporta EPUB2 e EPUB3, com ou sem capa, e tem um fallback para livros
+  sem `<p>` bem marcados no HTML.
+
+**Sobre o arquivo `.rar` de 1300 livros que você enviou:** não usei o
+conteúdo dele. É uma coletânea de livros com direitos autorais distribuída
+sem autorização — não uso esse tipo de material pra popular o catálogo ou
+qualquer outra parte do site, mesmo que fosse só pra teste. O recurso de
+EPUB acima é genérico: funciona com qualquer arquivo que você mesmo
+importar, um de cada vez.
+
+### Erros mais claros em qualquer operação de biblioteca
+
+Em vez de mostrar a mensagem crua do Firebase (tipo "Missing or
+insufficient permissions."), adicionar/remover/mudar status agora traduz
+os erros mais comuns (permissão, sessão expirada, sem conexão, muitas
+tentativas) para uma frase direta em português.
+
+---
+
 ## 🆕 Atualização — corrigido: "adiciono um livro e fica carregando" + botões sem reação
 
 Você relatou que adicionar livros ficava travado em "carregando" e que
