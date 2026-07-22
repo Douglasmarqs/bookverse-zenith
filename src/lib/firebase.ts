@@ -20,6 +20,10 @@ import {
   linkWithPopup,
   linkWithCredential,
   updateProfile,
+  reauthenticateWithCredential,
+  reauthenticateWithPopup,
+  updatePassword as fbUpdatePassword,
+  deleteUser,
   type Auth,
   type User,
 } from "firebase/auth";
@@ -214,4 +218,50 @@ export async function resetPassword(email: string): Promise<void> {
   const fb = getFirebase();
   if (!fb) throw new Error("Firebase not initialized");
   await sendPasswordResetEmail(fb.auth, email);
+}
+
+/** "password" | "google.com" | null (no provider data, e.g. anonymous). */
+export function getPrimaryProvider(user: User): string | null {
+  return user.providerData[0]?.providerId ?? null;
+}
+
+export async function updateDisplayName(name: string): Promise<void> {
+  const fb = getFirebase();
+  if (!fb?.auth.currentUser) throw new Error("Você precisa estar logado.");
+  await updateProfile(fb.auth.currentUser, { displayName: name.trim() });
+}
+
+/** Re-authenticates the current user — required by Firebase before
+ * sensitive operations like changing password or deleting the account. */
+async function reauthenticate(currentPassword?: string): Promise<void> {
+  const fb = getFirebase();
+  const user = fb?.auth.currentUser;
+  if (!fb || !user) throw new Error("Você precisa estar logado.");
+  const provider = getPrimaryProvider(user);
+  if (provider === "google.com") {
+    await reauthenticateWithPopup(user, new GoogleAuthProvider());
+    return;
+  }
+  if (!user.email || !currentPassword) {
+    throw new Error("Informe sua senha atual para continuar.");
+  }
+  const credential = EmailAuthProvider.credential(user.email, currentPassword);
+  await reauthenticateWithCredential(user, credential);
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  const fb = getFirebase();
+  if (!fb?.auth.currentUser) throw new Error("Você precisa estar logado.");
+  await reauthenticate(currentPassword);
+  await fbUpdatePassword(fb.auth.currentUser, newPassword);
+}
+
+/** Deletes the user's Auth account. Firestore data cleanup happens
+ * separately (see lib/user-profile.ts's deleteUserData) since Auth
+ * deletion alone doesn't touch Firestore. */
+export async function deleteAccount(currentPassword?: string): Promise<void> {
+  const fb = getFirebase();
+  if (!fb?.auth.currentUser) throw new Error("Você precisa estar logado.");
+  await reauthenticate(currentPassword);
+  await deleteUser(fb.auth.currentUser);
 }

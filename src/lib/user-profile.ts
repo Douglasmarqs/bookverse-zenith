@@ -8,8 +8,11 @@
  *   - write: only the owner (`request.auth.uid == uid`)
  */
 import {
+  collection,
+  deleteDoc,
   doc,
   getDoc,
+  getDocs,
   increment,
   onSnapshot,
   serverTimestamp,
@@ -25,6 +28,9 @@ export interface UserProfile {
   displayName: string;
   email: string | null;
   photoURL: string | null;
+  /** A short emoji chosen from the in-app avatar picker — takes priority
+   * over `photoURL` for display when set (see components that render it). */
+  avatarEmoji?: string | null;
   xp: number;
   booksCompleted: number;
   createdAt?: unknown;
@@ -114,6 +120,52 @@ export async function incrementBooksCompleted(uid: string): Promise<void> {
     );
   } catch (err) {
     console.warn("[user-profile] incrementBooksCompleted failed", err);
+  }
+}
+
+/** Updates editable profile fields (display name, chosen avatar emoji).
+ * Throws on failure so the settings page can show a clear error. */
+export async function updateProfileFields(
+  uid: string,
+  patch: { displayName?: string; avatarEmoji?: string | null },
+): Promise<void> {
+  const fb = getFirebase();
+  if (!fb) throw new Error("O login não está disponível neste ambiente agora.");
+  const ref = doc(fb.db, "users", uid);
+  await withDeadline(
+    setDoc(ref, { ...patch, updatedAt: serverTimestamp() }, { merge: true }),
+    WRITE_TIMEOUT_MS,
+    "Não foi possível salvar seu perfil agora. Tente novamente.",
+  );
+}
+
+/** Deletes every Firestore document belonging to a user — profile,
+ * library, and reading progress. Used before/after deleting the Auth
+ * account itself (see lib/firebase.ts's deleteAccount). Best-effort per
+ * subcollection so a partial failure doesn't block the rest. */
+export async function deleteUserData(uid: string): Promise<void> {
+  const fb = getFirebase();
+  if (!fb) return;
+
+  async function deleteCollection(path: string) {
+    try {
+      const snap = await withDeadline(
+        getDocs(collection(fb!.db, path)),
+        WRITE_TIMEOUT_MS,
+        "timeout",
+      );
+      await Promise.all(snap.docs.map((d) => deleteDoc(d.ref).catch(() => {})));
+    } catch (err) {
+      console.warn(`[user-profile] failed to delete ${path}`, err);
+    }
+  }
+
+  await deleteCollection(`users/${uid}/library`);
+  await deleteCollection(`users/${uid}/progress`);
+  try {
+    await deleteDoc(doc(fb.db, "users", uid));
+  } catch (err) {
+    console.warn("[user-profile] failed to delete profile doc", err);
   }
 }
 

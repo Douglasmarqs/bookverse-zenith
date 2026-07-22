@@ -50,6 +50,27 @@ function textOf(el: Element | null): string {
   return (el?.textContent ?? "").trim();
 }
 
+/**
+ * Merges consecutive paragraph fragments that don't end in sentence-ending
+ * punctuation — protects against source HTML that hard-wraps text without
+ * proper `<p>` boundaries (see the matching fix in public-domain.ts for the
+ * same issue in plain-text Gutenberg files).
+ */
+function reflowParagraphs(paragraphs: string[]): string[] {
+  const merged: string[] = [];
+  let buffer = "";
+  for (const p of paragraphs) {
+    buffer = buffer ? `${buffer} ${p}` : p;
+    const endsSentence = /[.!?][”"')\]]?$/.test(buffer) || buffer.length > 500;
+    if (endsSentence) {
+      merged.push(buffer);
+      buffer = "";
+    }
+  }
+  if (buffer) merged.push(buffer);
+  return merged;
+}
+
 /** Extracts readable paragraphs from one chapter's (X)HTML content. */
 function extractChapter(html: string, index: number): Chapter {
   const doc = parseXml(html);
@@ -65,12 +86,15 @@ function extractChapter(html: string, index: number): Chapter {
 
   if (paragraphs.length === 0) {
     // No <p> tags (some EPUBs use <div>s per paragraph, or plain text) —
-    // fall back to the raw text content split on blank lines.
+    // fall back to the raw text content split on blank lines, then reflow
+    // in case the source hard-wraps at every line instead of per-paragraph.
     const raw = (body?.textContent ?? "").trim();
-    paragraphs = raw
-      .split(/\n\s*\n/)
-      .map((p) => p.replace(/\s+/g, " ").trim())
-      .filter((p) => p.length > 0);
+    paragraphs = reflowParagraphs(
+      raw
+        .split(/\n\s*\n/)
+        .map((p) => p.replace(/\s+/g, " ").trim())
+        .filter((p) => p.length > 0),
+    );
   }
 
   return { id: `cap-${index}`, title, paragraphs };
@@ -92,6 +116,45 @@ function guessMimeType(href: string): string {
       return "image/webp";
     default:
       return "image/jpeg";
+  }
+}
+
+/**
+ * Downscales a cover image to a small JPEG data URL. EPUB covers are
+ * embedded directly (there's no image-hosting server involved), and this
+ * same string gets copied into the Firestore library entry so "Minha
+ * biblioteca" can show it without touching IndexedDB — Firestore caps
+ * documents at 1MB, so an unresized cover (some are multiple MB) would
+ * silently fail to save. 480px on the long side at JPEG quality 0.82 keeps
+ * every cover comfortably under ~60KB, plenty sharp for how covers are
+ * actually displayed in the app.
+ */
+async function downscaleCover(dataUrl: string): Promise<string> {
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("cover decode failed"));
+      el.src = dataUrl;
+    });
+
+    const maxDim = 480;
+    const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+    const w = Math.max(1, Math.round(img.width * scale));
+    const h = Math.max(1, Math.round(img.height * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return dataUrl;
+    ctx.drawImage(img, 0, 0, w, h);
+    return canvas.toDataURL("image/jpeg", 0.82);
+  } catch {
+    // If anything about decoding/resizing fails, fall back to the
+    // original — better a possibly-large cover than none at all, and the
+    // Firestore write itself is still resilient (see library.ts).
+    return dataUrl;
   }
 }
 
@@ -171,7 +234,8 @@ export async function parseEpubFile(file: File): Promise<Book> {
       const coverFile = zip.file(coverEntry.href);
       if (coverFile) {
         const base64 = await coverFile.async("base64");
-        cover = `data:${guessMimeType(coverEntry.href)};base64,${base64}`;
+        const raw = `data:${guessMimeType(coverEntry.href)};base64,${base64}`;
+        cover = await downscaleCover(raw);
       }
     } catch {
       cover = null; // cover is a nice-to-have, never block the import over it

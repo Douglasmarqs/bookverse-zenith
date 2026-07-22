@@ -40,6 +40,17 @@ export interface LibraryEntry extends BookMeta {
 
 const READ_TIMEOUT_MS = 5000;
 const WRITE_TIMEOUT_MS = 10000;
+// Firestore caps documents at 1MB total. Covers are normally short URLs,
+// but a locally-imported EPUB embeds its cover as a base64 data URL —
+// epub-parser.ts already downscales those, but this is a defense-in-depth
+// cap so an oversized cover degrades to "no cover" instead of failing the
+// whole library write.
+const MAX_COVER_LENGTH = 700_000;
+
+function safeCover(cover: string | null | undefined): string | null {
+  if (!cover) return null;
+  return cover.length > MAX_COVER_LENGTH ? null : cover;
+}
 
 export function slugFor(title: string, author?: string): string {
   return `${title}-${author ?? ""}`
@@ -82,7 +93,7 @@ export async function addToLibrary(
         {
           title: book.title,
           author: book.author,
-          cover: book.cover ?? data.cover ?? null,
+          cover: safeCover(book.cover) ?? safeCover(data.cover as string | null | undefined),
           readerId: book.readerId ?? data.readerId ?? null,
         },
         { merge: true },
@@ -99,7 +110,7 @@ export async function addToLibrary(
       {
         title: book.title,
         author: book.author,
-        cover: book.cover ?? null,
+        cover: safeCover(book.cover),
         readerId: book.readerId ?? null,
         status,
         addedAt: serverTimestamp(),
@@ -137,7 +148,7 @@ export async function markAsReading(
       const patch: Record<string, unknown> = {
         title: book.title,
         author: book.author,
-        cover: book.cover ?? data.cover ?? null,
+        cover: safeCover(book.cover) ?? safeCover(data.cover as string | null | undefined),
         readerId,
       };
       if (data.status !== "concluido") patch.status = "lendo";
@@ -151,7 +162,7 @@ export async function markAsReading(
         {
           title: book.title,
           author: book.author,
-          cover: book.cover ?? null,
+          cover: safeCover(book.cover),
           readerId,
           status: "lendo",
           addedAt: serverTimestamp(),

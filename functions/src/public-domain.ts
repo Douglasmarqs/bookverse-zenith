@@ -50,9 +50,7 @@ function pickTextUrl(formats: Record<string, string>): string | null {
   const keys = Object.keys(formats).filter((k) => k.startsWith("text/plain"));
   // Prefer utf-8, then ascii, then whatever plain-text variant exists.
   const byPref =
-    keys.find((k) => k.includes("utf-8")) ??
-    keys.find((k) => k.includes("us-ascii")) ??
-    keys[0];
+    keys.find((k) => k.includes("utf-8")) ?? keys.find((k) => k.includes("us-ascii")) ?? keys[0];
   return byPref ? formats[byPref] : null;
 }
 
@@ -71,6 +69,33 @@ interface ParsedChapter {
   paragraphs: string[];
 }
 
+function capitalize(word: string): string {
+  return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+}
+
+/**
+ * Some Gutenberg plain-text editions hard-wrap at every clause with a blank
+ * line between them (common in verse-like or numbered-maxim texts), which
+ * makes naive blank-line paragraph splitting produce tiny, choppy
+ * fragments like "batalha;" / "se" / "estivermos" instead of one flowing
+ * sentence. This merges consecutive fragments back together until each
+ * resulting paragraph actually ends in sentence-ending punctuation.
+ */
+function reflowParagraphs(paragraphs: string[]): string[] {
+  const merged: string[] = [];
+  let buffer = "";
+  for (const p of paragraphs) {
+    buffer = buffer ? `${buffer} ${p}` : p;
+    const endsSentence = /[.!?][”"')\]]?$/.test(buffer) || buffer.length > 500;
+    if (endsSentence) {
+      merged.push(buffer);
+      buffer = "";
+    }
+  }
+  if (buffer) merged.push(buffer);
+  return merged;
+}
+
 /**
  * Splits Gutenberg plain text into chapters. Tries common chapter markers
  * (CHAPTER/CAPÍTULO + numeral) first; falls back to fixed-size chunks so
@@ -78,17 +103,28 @@ interface ParsedChapter {
  */
 function parseChapters(text: string): ParsedChapter[] {
   const lines = text.split(/\r?\n/);
-  const markerRe =
-    /^\s*(CHAPTER|CAPÍTULO|CAP[IÍ]TULO)\s+([0-9IVXLCDM]+)\b\.?\s*(.*)$/i;
+  const markerRe = /^\s*(CHAPTER|CAPÍTULO|CAP[IÍ]TULO)\s+([0-9IVXLCDM]+)\b\.?\s*(.*)$/i;
 
   type Block = { title: string; lines: string[] };
   const blocks: Block[] = [];
   let current: Block | null = null;
 
   for (const line of lines) {
-    const m = markerRe.exec(line.trim());
+    const trimmed = line.trim();
+    const m = markerRe.exec(trimmed);
     if (m) {
-      current = { title: line.trim().replace(/\s+/g, " "), lines: [] };
+      const marker = capitalize(m[1]);
+      const number = m[2];
+      const trailing = (m[3] ?? "").trim();
+      // If there's a lot of text after the marker on the same line, it's
+      // almost always the start of the chapter's body (a run-on line in
+      // the source file), not a real subtitle — keep the heading clean
+      // and push that text into the body instead of the title.
+      const trailingIsTitle = trailing.length > 0 && trailing.length <= 60;
+      current = {
+        title: trailingIsTitle ? `${marker} ${number} — ${trailing}` : `${marker} ${number}`,
+        lines: trailingIsTitle ? [] : trailing ? [trailing] : [],
+      };
       blocks.push(current);
     } else if (current) {
       current.lines.push(line);
@@ -102,18 +138,32 @@ function parseChapters(text: string): ParsedChapter[] {
   }
 
   const toParagraphs = (raw: string[]): string[] =>
-    raw
-      .join("\n")
-      .split(/\n\s*\n/)
-      .map((p) => p.replace(/\s+/g, " ").trim())
-      .filter((p) => p.length > 0);
+    reflowParagraphs(
+      raw
+        .join("\n")
+        .split(/\n\s*\n/)
+        .map((p) => p.replace(/\s+/g, " ").trim())
+        .filter((p) => p.length > 0),
+    );
 
   // Good chapter markers found — use them (drop empty leading blocks).
   const withContent = blocks
     .map((b, i) => ({ id: `cap-${i}`, title: b.title, paragraphs: toParagraphs(b.lines) }))
     .filter((c) => c.paragraphs.length > 0);
 
-  if (withContent.length >= 2) return withContent;
+  // Sanity check: real chapter markers produce a handful of chapters with
+  // substantial content each. If matching produced a huge number of
+  // "chapters" averaging almost no paragraphs (e.g. the word "chapter"
+  // appears repeatedly in a table of contents, or matched incidentally),
+  // that's a false positive — prefer the fixed-size fallback instead.
+  const avgParagraphsPerChapter =
+    withContent.length > 0
+      ? withContent.reduce((sum, c) => sum + c.paragraphs.length, 0) / withContent.length
+      : 0;
+  const looksReliable =
+    withContent.length >= 2 && (withContent.length <= 20 || avgParagraphsPerChapter >= 2);
+
+  if (looksReliable) return withContent;
 
   // Fallback: no reliable chapter markers — chunk into ~6000-character
   // sections so the reader still has manageable "chapters".
@@ -135,7 +185,9 @@ function parseChapters(text: string): ParsedChapter[] {
   if (bucket.length > 0) {
     chunks.push({ id: `parte-${idx}`, title: `Parte ${idx + 1}`, paragraphs: bucket });
   }
-  return chunks.length > 0 ? chunks : [{ id: "unico", title: "Texto completo", paragraphs: allParagraphs }];
+  return chunks.length > 0
+    ? chunks
+    : [{ id: "unico", title: "Texto completo", paragraphs: allParagraphs }];
 }
 
 export const searchPublicDomainBooks = onCall<{ query?: string; maxResults?: number }>(

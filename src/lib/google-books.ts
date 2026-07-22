@@ -15,6 +15,7 @@
  */
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { getFirebase } from "./firebase";
+import { searchOpenLibrary } from "./open-library";
 
 export interface BookMeta {
   title: string;
@@ -223,6 +224,24 @@ export async function fetchBookMeta(title: string, author?: string): Promise<Boo
     }
   }
 
+  // Last resort: Open Library's search API tends to work even in networks
+  // that block Google's domains (it's a different host entirely), so it
+  // can still surface a real cover/author instead of a placeholder.
+  if (!meta) {
+    try {
+      const olResults = await searchOpenLibrary(author ? `${title} ${author}` : title, 1);
+      if (olResults[0]) {
+        meta = {
+          title: olResults[0].title,
+          author: olResults[0].author,
+          cover: olResults[0].cover,
+        };
+      }
+    } catch (err) {
+      console.warn("[google-books] open library fallback failed", err);
+    }
+  }
+
   memCache.set(key, meta);
   writeSessionCache(key, meta);
   return meta;
@@ -265,6 +284,25 @@ export async function searchBooks(
     return { results, networkError: false };
   } catch (err) {
     console.warn("[google-books] direct search failed", err);
+  }
+
+  // Both the Cloud Function and a direct browser fetch to Google failed —
+  // likely the visitor's network blocks Google's domains entirely (ad/
+  // privacy blockers, some corporate/school networks). Open Library is a
+  // different host and commonly still reachable, so fall back to it
+  // rather than showing an empty, dead-end error state.
+  try {
+    const categoryTerm = opts.category ? (CATEGORY_QUERY[opts.category] ?? opts.category) : "";
+    const q = [trimmed, categoryTerm].filter(Boolean).join(" ").trim() || trimmed;
+    const olResults = await searchOpenLibrary(q, opts.maxResults ?? 24);
+    // We got a real answer from a working source — even if it's empty,
+    // that's "no results", not "the network is blocked".
+    return {
+      results: olResults.map((b) => ({ title: b.title, author: b.author, cover: b.cover })),
+      networkError: false,
+    };
+  } catch (err) {
+    console.warn("[google-books] open library fallback search failed", err);
     return { results: [], networkError: true };
   }
 }

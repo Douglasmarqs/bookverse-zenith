@@ -13,6 +13,7 @@ import { Route as TermosRouteImport } from './routes/termos'
 import { Route as SobreRouteImport } from './routes/sobre'
 import { Route as RankingRouteImport } from './routes/ranking'
 import { Route as PrivacidadeRouteImport } from './routes/privacidade'
+import { Route as PerfilRouteImport } from './routes/perfil'
 import { Route as DescobrirRouteImport } from './routes/descobrir'
 import { Route as DesafiosRouteImport } from './routes/desafios'
 import { Route as ContatoRouteImport } from './routes/contato'
@@ -41,6 +42,11 @@ const RankingRoute = RankingRouteImport.update({
 const PrivacidadeRoute = PrivacidadeRouteImport.update({
   id: '/privacidade',
   path: '/privacidade',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PerfilRoute = PerfilRouteImport.update({
+  id: '/perfil',
+  path: '/perfil',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DescobrirRoute = DescobrirRouteImport.update({
@@ -97,6 +103,7 @@ export interface FileRoutesByFullPath {
   '/contato': typeof ContatoRoute
   '/desafios': typeof DesafiosRoute
   '/descobrir': typeof DescobrirRoute
+  '/perfil': typeof PerfilRoute
   '/privacidade': typeof PrivacidadeRoute
   '/ranking': typeof RankingRoute
   '/sobre': typeof SobreRoute
@@ -112,6 +119,7 @@ export interface FileRoutesByTo {
   '/contato': typeof ContatoRoute
   '/desafios': typeof DesafiosRoute
   '/descobrir': typeof DescobrirRoute
+  '/perfil': typeof PerfilRoute
   '/privacidade': typeof PrivacidadeRoute
   '/ranking': typeof RankingRoute
   '/sobre': typeof SobreRoute
@@ -128,6 +136,7 @@ export interface FileRoutesById {
   '/contato': typeof ContatoRoute
   '/desafios': typeof DesafiosRoute
   '/descobrir': typeof DescobrirRoute
+  '/perfil': typeof PerfilRoute
   '/privacidade': typeof PrivacidadeRoute
   '/ranking': typeof RankingRoute
   '/sobre': typeof SobreRoute
@@ -145,6 +154,7 @@ export interface FileRouteTypes {
     | '/contato'
     | '/desafios'
     | '/descobrir'
+    | '/perfil'
     | '/privacidade'
     | '/ranking'
     | '/sobre'
@@ -160,6 +170,7 @@ export interface FileRouteTypes {
     | '/contato'
     | '/desafios'
     | '/descobrir'
+    | '/perfil'
     | '/privacidade'
     | '/ranking'
     | '/sobre'
@@ -175,6 +186,7 @@ export interface FileRouteTypes {
     | '/contato'
     | '/desafios'
     | '/descobrir'
+    | '/perfil'
     | '/privacidade'
     | '/ranking'
     | '/sobre'
@@ -191,6 +203,7 @@ export interface RootRouteChildren {
   ContatoRoute: typeof ContatoRoute
   DesafiosRoute: typeof DesafiosRoute
   DescobrirRoute: typeof DescobrirRoute
+  PerfilRoute: typeof PerfilRoute
   PrivacidadeRoute: typeof PrivacidadeRoute
   RankingRoute: typeof RankingRoute
   SobreRoute: typeof SobreRoute
@@ -227,6 +240,13 @@ declare module '@tanstack/react-router' {
       path: '/privacidade'
       fullPath: '/privacidade'
       preLoaderRoute: typeof PrivacidadeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/perfil': {
+      id: '/perfil'
+      path: '/perfil'
+      fullPath: '/perfil'
+      preLoaderRoute: typeof PerfilRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/descobrir': {
@@ -303,6 +323,7 @@ const rootRouteChildren: RootRouteChildren = {
   ContatoRoute: ContatoRoute,
   DesafiosRoute: DesafiosRoute,
   DescobrirRoute: DescobrirRoute,
+  PerfilRoute: PerfilRoute,
   PrivacidadeRoute: PrivacidadeRoute,
   RankingRoute: RankingRoute,
   SobreRoute: SobreRoute,

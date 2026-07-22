@@ -1,10 +1,11 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Search, Menu, X, BookOpen, LogOut, User as UserIcon } from "lucide-react";
+import { Search, Menu, X, BookOpen, LogOut, User as UserIcon, Settings } from "lucide-react";
 import type { User } from "firebase/auth";
 import { signOut, subscribeAuth } from "../lib/firebase";
-import { ensureUserProfile } from "../lib/user-profile";
+import { ensureUserProfile, subscribeUserProfile, type UserProfile } from "../lib/user-profile";
 import { openLumiPanel } from "../lib/lumi-panel-store";
+import { UserAvatar } from "./user-avatar";
 import { toast } from "sonner";
 
 const NAV = [
@@ -19,6 +20,7 @@ export function SiteHeader() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
@@ -40,6 +42,14 @@ export function SiteHeader() {
     [],
   );
 
+  useEffect(() => {
+    if (!user || user.isAnonymous) {
+      setProfile(null);
+      return;
+    }
+    return subscribeUserProfile(user.uid, setProfile);
+  }, [user]);
+
   function submitSearch(e: React.FormEvent) {
     e.preventDefault();
     const q = searchValue.trim();
@@ -48,7 +58,6 @@ export function SiteHeader() {
   }
 
   const isSignedIn = !!user && !user.isAnonymous;
-  const initial = (user?.displayName || user?.email || "?").trim().charAt(0).toUpperCase() || "U";
 
   async function handleSignOut() {
     setMenuOpen(false);
@@ -123,17 +132,9 @@ export function SiteHeader() {
               <button
                 onClick={() => setMenuOpen((v) => !v)}
                 aria-label="Conta"
-                className="grid h-10 w-10 place-items-center rounded-full bg-gold/10 ring-1 ring-gold/40 text-sm font-semibold text-gold hover:bg-gold/20"
+                className="rounded-full transition hover:opacity-90"
               >
-                {user?.photoURL ? (
-                  <img
-                    src={user.photoURL}
-                    alt=""
-                    className="h-full w-full rounded-full object-cover"
-                  />
-                ) : (
-                  initial
-                )}
+                <UserAvatar profile={profile} user={user} size="md" />
               </button>
               {menuOpen && (
                 <div
@@ -141,10 +142,19 @@ export function SiteHeader() {
                   onMouseLeave={() => setMenuOpen(false)}
                 >
                   <div className="px-3 py-2">
-                    <p className="truncate text-sm font-medium">{user?.displayName || "Leitor"}</p>
+                    <p className="truncate text-sm font-medium">
+                      {profile?.displayName || user?.displayName || "Leitor"}
+                    </p>
                     <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
                   </div>
                   <div className="my-1 h-px bg-border/60" />
+                  <Link
+                    to="/perfil"
+                    onClick={() => setMenuOpen(false)}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-secondary"
+                  >
+                    <Settings className="h-4 w-4" /> Meu perfil
+                  </Link>
                   <button
                     onClick={handleSignOut}
                     className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-secondary"
@@ -211,15 +221,24 @@ export function SiteHeader() {
               IA
             </button>
             {isSignedIn ? (
-              <button
-                onClick={() => {
-                  setOpen(false);
-                  void signOut();
-                }}
-                className="mt-2 inline-flex items-center justify-center gap-2 rounded-full border border-border px-5 py-3 text-sm font-medium"
-              >
-                <UserIcon className="h-4 w-4" /> Sair ({user?.email})
-              </button>
+              <>
+                <Link
+                  to="/perfil"
+                  onClick={() => setOpen(false)}
+                  className="rounded-lg px-3 py-3 text-sm hover:bg-secondary"
+                >
+                  Meu perfil
+                </Link>
+                <button
+                  onClick={() => {
+                    setOpen(false);
+                    void signOut();
+                  }}
+                  className="mt-2 inline-flex items-center justify-center gap-2 rounded-full border border-border px-5 py-3 text-sm font-medium"
+                >
+                  <UserIcon className="h-4 w-4" /> Sair ({user?.email})
+                </button>
+              </>
             ) : (
               <Link
                 to="/auth"

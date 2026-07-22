@@ -1,5 +1,76 @@
 # Diagnóstico rápido — capas, catálogo e login
 
+## 🆕 Atualização — texto quebrado corrigido, catálogo com 3ª fonte de dados, perfil novo
+
+### O bug do texto quebrado em pedaços (Sun Tzu e possivelmente outros)
+
+Achei a causa real: o algoritmo que separa o texto em capítulos, quando uma
+linha de marcação de capítulo vinha seguida de uma frase longa na mesma
+linha (comum em certas edições do Gutenberg), acabava (1) jogando aquela
+frase inteira dentro do **título** do capítulo em vez do corpo do texto, e
+(2) como o texto original quebra linha a cada poucas palavras com linha em
+branco entre elas, cada fragmento curto virava um "parágrafo" separado —
+daí o efeito de frase picada ("batalha;" / "se" / "estivermos" cada um
+isolado).
+
+Corrigido dos dois lados (Cloud Function e navegador direto):
+- Título do capítulo agora fica limpo; texto longo que vier "grudado" na
+  linha de marcação vai para o corpo, não para o título.
+- Parágrafos fragmentados são remontados automaticamente até formarem uma
+  frase completa (termina em `.`, `!` ou `?`) — testei contra uma
+  reprodução exata do bug reportado e o resultado agora sai como texto
+  corrido, do jeito que deveria ser.
+- Apliquei o mesmo cuidado no importador de EPUB, para textos sem `<p>`
+  bem marcado.
+
+**Esse ajuste já está no código, mas — assim como toda mudança de
+`functions/` — só tem efeito depois de rodar `firebase deploy` dentro de
+`/functions` de novo** (ou, no caminho sem Cloud Function, só precisa do
+redeploy do site mesmo).
+
+### Catálogo geral: agora com uma 3ª fonte de dados
+
+O erro "rede bloqueada" que continuou aparecendo depois da correção
+anterior é porque o Google Books (Cloud Function *e* chamada direta do
+navegador) segue bloqueado no seu ambiente. Em vez de insistir só nisso,
+adicionei uma **terceira camada**: se as duas primeiras falharem, o app
+agora busca no Open Library (mesma fonte que já funciona na seção
+"Tendências da semana", como dá pra ver no seu próprio print) — tanto para
+a busca do catálogo geral quanto para a capa/sinopse na página de detalhes
+de cada livro. Isso deve resolver tanto a mensagem de erro quanto as capas
+que apareciam só como texto (ex: "Harry Potter and the Philosopher's
+Stone" sem capa real).
+
+### Bug real no upload de EPUB: capa grande demais podia travar o salvamento
+
+O Firestore tem um limite de 1MB por documento. A capa de um EPUB, extraída
+do próprio arquivo, ia direto pro banco em tamanho original — em capas
+maiores, isso passava do limite e o livro ficava salvo *localmente* (no
+navegador) mas falhava silenciosamente ao entrar na sua biblioteca online.
+Agora toda capa de EPUB é redimensionada (480px, JPEG) antes de salvar, e
+adicionei uma trava extra que descarta a capa (em vez de falhar tudo) se
+por algum motivo ela ainda vier grande demais.
+
+### Novo: tela de perfil e configurações de conta
+
+Em **Meu perfil** (link no menu da conta, no canto superior direito):
+- Avatar escolhível entre 16 opções, nome de exibição editável.
+- Resumo de XP, livros concluídos e itens na biblioteca.
+- Trocar senha (para contas de e-mail/senha) com reautenticação.
+- Excluir conta — apaga perfil, biblioteca e progresso, com confirmação
+  explícita (digitar "EXCLUIR" + senha) antes de executar.
+
+### Sobre os livros "que não dá pra nem clicar"
+
+Não consegui reproduzir esse ponto especificamente sem saber exatamente
+quais itens — mas a instabilidade generalizada do catálogo (que agora tem
+uma fonte de dados de reserva) era a causa mais provável de comportamento
+inconsistente entre os cards. Se depois desta atualização ainda sobrar
+algum item específico impossível de clicar, me diga qual exatamente (nome
+do livro + em qual página) que eu vou direto nele.
+
+---
+
 ## 🆕 Atualização — resolve "Missing or insufficient permissions", leitura sem depender de Cloud Functions, e EPUB próprio
 
 ### ⚠️ Ação mais importante: publicar as regras do Firestore (sem precisar de CLI)
