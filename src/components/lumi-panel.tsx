@@ -1,8 +1,21 @@
 import { useEffect, useRef, useState } from "react";
-import { Sparkles, X, Send, Loader2 } from "lucide-react";
-import owl from "@/assets/owl-mascot.png";
-import { closeLumiPanel, openLumiPanel, useLumiPanelState, type LumiContext } from "@/lib/lumi-panel-store";
+import { Sparkles, X, Send, Loader2, Trash2 } from "lucide-react";
+import owl from "@/assets/owl-mascot.webp";
+import {
+  closeLumiPanel,
+  openLumiPanel,
+  useLumiPanelState,
+  type LumiContext,
+} from "@/lib/lumi-panel-store";
 import { askLumi, type LumiMessage } from "@/lib/lumi";
+import { subscribeAuth } from "@/lib/firebase";
+import {
+  clearLumiHistory,
+  contextKeyFor,
+  loadLumiHistory,
+  saveLumiHistory,
+} from "@/lib/lumi-history";
+import type { User } from "firebase/auth";
 
 const SUGGESTIONS = [
   "Resuma o capítulo até aqui",
@@ -11,26 +24,49 @@ const SUGGESTIONS = [
   "Qual o contexto histórico desta obra?",
 ];
 
+function greeting(context: LumiContext | null): LumiMessage {
+  return {
+    role: "assistant",
+    text: context?.bookTitle
+      ? `Olá! Estou acompanhando "${context.bookTitle}" com você. Posso resumir, explicar trechos ou dar contexto — o que você gostaria de saber?`
+      : "Olá, eu sou a Lumi 🦉 — sua companhia de leitura. Posso resumir capítulos, explicar trechos difíceis ou recomendar livros parecidos. Como posso ajudar?",
+  };
+}
+
 export function LumiPanel() {
   const { open, context } = useLumiPanelState();
+  const [user, setUser] = useState<User | null>(null);
   const [messages, setMessages] = useState<LumiMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const contextKey = contextKeyFor(context?.bookTitle);
+  const canPersist = !!user && !user.isAnonymous;
 
+  useEffect(() => subscribeAuth(setUser), []);
+
+  // Load this context's saved thread (if any) once per open+context+account.
   useEffect(() => {
-    if (open && messages.length === 0) {
-      setMessages([
-        {
-          role: "assistant",
-          text: context?.bookTitle
-            ? `Olá! Estou acompanhando "${context.bookTitle}" com você. Posso resumir, explicar trechos ou dar contexto — o que você gostaria de saber?`
-            : "Olá, eu sou a Lumi 🦉 — sua companhia de leitura. Posso resumir capítulos, explicar trechos difíceis ou recomendar livros parecidos. Como posso ajudar?",
-        },
-      ]);
+    if (!open) return;
+    setHistoryLoaded(false);
+    if (!canPersist) {
+      setMessages([greeting(context ?? null)]);
+      setHistoryLoaded(true);
+      return;
     }
-  }, [open, context, messages.length]);
+    let cancelled = false;
+    loadLumiHistory(user!.uid, contextKey).then((saved) => {
+      if (cancelled) return;
+      setMessages(saved.length > 0 ? saved : [greeting(context ?? null)]);
+      setHistoryLoaded(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, contextKey, canPersist]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -46,11 +82,25 @@ export function LumiPanel() {
     setLoading(true);
     try {
       const reply = await askLumi(next, context);
-      setMessages((m) => [...m, { role: "assistant", text: reply }]);
+      const withReply: LumiMessage[] = [...next, { role: "assistant", text: reply }];
+      setMessages(withReply);
+      if (canPersist) void saveLumiHistory(user!.uid, contextKey, withReply);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Algo deu errado.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleClear() {
+    const fresh = [greeting(context ?? null)];
+    setMessages(fresh);
+    if (canPersist) {
+      try {
+        await clearLumiHistory(user!.uid, contextKey);
+      } catch (err) {
+        console.warn("[lumi] failed to clear history", err);
+      }
     }
   }
 
@@ -73,6 +123,14 @@ export function LumiPanel() {
             </p>
           </div>
           <button
+            onClick={handleClear}
+            aria-label="Limpar conversa"
+            title="Limpar conversa"
+            className="grid h-9 w-9 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+          <button
             onClick={closeLumiPanel}
             aria-label="Fechar painel da Lumi"
             className="grid h-9 w-9 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
@@ -82,22 +140,28 @@ export function LumiPanel() {
         </div>
 
         <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
-          {messages.map((m, i) => (
-            <div
-              key={i}
-              className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
-            >
-              <div
-                className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-                  m.role === "user"
-                    ? "bg-gold text-primary-foreground"
-                    : "border border-border/60 bg-card text-foreground"
-                }`}
-              >
-                {m.text}
-              </div>
+          {!historyLoaded ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             </div>
-          ))}
+          ) : (
+            messages.map((m, i) => (
+              <div
+                key={i}
+                className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+              >
+                <div
+                  className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                    m.role === "user"
+                      ? "bg-gold text-primary-foreground"
+                      : "border border-border/60 bg-card text-foreground"
+                  }`}
+                >
+                  {m.text}
+                </div>
+              </div>
+            ))
+          )}
           {loading && (
             <div className="flex justify-start">
               <div className="flex items-center gap-2 rounded-2xl border border-border/60 bg-card px-4 py-2.5 text-sm text-muted-foreground">

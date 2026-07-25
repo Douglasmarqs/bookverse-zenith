@@ -8,6 +8,9 @@ rules_version = '2';
 //                                   name/xp; written only by the owner)
 //   users/{uid}/library/{bookId}   personal library — owner-only
 //   users/{uid}/progress/{bookId}  reading progress — owner-only
+//   users/{uid}/annotations/{id}   highlights + bookmarks — owner-only
+//   users/{uid}/lumi/{contextKey}  Lumi AI chat history, one per book —
+//                                  owner-only
 //   publicDomainBooks/{id}         Gutenberg text cache — Admin SDK only
 //                                  (Cloud Functions bypass these rules), so
 //                                  it's intentionally left with no client
@@ -22,6 +25,12 @@ service cloud.firestore {
         allow read, write: if request.auth != null && request.auth.uid == uid;
       }
       match /progress/{bookId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+      match /annotations/{bookId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+      match /lumi/{contextKey} {
         allow read, write: if request.auth != null && request.auth.uid == uid;
       }
     }

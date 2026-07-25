@@ -307,8 +307,10 @@ export async function searchPublicDomainBooks(
 
 export async function getPublicDomainBook(gutenbergId: number): Promise<Book> {
   const fb = getFirebase();
+  let cloudFunctionTried = false;
   if (fb) {
     try {
+      cloudFunctionTried = true;
       const fn = httpsCallable<{ gutenbergId: number }, Book>(
         getFunctions(fb.app),
         "getPublicDomainBook",
@@ -322,7 +324,29 @@ export async function getPublicDomainBook(gutenbergId: number): Promise<Book> {
       );
     }
   }
-  // Let this throw — the reader page already shows a clear error if it
-  // rejects, and there's no useful fallback beyond this.
-  return directGetPublicDomainBook(gutenbergId);
+
+  try {
+    return await directGetPublicDomainBook(gutenbergId);
+  } catch (err) {
+    console.warn("[public-domain] direct fetch also failed", err);
+    // A bare TypeError here is fetch()'s own generic "Failed to fetch" —
+    // it means the browser couldn't reach gutenberg.org directly (no CORS
+    // headers on that file, or the network blocks it), which isn't
+    // fixable from the browser side. An AbortError means our own timeout
+    // fired (see fetchWithTimeout). Errors we threw ourselves above (book
+    // not found, no plain-text edition, etc.) already have a clear
+    // message, so only rewrite these two generic/cryptic cases.
+    const isNetworkFailure = err instanceof TypeError;
+    const isTimeout = err instanceof DOMException && err.name === "AbortError";
+    if (isNetworkFailure || isTimeout) {
+      throw new Error(
+        isTimeout
+          ? "O download do texto deste livro demorou demais e foi cancelado. Tente novamente — se persistir, publique as Cloud Functions do projeto (veja DEPLOY.md) para um download mais confiável."
+          : cloudFunctionTried
+            ? "Não conseguimos baixar o texto deste livro nem pelo servidor nem diretamente. Se você administra este site, publique as Cloud Functions (veja DEPLOY.md) — isso resolve de forma definitiva."
+            : "Não conseguimos baixar o texto deste livro. Se você administra este site, publique as Cloud Functions do projeto (veja DEPLOY.md) para que a leitura funcione de forma confiável.",
+      );
+    }
+    throw err;
+  }
 }

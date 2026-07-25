@@ -1,4 +1,6 @@
 // Sample book content — will be replaced by real data from APIs / Firebase later.
+import book1Cover from "@/assets/book-1.webp";
+
 export type Chapter = { id: string; title: string; paragraphs: string[] };
 export type Book = {
   id: string;
@@ -27,7 +29,7 @@ export const SAMPLE_BOOK: Book = {
   id: "casa-espiritos",
   title: "A Casa dos Espíritos",
   author: "Isabel Allende",
-  cover: "/src/assets/book-1.jpg",
+  cover: book1Cover,
   chapters: [
     {
       id: "prologo",

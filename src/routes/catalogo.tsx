@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { describeFirestoreError } from "@/lib/async-utils";
 import { subscribeAuth } from "@/lib/firebase";
 import { LanguageBadge } from "@/components/language-badge";
+import { Carousel } from "@/components/carousel";
 import type { User } from "firebase/auth";
 
 export const Route = createFileRoute("/catalogo")({
@@ -197,11 +198,7 @@ function Shelf({
 }
 
 function BookRail({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="-mx-5 flex snap-x snap-mandatory gap-5 overflow-x-auto px-5 pb-4 md:-mx-8 md:px-8 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      {children}
-    </div>
-  );
+  return <Carousel>{children}</Carousel>;
 }
 
 function OpenLibraryCard({ book, rank }: { book: OpenLibraryBook; rank?: number }) {

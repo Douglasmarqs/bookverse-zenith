@@ -1,4 +1,4 @@
-import { X, Type, AlignJustify, Rows3, Columns2, Sun, Moon, BookOpen } from "lucide-react";
+import { X, Type, AlignJustify, Rows3, Columns2 } from "lucide-react";
 import type { ReaderSettings, ReaderTheme, ReaderFont, ReaderMode } from "@/lib/reader-store";
 
 interface Props {
@@ -7,6 +7,13 @@ interface Props {
   settings: ReaderSettings;
   onChange: (patch: Partial<ReaderSettings>) => void;
 }
+
+const THEME_SWATCHES: { value: ReaderTheme; label: string; bg: string; fg: string }[] = [
+  { value: "light", label: "Claro", bg: "#FFFFFF", fg: "#1A1A1A" },
+  { value: "paper", label: "Papel", bg: "#F2ECE1", fg: "#2A2420" },
+  { value: "sepia", label: "Sépia", bg: "#EFE0C0", fg: "#3A2818" },
+  { value: "dark", label: "Escuro", bg: "#0E0B08", fg: "#E8DFD3" },
+];
 
 export function ReaderSettingsPanel({ open, onClose, settings, onChange }: Props) {
   return (
@@ -36,15 +43,27 @@ export function ReaderSettingsPanel({ open, onClose, settings, onChange }: Props
 
         <div className="flex-1 space-y-8 overflow-y-auto px-5 py-6">
           <Group label="Tema">
-            <SegGroup
-              value={settings.theme}
-              onChange={(v) => onChange({ theme: v as ReaderTheme })}
-              options={[
-                { value: "light", label: "Claro", icon: <Sun className="h-3.5 w-3.5" /> },
-                { value: "sepia", label: "Sépia", icon: <BookOpen className="h-3.5 w-3.5" /> },
-                { value: "dark", label: "Escuro", icon: <Moon className="h-3.5 w-3.5" /> },
-              ]}
-            />
+            <div className="grid grid-cols-2 gap-2.5">
+              {THEME_SWATCHES.map((t) => (
+                <button
+                  key={t.value}
+                  onClick={() => onChange({ theme: t.value })}
+                  className={`flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition ${
+                    settings.theme === t.value
+                      ? "border-gold ring-1 ring-gold"
+                      : "border-border/60 hover:border-gold/40"
+                  }`}
+                >
+                  <span
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[10px] font-semibold ring-1 ring-black/10"
+                    style={{ background: t.bg, color: t.fg }}
+                  >
+                    Aa
+                  </span>
+                  <span className="text-xs font-medium">{t.label}</span>
+                </button>
+              ))}
+            </div>
           </Group>
 
           <Group label="Fonte">

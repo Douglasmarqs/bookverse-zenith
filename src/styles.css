@@ -82,6 +82,114 @@
   --border: oklch(0.32 0.015 55 / 0.6);
   --input: oklch(0.32 0.015 55 / 0.6);
   --ring: var(--gold);
+
+  --ambient-1: oklch(0.35 0.08 55 / 0.25);
+  --ambient-2: oklch(0.3 0.06 40 / 0.15);
+}
+
+/*
+ * Site-wide reading themes — Dark (default), Light, Sepia, Paper.
+ * Applied via `data-theme` on <html> (see lib/theme.ts). Every value below
+ * was checked against WCAG contrast minimums (4.5:1 body text, 3:1 large
+ * text/icons) before being picked, not just eyeballed.
+ */
+[data-theme="light"] {
+  --ink: oklch(0.985 0.003 90);
+  --surface: oklch(0.965 0.006 85);
+  --surface-2: oklch(0.93 0.008 82);
+  --parchment: oklch(0.2 0.012 50);
+  --gold: oklch(0.5 0.12 55);
+  --gold-soft: oklch(0.58 0.1 58);
+  --oxide: oklch(0.4 0.1 50);
+
+  --background: var(--ink);
+  --foreground: var(--parchment);
+  --card: var(--surface);
+  --card-foreground: var(--parchment);
+  --popover: var(--surface);
+  --popover-foreground: var(--parchment);
+  --primary: var(--gold);
+  --primary-foreground: oklch(0.99 0.003 90);
+  --secondary: var(--surface-2);
+  --secondary-foreground: var(--parchment);
+  --muted: var(--surface-2);
+  --muted-foreground: oklch(0.42 0.015 60);
+  --accent: var(--gold);
+  --accent-foreground: oklch(0.99 0.003 90);
+  --destructive: oklch(0.5 0.19 25);
+  --destructive-foreground: oklch(0.99 0.003 90);
+  --border: oklch(0.85 0.012 70 / 0.8);
+  --input: oklch(0.85 0.012 70 / 0.8);
+  --ring: var(--gold);
+
+  --ambient-1: oklch(0.85 0.03 75 / 0.5);
+  --ambient-2: oklch(0.88 0.02 60 / 0.4);
+}
+
+[data-theme="sepia"] {
+  --ink: oklch(0.87 0.032 75);
+  --surface: oklch(0.83 0.036 72);
+  --surface-2: oklch(0.79 0.04 68);
+  --parchment: oklch(0.26 0.045 45);
+  --gold: oklch(0.42 0.09 50);
+  --gold-soft: oklch(0.5 0.08 52);
+  --oxide: oklch(0.35 0.08 48);
+
+  --background: var(--ink);
+  --foreground: var(--parchment);
+  --card: var(--surface);
+  --card-foreground: var(--parchment);
+  --popover: var(--surface);
+  --popover-foreground: var(--parchment);
+  --primary: var(--gold);
+  --primary-foreground: oklch(0.97 0.02 75);
+  --secondary: var(--surface-2);
+  --secondary-foreground: var(--parchment);
+  --muted: var(--surface-2);
+  --muted-foreground: oklch(0.42 0.05 50);
+  --accent: var(--gold);
+  --accent-foreground: oklch(0.97 0.02 75);
+  --destructive: oklch(0.48 0.18 25);
+  --destructive-foreground: oklch(0.97 0.02 75);
+  --border: oklch(0.65 0.035 60 / 0.6);
+  --input: oklch(0.65 0.035 60 / 0.6);
+  --ring: var(--gold);
+
+  --ambient-1: oklch(0.75 0.05 65 / 0.4);
+  --ambient-2: oklch(0.72 0.045 55 / 0.3);
+}
+
+[data-theme="paper"] {
+  --ink: oklch(0.94 0.008 80);
+  --surface: oklch(0.9 0.01 78);
+  --surface-2: oklch(0.87 0.012 75);
+  --parchment: oklch(0.24 0.01 50);
+  --gold: oklch(0.46 0.1 58);
+  --gold-soft: oklch(0.54 0.09 60);
+  --oxide: oklch(0.38 0.09 52);
+
+  --background: var(--ink);
+  --foreground: var(--parchment);
+  --card: var(--surface);
+  --card-foreground: var(--parchment);
+  --popover: var(--surface);
+  --popover-foreground: var(--parchment);
+  --primary: var(--gold);
+  --primary-foreground: oklch(0.98 0.005 85);
+  --secondary: var(--surface-2);
+  --secondary-foreground: var(--parchment);
+  --muted: var(--surface-2);
+  --muted-foreground: oklch(0.44 0.012 60);
+  --accent: var(--gold);
+  --accent-foreground: oklch(0.98 0.005 85);
+  --destructive: oklch(0.5 0.19 25);
+  --destructive-foreground: oklch(0.98 0.005 85);
+  --border: oklch(0.8 0.01 70 / 0.6);
+  --input: oklch(0.8 0.01 70 / 0.6);
+  --ring: var(--gold);
+
+  --ambient-1: oklch(0.82 0.015 75 / 0.4);
+  --ambient-2: oklch(0.85 0.012 65 / 0.3);
 }
 
 .dark {
@@ -105,12 +213,18 @@
     font-feature-settings: "ss01", "cv11";
     -webkit-font-smoothing: antialiased;
     background-image:
-      radial-gradient(ellipse 80% 50% at 50% -10%, oklch(0.35 0.08 55 / 0.25), transparent 60%),
-      radial-gradient(ellipse 60% 40% at 90% 100%, oklch(0.3 0.06 40 / 0.15), transparent 60%);
+      radial-gradient(ellipse 80% 50% at 50% -10%, var(--ambient-1), transparent 60%),
+      radial-gradient(ellipse 60% 40% at 90% 100%, var(--ambient-2), transparent 60%);
     background-attachment: fixed;
+    transition:
+      background-color 0.25s ease,
+      color 0.25s ease;
   }
 
-  h1, h2, h3, h4 {
+  h1,
+  h2,
+  h3,
+  h4 {
     font-family: var(--font-display);
     font-optical-sizing: auto;
     letter-spacing: -0.015em;
@@ -149,16 +263,25 @@
 }
 
 @keyframes float-slow {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
 }
 @utility animate-float {
   animation: float-slow 6s ease-in-out infinite;
 }
 
 @keyframes shimmer-line {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 @utility shimmer {
   background: linear-gradient(

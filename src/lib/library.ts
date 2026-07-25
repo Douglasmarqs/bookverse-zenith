@@ -21,7 +21,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { getFirebase } from "./firebase";
-import { awardXp } from "./user-profile";
+import { awardXp, recordReadingActivity } from "./user-profile";
 import { withDeadline, withFallback } from "./async-utils";
 import type { BookMeta } from "./google-books";
 
@@ -121,6 +121,7 @@ export async function addToLibrary(
     "Não foi possível adicionar este livro à biblioteca agora. Tente novamente.",
   );
   void awardXp(uid, 5);
+  void recordReadingActivity(uid, { bookAdded: true });
 }
 
 /**
@@ -153,6 +154,7 @@ export async function markAsReading(
       };
       if (data.status !== "concluido") patch.status = "lendo";
       await withDeadline(setDoc(ref, patch, { merge: true }), WRITE_TIMEOUT_MS, "timeout");
+      void recordReadingActivity(uid, {});
       return;
     }
 
@@ -173,6 +175,7 @@ export async function markAsReading(
       "timeout",
     );
     void awardXp(uid, 5);
+    void recordReadingActivity(uid, { bookAdded: true });
   } catch (err) {
     console.warn("[library] markAsReading failed (non-blocking)", err);
   }

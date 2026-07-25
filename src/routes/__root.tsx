@@ -124,6 +124,14 @@ function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="pt-BR" className="dark">
       <head>
+        {/* Applied synchronously, before hydration, so switching to
+            Light/Sepia/Paper doesn't flash the dark theme first on load. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){try{var t=localStorage.getItem('bookverse:theme');if(t&&t!=='dark'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();",
+          }}
+        />
         <HeadContent />
       </head>
       <body>

@@ -10,16 +10,13 @@ import {
   Library,
   Eye,
   EyeOff,
+  Flame,
+  Palette,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { User } from "firebase/auth";
 import { useRequireAuth } from "@/hooks/use-require-auth";
-import {
-  changePassword,
-  deleteAccount,
-  getPrimaryProvider,
-  updateDisplayName,
-} from "@/lib/firebase";
+import { getPrimaryProvider, updateDisplayName } from "@/lib/firebase";
 import {
   deleteUserData,
   subscribeUserProfile,
@@ -27,9 +24,12 @@ import {
   type UserProfile,
 } from "@/lib/user-profile";
 import { subscribeLibrary } from "@/lib/library";
+import { getLevelInfo } from "@/lib/achievements";
 import { describeFirestoreError } from "@/lib/async-utils";
 import { UserAvatar } from "@/components/user-avatar";
 import { AVATAR_EMOJIS } from "@/lib/avatar-emojis";
+import { useSiteTheme } from "@/hooks/use-site-theme";
+import { THEME_LABEL, THEME_PREVIEW, allThemes } from "@/lib/theme";
 
 export const Route = createFileRoute("/perfil")({
   head: () => ({
@@ -84,6 +84,7 @@ function PerfilPage({ user }: { user: User }) {
   const [deleting, setDeleting] = useState(false);
 
   const provider = getPrimaryProvider(user);
+  const [siteTheme, setSiteTheme] = useSiteTheme();
 
   useEffect(() => subscribeUserProfile(user.uid, setProfile), [user.uid]);
   useEffect(
@@ -139,6 +140,7 @@ function PerfilPage({ user }: { user: User }) {
     }
     setPasswordSaving(true);
     try {
+      const { changePassword } = await import("@/lib/firebase-account");
       await changePassword(currentPassword, newPassword);
       setCurrentPassword("");
       setNewPassword("");
@@ -164,6 +166,7 @@ function PerfilPage({ user }: { user: User }) {
     setDeleting(true);
     try {
       await deleteUserData(user.uid);
+      const { deleteAccount } = await import("@/lib/firebase-account");
       await deleteAccount(provider === "password" ? deletePassword : undefined);
       toast.success("Conta excluída.");
       navigate({ to: "/", replace: true });
@@ -200,8 +203,19 @@ function PerfilPage({ user }: { user: User }) {
       </div>
 
       {/* Stats */}
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard icon={Trophy} label="XP total" value={profile?.xp ?? 0} />
+      <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <StatCard
+          icon={Trophy}
+          label={`Nível ${getLevelInfo(profile?.xp ?? 0).level}`}
+          value={profile?.xp ?? 0}
+          suffix=" XP"
+        />
+        <StatCard
+          icon={Flame}
+          label="Sequência"
+          value={profile?.currentStreak ?? 0}
+          suffix=" dias"
+        />
         <StatCard
           icon={BookMarked}
           label="Livros concluídos"
@@ -209,6 +223,12 @@ function PerfilPage({ user }: { user: User }) {
         />
         <StatCard icon={Library} label="Na biblioteca" value={libraryCount} />
       </div>
+      <Link
+        to="/desafios"
+        className="mt-3 inline-flex items-center gap-1.5 text-xs text-gold underline underline-offset-4"
+      >
+        Ver conquistas e missões
+      </Link>
 
       {/* Edit profile */}
       <section className="mt-10 rounded-2xl border border-border/60 bg-card/40 p-6">
@@ -261,6 +281,38 @@ function PerfilPage({ user }: { user: User }) {
             Salvar
           </button>
         </form>
+      </section>
+
+      {/* Appearance */}
+      <section className="mt-6 rounded-2xl border border-border/60 bg-card/40 p-6">
+        <h2 className="flex items-center gap-2 font-display text-xl font-medium">
+          <Palette className="h-4 w-4 text-gold" /> Aparência
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Escolha o tema de todo o aplicativo. O leitor tem suas próprias opções de tema,
+          independentes desta.
+        </p>
+        <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+          {allThemes().map((t) => (
+            <button
+              key={t}
+              onClick={() => setSiteTheme(t)}
+              className={`flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition ${
+                siteTheme === t
+                  ? "border-gold ring-1 ring-gold"
+                  : "border-border/60 hover:border-gold/40"
+              }`}
+            >
+              <span
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[10px] font-semibold ring-1 ring-black/10"
+                style={{ background: THEME_PREVIEW[t].bg, color: THEME_PREVIEW[t].fg }}
+              >
+                Aa
+              </span>
+              <span className="text-xs font-medium">{THEME_LABEL[t]}</span>
+            </button>
+          ))}
+        </div>
       </section>
 
       {/* Security */}
@@ -397,15 +449,20 @@ function StatCard({
   icon: Icon,
   label,
   value,
+  suffix,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: number;
+  suffix?: string;
 }) {
   return (
     <div className="rounded-2xl border border-border/60 bg-card/40 p-5">
       <Icon className="h-5 w-5 text-gold" />
-      <p className="mt-3 font-display text-3xl font-medium">{value}</p>
+      <p className="mt-3 font-display text-3xl font-medium">
+        {value}
+        {suffix && <span className="text-base text-muted-foreground">{suffix}</span>}
+      </p>
       <p className="mt-1 text-sm text-muted-foreground">{label}</p>
     </div>
   );

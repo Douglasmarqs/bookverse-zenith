@@ -6,6 +6,7 @@ import { signOut, subscribeAuth } from "../lib/firebase";
 import { ensureUserProfile, subscribeUserProfile, type UserProfile } from "../lib/user-profile";
 import { openLumiPanel } from "../lib/lumi-panel-store";
 import { UserAvatar } from "./user-avatar";
+import { ThemeSwitcher } from "./theme-switcher";
 import { toast } from "sonner";
 
 const NAV = [
@@ -13,6 +14,7 @@ const NAV = [
   { label: "Catálogo", to: "/catalogo" as const },
   { label: "Descobrir", to: "/descobrir" as const },
   { label: "Minha biblioteca", to: "/biblioteca" as const },
+  { label: "Desafios", to: "/desafios" as const },
   { label: "Ranking", to: "/ranking" as const },
 ];
 
@@ -127,6 +129,8 @@ export function SiteHeader() {
             IA
           </button>
 
+          <ThemeSwitcher />
+
           {isSignedIn ? (
             <div className="relative">
               <button
@@ -138,7 +142,7 @@ export function SiteHeader() {
               </button>
               {menuOpen && (
                 <div
-                  className="absolute right-0 mt-2 w-56 rounded-2xl border border-border/60 bg-background/95 p-2 shadow-xl backdrop-blur-xl"
+                  className="absolute right-0 mt-2 w-56 max-w-[calc(100vw-2rem)] rounded-2xl border border-border/60 bg-background/95 p-2 shadow-xl backdrop-blur-xl"
                   onMouseLeave={() => setMenuOpen(false)}
                 >
                   <div className="px-3 py-2">

@@ -23,8 +23,8 @@ import {
   isFirebaseConfigured,
   getFirebaseKeyDebugInfo,
 } from "../lib/firebase";
-import heroImg from "@/assets/hero-library.jpg";
-import owl from "@/assets/owl-mascot.png";
+import heroImg from "@/assets/hero-library.webp";
+import owl from "@/assets/owl-mascot.webp";
 
 export const Route = createFileRoute("/auth")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -174,7 +174,14 @@ function AuthPage() {
       {/* Branding panel — hidden on small screens */}
       <div className="glass-plate relative hidden overflow-hidden rounded-3xl p-10 lg:flex lg:flex-col lg:justify-between lg:self-stretch">
         <div className="pointer-events-none absolute inset-0">
-          <img src={heroImg} alt="" className="h-full w-full object-cover opacity-30" />
+          <img
+            src={heroImg}
+            alt=""
+            width={1920}
+            height={1280}
+            fetchPriority="high"
+            className="h-full w-full object-cover opacity-30"
+          />
           <div className="absolute inset-0 bg-gradient-to-b from-background/50 via-background/80 to-background" />
         </div>
         <div className="relative">

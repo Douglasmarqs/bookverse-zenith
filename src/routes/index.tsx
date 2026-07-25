@@ -14,10 +14,11 @@ import {
   Play,
 } from "lucide-react";
 
-import heroImg from "@/assets/hero-library.jpg";
-import owl from "@/assets/owl-mascot.png";
-import b1 from "@/assets/book-1.jpg";
+import heroImg from "@/assets/hero-library.webp";
+import owl from "@/assets/owl-mascot.webp";
+import b1 from "@/assets/book-1.webp";
 import { BookCover } from "@/components/book-cover";
+import { Carousel } from "@/components/carousel";
 import { LanguageBadge } from "@/components/language-badge";
 import { LumiButton } from "@/components/lumi-panel";
 import { subscribeRanking, type RankingRow } from "@/lib/ranking";
@@ -130,6 +131,7 @@ function Home() {
             alt=""
             width={1920}
             height={1280}
+            fetchPriority="high"
             className="h-full w-full object-cover opacity-40"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/70 to-background" />
@@ -273,11 +275,11 @@ function Home() {
           actionTo="/descobrir"
           icon={<Flame className="h-4 w-4" />}
         >
-          <div className="-mx-5 flex snap-x snap-mandatory gap-5 overflow-x-auto px-5 pb-4 md:-mx-8 md:px-8 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <Carousel>
             {bestsellers.map((book, i) => (
               <OpenLibraryBookCard key={book.workKey + i} book={book} rank={i + 1} />
             ))}
-          </div>
+          </Carousel>
         </Section>
       )}
 
@@ -290,7 +292,7 @@ function Home() {
           actionTo="/catalogo"
           icon={<Sparkles className="h-4 w-4" />}
         >
-          <div className="-mx-5 flex snap-x snap-mandatory gap-5 overflow-x-auto px-5 pb-4 md:-mx-8 md:px-8 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <Carousel>
             {subjectBestsellers.map((book, i) => (
               <Link
                 key={book.workKey + i}
@@ -313,7 +315,7 @@ function Home() {
                 <p className="mt-0.5 truncate text-xs text-muted-foreground">{book.author}</p>
               </Link>
             ))}
-          </div>
+          </Carousel>
         </Section>
       )}
 

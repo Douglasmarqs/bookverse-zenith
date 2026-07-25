@@ -1,5 +1,10 @@
 import type { User } from "firebase/auth";
-import type { UserProfile } from "@/lib/user-profile";
+
+type MinimalProfile = {
+  avatarEmoji?: string | null;
+  photoURL?: string | null;
+  displayName?: string | null;
+};
 
 const SIZES = {
   sm: "h-8 w-8 text-sm",
@@ -10,7 +15,9 @@ const SIZES = {
 /**
  * Renders, in priority order: the chosen emoji avatar, the account's photo
  * (Google profile picture), or a colored initial. Used anywhere a user's
- * avatar shows up so all three stay visually consistent.
+ * avatar shows up so all three stay visually consistent. Accepts any
+ * object with the three display fields — the full `UserProfile`, a
+ * `RankingRow`, or anything else shaped the same way.
  */
 export function UserAvatar({
   profile,
@@ -18,7 +25,7 @@ export function UserAvatar({
   size = "md",
   className = "",
 }: {
-  profile?: UserProfile | null;
+  profile?: MinimalProfile | null;
   user?: User | null;
   size?: keyof typeof SIZES;
   className?: string;

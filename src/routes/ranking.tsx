@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { Trophy } from "lucide-react";
 import { subscribeRanking, type RankingRow } from "@/lib/ranking";
 import { subscribeAuth } from "@/lib/firebase";
+import { getLevelInfo } from "@/lib/achievements";
+import { UserAvatar } from "@/components/user-avatar";
 import type { User } from "firebase/auth";
 
 export const Route = createFileRoute("/ranking")({
@@ -54,6 +56,7 @@ function RankingPage() {
           <ul className="divide-y divide-border/60">
             {rows.map((r) => {
               const me = user && !user.isAnonymous && r.uid === user.uid;
+              const level = getLevelInfo(r.xp).level;
               return (
                 <li
                   key={r.uid}
@@ -68,15 +71,12 @@ function RankingPage() {
                   >
                     {r.pos}
                   </span>
-                  {r.photoURL ? (
-                    <img src={r.photoURL} alt="" className="h-8 w-8 rounded-full object-cover" />
-                  ) : (
-                    <span className="grid h-8 w-8 place-items-center rounded-full bg-secondary text-xs font-medium text-foreground/70">
-                      {r.displayName.charAt(0).toUpperCase()}
-                    </span>
-                  )}
+                  <UserAvatar profile={r} size="sm" />
                   <span className={`truncate ${me ? "font-medium" : ""}`}>
                     {me ? "Você" : r.displayName}
+                    <span className="ml-2 rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      Nv. {level}
+                    </span>
                   </span>
                   <span className="text-sm tabular-nums text-muted-foreground">
                     {r.xp.toLocaleString("pt-BR")} XP

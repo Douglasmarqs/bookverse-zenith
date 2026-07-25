@@ -9,7 +9,7 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 import { ensureUser, getFirebase } from "./firebase";
 import { withDeadline, withFallback } from "./async-utils";
 
-export type ReaderTheme = "light" | "sepia" | "dark";
+export type ReaderTheme = "light" | "paper" | "sepia" | "dark";
 export type ReaderFont = "serif" | "sans";
 export type ReaderMode = "scroll" | "paginated";
 

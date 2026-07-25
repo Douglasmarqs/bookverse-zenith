@@ -33,12 +33,46 @@ export interface UserProfile {
   avatarEmoji?: string | null;
   xp: number;
   booksCompleted: number;
+  /** Total chapters finished across every book — the closest proxy we
+   * have to "pages read" without per-book pagination data. */
+  chaptersRead?: number;
+  /** Consecutive days with any reading activity (opening a book or
+   * finishing a chapter counts). */
+  currentStreak?: number;
+  longestStreak?: number;
+  /** YYYY-MM-DD (local date) of the last day that counted toward the
+   * streak — used to tell "still today", "continues from yesterday", or
+   * "streak broken" apart. */
+  lastActiveDate?: string;
+  /** Monday (YYYY-MM-DD) of the week the counters below apply to — reset
+   * automatically once a new week starts. */
+  weekStart?: string;
+  weeklyChaptersRead?: number;
+  weeklyXp?: number;
+  weeklyBooksAdded?: number;
   createdAt?: unknown;
   updatedAt?: unknown;
 }
 
 const READ_TIMEOUT_MS = 5000;
 const WRITE_TIMEOUT_MS = 10000;
+
+function localDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Monday of the week containing `d`, as a local YYYY-MM-DD key — used to
+ * reset the weekly mission counters when a new week starts. */
+function mondayKey(d: Date): string {
+  const date = new Date(d);
+  const day = date.getDay(); // 0 = Sunday
+  const diff = (day === 0 ? -6 : 1) - day;
+  date.setDate(date.getDate() + diff);
+  return localDateKey(date);
+}
 
 /**
  * Creates the user's profile doc on first sign-in (real account, not
@@ -66,6 +100,14 @@ export async function ensureUserProfile(user: User): Promise<void> {
           photoURL: user.photoURL ?? null,
           xp: 0,
           booksCompleted: 0,
+          chaptersRead: 0,
+          currentStreak: 0,
+          longestStreak: 0,
+          lastActiveDate: null,
+          weekStart: null,
+          weeklyChaptersRead: 0,
+          weeklyXp: 0,
+          weeklyBooksAdded: 0,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         }),
@@ -98,13 +140,79 @@ export async function awardXp(uid: string, amount: number): Promise<void> {
   if (!fb || amount <= 0) return;
   const ref = doc(fb.db, "users", uid);
   try {
-    await withDeadline(
-      setDoc(ref, { xp: increment(amount), updatedAt: serverTimestamp() }, { merge: true }),
-      WRITE_TIMEOUT_MS,
-      "timeout",
-    );
+    const snap = await withFallback(getDoc(ref), READ_TIMEOUT_MS, null);
+    const data = (snap?.data() as Partial<UserProfile>) ?? {};
+    const thisMonday = mondayKey(new Date());
+    const sameWeek = data.weekStart === thisMonday;
+
+    const patch: Record<string, unknown> = {
+      xp: increment(amount),
+      updatedAt: serverTimestamp(),
+      weeklyXp: (sameWeek ? (data.weeklyXp ?? 0) : 0) + amount,
+    };
+    if (!sameWeek) {
+      patch.weekStart = thisMonday;
+      patch.weeklyChaptersRead = 0;
+      patch.weeklyBooksAdded = 0;
+    }
+    await withDeadline(setDoc(ref, patch, { merge: true }), WRITE_TIMEOUT_MS, "timeout");
   } catch (err) {
     console.warn("[user-profile] awardXp failed", err);
+  }
+}
+
+/**
+ * Records reading activity for streak + weekly mission tracking. Call this
+ * when a user opens a book (keeps the streak alive) and/or finishes a
+ * chapter (counts toward "pages read" achievements and the weekly
+ * mission). Never throws — this runs alongside the main action, not
+ * instead of it.
+ */
+export async function recordReadingActivity(
+  uid: string,
+  opts: { chapterCompleted?: boolean; bookAdded?: boolean } = {},
+): Promise<void> {
+  const fb = getFirebase();
+  if (!fb) return;
+  const ref = doc(fb.db, "users", uid);
+  try {
+    const snap = await withFallback(getDoc(ref), READ_TIMEOUT_MS, null);
+    const data = (snap?.data() as Partial<UserProfile>) ?? {};
+    const now = new Date();
+    const today = localDateKey(now);
+    const thisMonday = mondayKey(now);
+    const sameWeek = data.weekStart === thisMonday;
+
+    const patch: Record<string, unknown> = { updatedAt: serverTimestamp() };
+
+    // Streak — only re-evaluate once per calendar day, so opening the
+    // book five times in one day doesn't inflate anything.
+    if (data.lastActiveDate !== today) {
+      const prevDate = data.lastActiveDate ? new Date(`${data.lastActiveDate}T00:00:00`) : null;
+      const daysSince = prevDate
+        ? Math.round((new Date(`${today}T00:00:00`).getTime() - prevDate.getTime()) / 86400000)
+        : null;
+      const newStreak = daysSince === 1 ? (data.currentStreak ?? 0) + 1 : 1;
+      patch.currentStreak = newStreak;
+      patch.longestStreak = Math.max(newStreak, data.longestStreak ?? 0);
+      patch.lastActiveDate = today;
+    }
+
+    // Weekly mission counters — reset automatically when a new week starts.
+    patch.weekStart = thisMonday;
+    patch.weeklyChaptersRead =
+      (sameWeek ? (data.weeklyChaptersRead ?? 0) : 0) + (opts.chapterCompleted ? 1 : 0);
+    patch.weeklyBooksAdded =
+      (sameWeek ? (data.weeklyBooksAdded ?? 0) : 0) + (opts.bookAdded ? 1 : 0);
+    if (!sameWeek) patch.weeklyXp = 0;
+
+    if (opts.chapterCompleted) {
+      patch.chaptersRead = (data.chaptersRead ?? 0) + 1;
+    }
+
+    await withDeadline(setDoc(ref, patch, { merge: true }), WRITE_TIMEOUT_MS, "timeout");
+  } catch (err) {
+    console.warn("[user-profile] recordReadingActivity failed", err);
   }
 }
 
@@ -162,6 +270,8 @@ export async function deleteUserData(uid: string): Promise<void> {
 
   await deleteCollection(`users/${uid}/library`);
   await deleteCollection(`users/${uid}/progress`);
+  await deleteCollection(`users/${uid}/annotations`);
+  await deleteCollection(`users/${uid}/lumi`);
   try {
     await deleteDoc(doc(fb.db, "users", uid));
   } catch (err) {

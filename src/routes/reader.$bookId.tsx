@@ -9,6 +9,11 @@ import {
   Cloud,
   CloudOff,
   Sparkles,
+  Bookmark as BookmarkIcon,
+  Highlighter,
+  StickyNote,
+  X as XIcon,
+  Trash2,
 } from "lucide-react";
 
 import { SAMPLE_BOOK, type Book } from "@/lib/sample-book";
@@ -23,11 +28,23 @@ import {
   type ReaderSettings,
   type ReadingProgress,
 } from "@/lib/reader-store";
+import {
+  subscribeAnnotations,
+  addHighlight,
+  removeHighlight,
+  updateHighlightNote,
+  addBookmark,
+  removeBookmark,
+  type BookAnnotations,
+  type HighlightColor,
+} from "@/lib/annotations";
 import { ReaderSettingsPanel } from "@/components/reader/settings-panel";
 import { useRequireAuth } from "@/hooks/use-require-auth";
 import { openLumiPanel } from "@/lib/lumi-panel-store";
-import { awardXp, incrementBooksCompleted } from "@/lib/user-profile";
+import { awardXp, incrementBooksCompleted, recordReadingActivity } from "@/lib/user-profile";
 import { markAsReading, setLibraryStatus, slugFor } from "@/lib/library";
+import { toast } from "sonner";
+import { describeFirestoreError } from "@/lib/async-utils";
 
 export const Route = createFileRoute("/reader/$bookId")({
   head: () => ({
@@ -157,6 +174,7 @@ function EpubBookLoader({ uid, localId }: { uid: string; localId: string }) {
 function GutenbergBookLoader({ uid, gutenbergId }: { uid: string; gutenbergId: number }) {
   const [book, setBook] = useState<Book | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -177,20 +195,28 @@ function GutenbergBookLoader({ uid, gutenbergId }: { uid: string; gutenbergId: n
     return () => {
       cancelled = true;
     };
-  }, [gutenbergId]);
+  }, [gutenbergId, attempt]);
 
   if (error) {
     return (
       <div className="mx-auto max-w-md px-6 py-32 text-center">
         <h2 className="font-display text-3xl">Não foi possível abrir este livro</h2>
         <p className="mt-3 text-muted-foreground">{error}</p>
-        <Link
-          to="/descobrir"
-          search={{ q: undefined, categoria: undefined }}
-          className="mt-6 inline-block rounded-full bg-gold px-5 py-2.5 text-sm font-medium text-primary-foreground"
-        >
-          Voltar a Descobrir
-        </Link>
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          <button
+            onClick={() => setAttempt((a) => a + 1)}
+            className="inline-block rounded-full bg-gold px-5 py-2.5 text-sm font-medium text-primary-foreground"
+          >
+            Tentar novamente
+          </button>
+          <Link
+            to="/descobrir"
+            search={{ q: undefined, categoria: undefined }}
+            className="inline-block rounded-full border border-border/60 px-5 py-2.5 text-sm hover:border-gold/40 hover:text-gold"
+          >
+            Voltar a Descobrir
+          </Link>
+        </div>
       </div>
     );
   }
@@ -209,16 +235,37 @@ function GutenbergBookLoader({ uid, gutenbergId }: { uid: string; gutenbergId: n
   return <ReaderPage uid={uid} book={book} />;
 }
 
+const HIGHLIGHT_ACCENT: Record<HighlightColor, string> = {
+  gold: "#C89B32",
+  green: "#4A9B6E",
+  blue: "#4A7FC4",
+  pink: "#C46B9E",
+};
+
+const HIGHLIGHT_BG: Record<HighlightColor, string> = {
+  gold: "rgba(200,155,50,0.18)",
+  green: "rgba(74,155,110,0.16)",
+  blue: "rgba(74,127,196,0.16)",
+  pink: "rgba(196,107,158,0.16)",
+};
+
 const THEME_STYLES = {
   light: {
-    bg: "#F7F1E6",
-    fg: "#1F1B16",
-    muted: "#7A6E5E",
+    bg: "#FFFFFF",
+    fg: "#1A1A1A",
+    muted: "#6B6B6B",
     accent: "#8B5E34",
-    rule: "rgba(31,27,22,0.12)",
+    rule: "rgba(0,0,0,0.1)",
+  },
+  paper: {
+    bg: "#F2ECE1",
+    fg: "#2A2420",
+    muted: "#7A7062",
+    accent: "#8B5E34",
+    rule: "rgba(42,36,32,0.12)",
   },
   sepia: {
-    bg: "#EFE4D0",
+    bg: "#EFE0C0",
     fg: "#3A2818",
     muted: "#7A5B3E",
     accent: "#8B5E34",
@@ -239,6 +286,14 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   const [scrollRatio, setScrollRatio] = useState(0);
   const [panelOpen, setPanelOpen] = useState(false);
   const [tocOpen, setTocOpen] = useState(false);
+  const [tocTab, setTocTab] = useState<"toc" | "highlights" | "bookmarks">("toc");
+  const [annotations, setAnnotations] = useState<BookAnnotations>({
+    highlights: [],
+    bookmarks: [],
+  });
+  const [activeParagraph, setActiveParagraph] = useState<number | null>(null);
+  const [editingNoteFor, setEditingNoteFor] = useState<string | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
   const [saved, setSaved] = useState(true);
   const [hydrated, setHydrated] = useState(false);
 
@@ -250,6 +305,8 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   useEffect(() => {
     void markAsReading(uid, { title: book.title, author: book.author, cover: book.cover }, book.id);
   }, [uid, book.id, book.title, book.author, book.cover]);
+
+  useEffect(() => subscribeAnnotations(uid, book.id, setAnnotations), [uid, book.id]);
 
   // Hydrate settings + progress after mount (avoid SSR mismatch).
   useEffect(() => {
@@ -299,6 +356,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       const clamped = Math.max(0, Math.min(book.chapters.length - 1, i));
       if (clamped > chapterIndex) {
         void awardXp(uid, 20);
+        void recordReadingActivity(uid, { chapterCompleted: true });
         if (clamped === book.chapters.length - 1) {
           void incrementBooksCompleted(uid);
           void setLibraryStatus(uid, slugFor(book.title, book.author), "concluido").catch((err) =>
@@ -308,6 +366,8 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       }
       setChapterIndex(clamped);
       setScrollRatio(0);
+      setActiveParagraph(null);
+      setEditingNoteFor(null);
       requestAnimationFrame(() => {
         const el = contentRef.current;
         if (el) el.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
@@ -325,6 +385,93 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     const per = 1 / book.chapters.length;
     return Math.min(1, chapterIndex * per + scrollRatio * per);
   }, [book.chapters.length, chapterIndex, scrollRatio]);
+
+  const currentHighlight = useCallback(
+    (paragraphIndex: number) =>
+      annotations.highlights.find(
+        (h) => h.chapterId === chapter.id && h.paragraphIndex === paragraphIndex,
+      ),
+    [annotations.highlights, chapter.id],
+  );
+
+  async function handleHighlight(paragraphIndex: number, color: HighlightColor) {
+    const existing = currentHighlight(paragraphIndex);
+    try {
+      if (existing) {
+        if (existing.color === color) {
+          await removeHighlight(uid, book.id, existing.id);
+        } else {
+          await removeHighlight(uid, book.id, existing.id);
+          await addHighlight(uid, book.id, {
+            chapterId: chapter.id,
+            chapterIndex,
+            paragraphIndex,
+            color,
+            excerpt: chapter.paragraphs[paragraphIndex].slice(0, 140),
+          });
+        }
+      } else {
+        await addHighlight(uid, book.id, {
+          chapterId: chapter.id,
+          chapterIndex,
+          paragraphIndex,
+          color,
+          excerpt: chapter.paragraphs[paragraphIndex].slice(0, 140),
+        });
+        void awardXp(uid, 2);
+      }
+    } catch (err) {
+      toast.error(describeFirestoreError(err, "Não foi possível salvar o destaque agora."));
+    }
+  }
+
+  async function handleSaveNote(highlightId: string) {
+    try {
+      await updateHighlightNote(uid, book.id, highlightId, noteDraft.trim());
+      setEditingNoteFor(null);
+      setNoteDraft("");
+      toast.success("Anotação salva.");
+    } catch (err) {
+      toast.error(describeFirestoreError(err, "Não foi possível salvar a anotação agora."));
+    }
+  }
+
+  async function handleAddBookmark() {
+    try {
+      await addBookmark(uid, book.id, {
+        chapterId: chapter.id,
+        chapterIndex,
+        scrollRatio,
+        label: chapter.title,
+      });
+      toast.success("Página marcada.");
+    } catch (err) {
+      toast.error(describeFirestoreError(err, "Não foi possível salvar o marcador agora."));
+    }
+  }
+
+  async function handleRemoveBookmark(bookmarkId: string) {
+    try {
+      await removeBookmark(uid, book.id, bookmarkId);
+    } catch (err) {
+      toast.error(describeFirestoreError(err, "Não foi possível remover o marcador agora."));
+    }
+  }
+
+  function jumpToBookmark(b: { chapterIndex: number; scrollRatio: number }) {
+    setChapterIndex(b.chapterIndex);
+    setScrollRatio(b.scrollRatio);
+    setTocOpen(false);
+    requestAnimationFrame(() => {
+      const el = contentRef.current;
+      if (el) el.scrollTo({ top: b.scrollRatio * (el.scrollHeight - el.clientHeight) });
+    });
+  }
+
+  function jumpToHighlight(h: { chapterIndex: number }) {
+    goto(h.chapterIndex);
+    setTocOpen(false);
+  }
 
   const readerFontFamily = settings.font === "serif" ? "var(--font-display)" : "var(--font-sans)";
 
@@ -358,7 +505,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
         <div className="flex min-w-0 items-center gap-2">
           <Link
             to="/"
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-full transition hover:opacity-70"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full transition hover:opacity-70"
             style={{ color: theme.fg }}
             aria-label="Voltar"
           >
@@ -383,6 +530,9 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
           </span>
           <IconBtn theme={theme} onClick={() => setTocOpen(true)} label="Sumário">
             <List className="h-4 w-4" />
+          </IconBtn>
+          <IconBtn theme={theme} onClick={handleAddBookmark} label="Marcar esta página">
+            <BookmarkIcon className="h-4 w-4" />
           </IconBtn>
           <IconBtn
             theme={theme}
@@ -440,11 +590,133 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
             />
           </header>
 
-          {chapter.paragraphs.map((p: string, i: number) => (
-            <p key={i} className="mb-6 [text-align:justify] [hyphens:auto]">
-              {p}
-            </p>
-          ))}
+          {chapter.paragraphs.map((p: string, i: number) => {
+            const highlight = currentHighlight(i);
+            const isActive = activeParagraph === i;
+            const isEditingNote = highlight && editingNoteFor === highlight.id;
+            return (
+              <div key={i} className="relative">
+                <p
+                  onClick={() => setActiveParagraph(isActive ? null : i)}
+                  className="mb-1 cursor-pointer rounded-sm px-2 -mx-2 py-0.5 [hyphens:auto] [text-align:justify] transition-colors"
+                  style={
+                    highlight
+                      ? {
+                          backgroundColor: HIGHLIGHT_BG[highlight.color],
+                          boxShadow: `inset 3px 0 0 0 ${HIGHLIGHT_ACCENT[highlight.color]}`,
+                        }
+                      : undefined
+                  }
+                >
+                  {p}
+                </p>
+
+                {highlight?.note && !isEditingNote && (
+                  <button
+                    onClick={() => {
+                      setEditingNoteFor(highlight.id);
+                      setNoteDraft(highlight.note ?? "");
+                    }}
+                    className="mb-6 mt-1 flex items-start gap-2 rounded-lg border-l-2 py-1 pl-3 pr-2 text-left text-sm italic"
+                    style={{ borderColor: theme.accent, color: theme.muted }}
+                  >
+                    <StickyNote className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    {highlight.note}
+                  </button>
+                )}
+                {!highlight?.note && <div className="mb-6" />}
+
+                {isActive && (
+                  <div
+                    className="mb-4 -mt-1 flex flex-wrap items-center gap-2 rounded-2xl border px-3 py-2 text-xs"
+                    style={{ borderColor: theme.rule, fontFamily: "var(--font-sans)" }}
+                  >
+                    <Highlighter className="h-3.5 w-3.5" style={{ color: theme.muted }} />
+                    {(["gold", "green", "blue", "pink"] as HighlightColor[]).map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => void handleHighlight(i, c)}
+                        aria-label={`Destacar em ${c}`}
+                        className="h-6 w-6 rounded-full ring-1 ring-black/10 transition hover:scale-110"
+                        style={{
+                          backgroundColor: HIGHLIGHT_ACCENT[c],
+                          outline: highlight?.color === c ? `2px solid ${theme.fg}` : "none",
+                          outlineOffset: "2px",
+                        }}
+                      />
+                    ))}
+                    <span className="mx-1 h-4 w-px" style={{ backgroundColor: theme.rule }} />
+                    {highlight ? (
+                      <>
+                        <button
+                          onClick={() => {
+                            setEditingNoteFor(highlight.id);
+                            setNoteDraft(highlight.note ?? "");
+                          }}
+                          className="inline-flex items-center gap-1 rounded-full px-2 py-1 hover:opacity-70"
+                        >
+                          <StickyNote className="h-3.5 w-3.5" /> Nota
+                        </button>
+                        <button
+                          onClick={() => void handleHighlight(i, highlight.color)}
+                          className="inline-flex items-center gap-1 rounded-full px-2 py-1 hover:opacity-70"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" /> Remover
+                        </button>
+                      </>
+                    ) : (
+                      <span style={{ color: theme.muted }}>Toque numa cor pra destacar</span>
+                    )}
+                    <button
+                      onClick={() => setActiveParagraph(null)}
+                      className="ml-auto rounded-full p-1 hover:opacity-70"
+                    >
+                      <XIcon className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
+
+                {isEditingNote && (
+                  <div
+                    className="mb-6 -mt-1 rounded-lg border p-3"
+                    style={{ borderColor: theme.rule }}
+                  >
+                    <textarea
+                      autoFocus
+                      value={noteDraft}
+                      onChange={(e) => setNoteDraft(e.target.value)}
+                      placeholder="Escreva uma anotação sobre este trecho..."
+                      rows={3}
+                      className="w-full resize-none rounded-md border bg-transparent p-2 text-sm outline-none"
+                      style={{
+                        borderColor: theme.rule,
+                        color: theme.fg,
+                        fontFamily: "var(--font-sans)",
+                      }}
+                    />
+                    <div className="mt-2 flex justify-end gap-2">
+                      <button
+                        onClick={() => {
+                          setEditingNoteFor(null);
+                          setNoteDraft("");
+                        }}
+                        className="rounded-full px-3 py-1.5 text-xs hover:opacity-70"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={() => void handleSaveNote(highlight!.id)}
+                        className="rounded-full px-3 py-1.5 text-xs font-medium"
+                        style={{ backgroundColor: theme.accent, color: theme.bg }}
+                      >
+                        Salvar nota
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
 
           {/* Chapter nav */}
           <nav
@@ -501,7 +773,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
         onChange={(patch) => setSettings((s) => ({ ...s, ...patch }))}
       />
 
-      {/* Table of contents */}
+      {/* Table of contents / highlights / bookmarks */}
       {tocOpen && (
         <>
           <div
@@ -513,36 +785,145 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
             style={{ backgroundColor: theme.bg, color: theme.fg, borderColor: theme.rule }}
           >
             <div className="border-b px-5 py-4" style={{ borderColor: theme.rule }}>
-              <p
-                className="text-[11px] uppercase tracking-[0.25em]"
-                style={{ color: theme.accent }}
+              <h3 className="font-display text-lg font-medium">{book.title}</h3>
+              <div
+                className="mt-3 grid grid-cols-3 gap-1 rounded-full p-1"
+                style={{ backgroundColor: theme.rule, fontFamily: "var(--font-sans)" }}
               >
-                Sumário
-              </p>
-              <h3 className="mt-1 font-display text-lg font-medium">{book.title}</h3>
+                {(
+                  [
+                    { key: "toc", label: "Sumário" },
+                    { key: "highlights", label: "Destaques" },
+                    { key: "bookmarks", label: "Marcadores" },
+                  ] as const
+                ).map((t) => (
+                  <button
+                    key={t.key}
+                    onClick={() => setTocTab(t.key)}
+                    className="rounded-full px-2 py-1.5 text-xs font-medium transition"
+                    style={{
+                      backgroundColor: tocTab === t.key ? theme.accent : "transparent",
+                      color: tocTab === t.key ? theme.bg : theme.fg,
+                    }}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
             </div>
-            <ul className="flex-1 overflow-y-auto p-3">
-              {book.chapters.map((c: (typeof book.chapters)[number], i: number) => {
-                const active = i === chapterIndex;
-                return (
-                  <li key={c.id}>
-                    <button
-                      onClick={() => goto(i)}
-                      className="w-full rounded-xl px-4 py-3 text-left transition"
-                      style={{
-                        backgroundColor: active ? theme.accent + "22" : "transparent",
-                        color: active ? theme.accent : theme.fg,
-                      }}
-                    >
-                      <span className="text-[10px] tabular-nums" style={{ color: theme.muted }}>
-                        {String(i + 1).padStart(2, "0")}
-                      </span>
-                      <span className="ml-3 font-display">{c.title}</span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+
+            {tocTab === "toc" && (
+              <ul className="flex-1 overflow-y-auto p-3">
+                {book.chapters.map((c: (typeof book.chapters)[number], i: number) => {
+                  const active = i === chapterIndex;
+                  return (
+                    <li key={c.id}>
+                      <button
+                        onClick={() => goto(i)}
+                        className="w-full rounded-xl px-4 py-3 text-left transition"
+                        style={{
+                          backgroundColor: active ? theme.accent + "22" : "transparent",
+                          color: active ? theme.accent : theme.fg,
+                        }}
+                      >
+                        <span className="text-[10px] tabular-nums" style={{ color: theme.muted }}>
+                          {String(i + 1).padStart(2, "0")}
+                        </span>
+                        <span className="ml-3 font-display">{c.title}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            {tocTab === "highlights" &&
+              (annotations.highlights.length === 0 ? (
+                <div className="flex-1 p-6 text-center text-sm" style={{ color: theme.muted }}>
+                  <Highlighter className="mx-auto h-5 w-5" />
+                  <p className="mt-3">Toque em um parágrafo durante a leitura para destacá-lo.</p>
+                </div>
+              ) : (
+                <ul className="flex-1 space-y-2 overflow-y-auto p-3">
+                  {[...annotations.highlights]
+                    .sort(
+                      (a, b) =>
+                        a.chapterIndex - b.chapterIndex || a.paragraphIndex - b.paragraphIndex,
+                    )
+                    .map((h) => (
+                      <li
+                        key={h.id}
+                        className="rounded-xl border p-3"
+                        style={{ borderColor: theme.rule }}
+                      >
+                        <button
+                          onClick={() => jumpToHighlight(h)}
+                          className="block w-full text-left"
+                        >
+                          <p
+                            className="text-sm"
+                            style={{
+                              boxShadow: `inset 3px 0 0 0 ${HIGHLIGHT_ACCENT[h.color]}`,
+                              paddingLeft: 8,
+                            }}
+                          >
+                            {h.excerpt}
+                            {h.excerpt.length >= 140 ? "…" : ""}
+                          </p>
+                          {h.note && (
+                            <p className="mt-2 text-xs italic" style={{ color: theme.muted }}>
+                              {h.note}
+                            </p>
+                          )}
+                        </button>
+                        <button
+                          onClick={() => void removeHighlight(uid, book.id, h.id)}
+                          className="mt-2 inline-flex items-center gap-1 text-[11px]"
+                          style={{ color: theme.muted }}
+                        >
+                          <Trash2 className="h-3 w-3" /> Remover
+                        </button>
+                      </li>
+                    ))}
+                </ul>
+              ))}
+
+            {tocTab === "bookmarks" &&
+              (annotations.bookmarks.length === 0 ? (
+                <div className="flex-1 p-6 text-center text-sm" style={{ color: theme.muted }}>
+                  <BookmarkIcon className="mx-auto h-5 w-5" />
+                  <p className="mt-3">
+                    Use o ícone de marcador no topo para salvar a página atual.
+                  </p>
+                </div>
+              ) : (
+                <ul className="flex-1 space-y-2 overflow-y-auto p-3">
+                  {[...annotations.bookmarks]
+                    .sort((a, b) => a.chapterIndex - b.chapterIndex)
+                    .map((b) => (
+                      <li key={b.id} className="flex items-center gap-2">
+                        <button
+                          onClick={() => jumpToBookmark(b)}
+                          className="flex-1 rounded-xl border px-4 py-3 text-left"
+                          style={{ borderColor: theme.rule }}
+                        >
+                          <span className="text-[10px] tabular-nums" style={{ color: theme.muted }}>
+                            Cap. {b.chapterIndex + 1}
+                          </span>
+                          <span className="ml-3 font-display">{b.label}</span>
+                        </button>
+                        <button
+                          onClick={() => void handleRemoveBookmark(b.id)}
+                          aria-label="Remover marcador"
+                          className="rounded-full p-2 hover:opacity-70"
+                          style={{ color: theme.muted }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </li>
+                    ))}
+                </ul>
+              ))}
           </aside>
         </>
       )}
@@ -565,7 +946,7 @@ function IconBtn({
     <button
       onClick={onClick}
       aria-label={label}
-      className="grid h-9 w-9 place-items-center rounded-full transition hover:opacity-70"
+      className="grid h-10 w-10 place-items-center rounded-full transition hover:opacity-70"
       style={{ color: theme.fg }}
     >
       {children}
