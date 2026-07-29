@@ -1,11 +1,22 @@
 import { X, Type, AlignJustify, Rows3, Columns2 } from "lucide-react";
 import type { ReaderSettings, ReaderTheme, ReaderFont, ReaderMode } from "@/lib/reader-store";
 
+/** Matches the shape of THEME_STYLES[settings.theme] in reader.$bookId.tsx —
+ * kept as a separate type here to avoid a route -> component import cycle. */
+export interface ReaderThemeColors {
+  bg: string;
+  fg: string;
+  muted: string;
+  accent: string;
+  rule: string;
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
   settings: ReaderSettings;
   onChange: (patch: Partial<ReaderSettings>) => void;
+  theme: ReaderThemeColors;
 }
 
 const THEME_SWATCHES: { value: ReaderTheme; label: string; bg: string; fg: string }[] = [
@@ -15,7 +26,17 @@ const THEME_SWATCHES: { value: ReaderTheme; label: string; bg: string; fg: strin
   { value: "dark", label: "Escuro", bg: "#0E0B08", fg: "#E8DFD3" },
 ];
 
-export function ReaderSettingsPanel({ open, onClose, settings, onChange }: Props) {
+/**
+ * This panel deliberately does NOT use the sitewide `bg-background` /
+ * `text-foreground` / etc. Tailwind classes — those follow the site-wide
+ * Claro/Sépia/Papel/Escuro theme (see lib/theme.ts), which is a separate,
+ * independent setting from the reader's own theme. Using the site theme
+ * here would make the settings panel visually clash with whatever reading
+ * theme is actually active (e.g. a dark site theme showing a dark panel
+ * floating over a Sépia reading page). Every color below comes from the
+ * `theme` prop instead, so this panel always matches the page behind it.
+ */
+export function ReaderSettingsPanel({ open, onClose, settings, onChange, theme }: Props) {
   return (
     <>
       <div
@@ -25,34 +46,43 @@ export function ReaderSettingsPanel({ open, onClose, settings, onChange }: Props
         onClick={onClose}
       />
       <aside
-        className={`fixed right-0 top-0 z-50 flex h-full w-full max-w-sm flex-col border-l border-border/60 bg-background shadow-2xl transition-transform duration-300 ${
+        className={`fixed right-0 top-0 z-50 flex h-full w-full max-w-sm flex-col shadow-2xl transition-transform duration-300 ${
           open ? "translate-x-0" : "translate-x-full"
         }`}
+        style={{
+          backgroundColor: theme.bg,
+          color: theme.fg,
+          borderLeft: `1px solid ${theme.rule}`,
+          transition: "background-color 0.3s ease, color 0.3s ease, transform 0.3s ease",
+        }}
         aria-hidden={!open}
       >
-        <header className="flex items-center justify-between border-b border-border/60 px-5 py-4">
+        <header
+          className="flex items-center justify-between px-5 py-4"
+          style={{ borderBottom: `1px solid ${theme.rule}` }}
+        >
           <h3 className="font-display text-lg font-medium">Ajustes de leitura</h3>
           <button
             onClick={onClose}
             aria-label="Fechar"
-            className="grid h-9 w-9 place-items-center rounded-full hover:bg-secondary"
+            className="grid h-9 w-9 place-items-center rounded-full transition hover:opacity-70"
           >
             <X className="h-4 w-4" />
           </button>
         </header>
 
         <div className="flex-1 space-y-8 overflow-y-auto px-5 py-6">
-          <Group label="Tema">
+          <Group label="Tema" theme={theme}>
             <div className="grid grid-cols-2 gap-2.5">
               {THEME_SWATCHES.map((t) => (
                 <button
                   key={t.value}
                   onClick={() => onChange({ theme: t.value })}
-                  className={`flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition ${
-                    settings.theme === t.value
-                      ? "border-gold ring-1 ring-gold"
-                      : "border-border/60 hover:border-gold/40"
-                  }`}
+                  className="flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition"
+                  style={{
+                    borderColor: settings.theme === t.value ? theme.accent : theme.rule,
+                    boxShadow: settings.theme === t.value ? `0 0 0 1px ${theme.accent}` : "none",
+                  }}
                 >
                   <span
                     className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[10px] font-semibold ring-1 ring-black/10"
@@ -66,8 +96,9 @@ export function ReaderSettingsPanel({ open, onClose, settings, onChange }: Props
             </div>
           </Group>
 
-          <Group label="Fonte">
+          <Group label="Fonte" theme={theme}>
             <SegGroup
+              theme={theme}
               value={settings.font}
               onChange={(v) => onChange({ font: v as ReaderFont })}
               options={[
@@ -77,8 +108,9 @@ export function ReaderSettingsPanel({ open, onClose, settings, onChange }: Props
             />
           </Group>
 
-          <Group label="Modo de leitura">
+          <Group label="Modo de leitura" theme={theme}>
             <SegGroup
+              theme={theme}
               value={settings.mode}
               onChange={(v) => onChange({ mode: v as ReaderMode })}
               options={[
@@ -93,6 +125,7 @@ export function ReaderSettingsPanel({ open, onClose, settings, onChange }: Props
           </Group>
 
           <Slider
+            theme={theme}
             label="Tamanho da fonte"
             icon={<Type className="h-3.5 w-3.5" />}
             value={settings.fontSize}
@@ -104,6 +137,7 @@ export function ReaderSettingsPanel({ open, onClose, settings, onChange }: Props
           />
 
           <Slider
+            theme={theme}
             label="Espaçamento entre linhas"
             icon={<AlignJustify className="h-3.5 w-3.5" />}
             value={settings.lineHeight}
@@ -116,6 +150,7 @@ export function ReaderSettingsPanel({ open, onClose, settings, onChange }: Props
           />
 
           <Slider
+            theme={theme}
             label="Margens laterais"
             value={settings.margin}
             min={16}
@@ -126,6 +161,7 @@ export function ReaderSettingsPanel({ open, onClose, settings, onChange }: Props
           />
 
           <Slider
+            theme={theme}
             label="Largura do texto"
             value={settings.maxWidth}
             min={40}
@@ -136,18 +172,30 @@ export function ReaderSettingsPanel({ open, onClose, settings, onChange }: Props
           />
         </div>
 
-        <footer className="border-t border-border/60 px-5 py-4 text-xs text-muted-foreground">
-          Suas preferências são salvas automaticamente.
+        <footer
+          className="px-5 py-4 text-xs"
+          style={{ borderTop: `1px solid ${theme.rule}`, color: theme.muted }}
+        >
+          Suas preferências são salvas automaticamente. O tema escolhido aqui é só para a leitura —
+          independente do tema do restante do site.
         </footer>
       </aside>
     </>
   );
 }
 
-function Group({ label, children }: { label: string; children: React.ReactNode }) {
+function Group({
+  label,
+  theme,
+  children,
+}: {
+  label: string;
+  theme: ReaderThemeColors;
+  children: React.ReactNode;
+}) {
   return (
     <div>
-      <p className="mb-2.5 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+      <p className="mb-2.5 text-[11px] uppercase tracking-[0.22em]" style={{ color: theme.muted }}>
         {label}
       </p>
       {children}
@@ -156,35 +204,43 @@ function Group({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function SegGroup<T extends string>({
+  theme,
   value,
   onChange,
   options,
 }: {
+  theme: ReaderThemeColors;
   value: T;
   onChange: (v: T) => void;
   options: { value: T; label: string; icon?: React.ReactNode }[];
 }) {
   return (
-    <div className="grid auto-cols-fr grid-flow-col gap-1 rounded-full border border-border/60 bg-secondary/40 p-1">
-      {options.map((o) => (
-        <button
-          key={o.value}
-          onClick={() => onChange(o.value)}
-          className={`inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-2 text-xs font-medium transition ${
-            value === o.value
-              ? "bg-gold text-primary-foreground shadow-sm"
-              : "text-foreground/75 hover:text-foreground"
-          }`}
-        >
-          {o.icon}
-          {o.label}
-        </button>
-      ))}
+    <div
+      className="grid auto-cols-fr grid-flow-col gap-1 rounded-full border p-1"
+      style={{ borderColor: theme.rule }}
+    >
+      {options.map((o) => {
+        const active = value === o.value;
+        return (
+          <button
+            key={o.value}
+            onClick={() => onChange(o.value)}
+            className="inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-2 text-xs font-medium transition"
+            style={
+              active ? { backgroundColor: theme.accent, color: theme.bg } : { color: theme.muted }
+            }
+          >
+            {o.icon}
+            {o.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
 function Slider({
+  theme,
   label,
   icon,
   value,
@@ -195,6 +251,7 @@ function Slider({
   onChange,
   format,
 }: {
+  theme: ReaderThemeColors;
   label: string;
   icon?: React.ReactNode;
   value: number;
@@ -209,11 +266,11 @@ function Slider({
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
-        <span className="inline-flex items-center gap-1.5 text-sm text-foreground/85">
+        <span className="inline-flex items-center gap-1.5 text-sm" style={{ color: theme.fg }}>
           {icon}
           {label}
         </span>
-        <span className="text-xs tabular-nums text-gold">
+        <span className="text-xs tabular-nums" style={{ color: theme.accent }}>
           {display}
           {unit}
         </span>
@@ -225,7 +282,8 @@ function Slider({
         step={step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full accent-gold"
+        className="w-full"
+        style={{ accentColor: theme.accent }}
       />
     </div>
   );

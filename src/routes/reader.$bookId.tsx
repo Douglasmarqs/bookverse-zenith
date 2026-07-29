@@ -494,12 +494,12 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
 
   return (
     <div
-      className="fixed inset-0 z-30 flex flex-col"
+      className="fixed inset-0 z-30 flex flex-col transition-colors duration-300"
       style={{ backgroundColor: theme.bg, color: theme.fg }}
     >
       {/* Top bar */}
       <header
-        className="flex items-center justify-between gap-3 border-b px-4 py-3 md:px-6"
+        className="flex items-center justify-between gap-3 border-b px-4 py-3 transition-colors duration-300 md:px-6"
         style={{ borderColor: theme.rule }}
       >
         <div className="flex min-w-0 items-center gap-2">
@@ -771,6 +771,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
         onClose={() => setPanelOpen(false)}
         settings={settings}
         onChange={(patch) => setSettings((s) => ({ ...s, ...patch }))}
+        theme={theme}
       />
 
       {/* Table of contents / highlights / bookmarks */}

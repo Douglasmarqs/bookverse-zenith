@@ -1,5 +1,48 @@
 # Diagnóstico rápido — capas, catálogo e login
 
+## 🆕 Atualização — Lumi migrada pra Gemini (gratuito) + correção real de tema no leitor
+
+### IA trocada de Anthropic para Gemini
+
+Migrei a função `askLumi` para usar o **Gemini** (Google) em vez da
+Anthropic — é a mesma qualidade de resposta pra este uso, mas o Google AI
+Studio emite chave gratuita sem pedir cartão de crédito. Veja o passo a
+passo completo (com o link direto pra gerar a chave) em
+`functions/README.md`, seção "Passo 0". Resumo:
+
+1. **console.anthropic.com não é mais necessário** — em vez disso, use
+   **aistudio.google.com** → Get API key → Create API key.
+2. `firebase functions:secrets:set GEMINI_API_KEY` (troca o nome do
+   secret — se você já tinha configurado `ANTHROPIC_API_KEY` antes, esse
+   fica órfão, sem problema, pode ignorar ou remover).
+3. `cd functions && npm install && npm run deploy`
+
+**O plano Blaze do Firebase continua sendo exigido** — isso é sobre
+Cloud Functions poderem acessar a internet, não sobre qual IA você
+escolhe. O Gemini elimina o custo/cadastro da IA em si; o Blaze continua
+sendo pré-requisito técnico do Firebase, com cota gratuita mensal
+generosa.
+
+### Bug real corrigido: tema do site vazando pro leitor
+
+Você tinha razão em desconfiar — achei o problema. O painel de
+**Ajustes** dentro do leitor (fonte, tamanho, tema, margens) usava as
+cores do tema *do site inteiro*, não as cores do tema *da leitura*. Na
+prática: se o site estivesse no tema Escuro mas você tivesse escolhido
+ler em Sépia, o painel de ajustes aparecia escuro flutuando sobre uma
+página sépia — uma mistura visual que não deveria acontecer.
+
+Corrigido: agora esse painel usa exclusivamente as cores do tema de
+leitura escolhido (Claro/Papel/Sépia/Escuro), nunca as do tema do site.
+Troca de tema de leitura agora também tem uma transição suave (antes
+trocava instantaneamente).
+
+Reconfirmando o comportamento esperado: o tema do **site** (ícone de
+paleta no cabeçalho, ou Perfil → Aparência) e o tema da **leitura**
+(dentro do leitor, ícone de ajustes) são propositalmente independentes
+— você pode ter o site em Escuro e ler em Sépia ao mesmo tempo, sem
+nenhum vazamento entre os dois agora.
+
 ## 🆕 Atualização — histórico da Lumi salvo de verdade + arquitetura da IA documentada
 
 Revisando a lista original de novo, achei uma peça que ainda faltava:
