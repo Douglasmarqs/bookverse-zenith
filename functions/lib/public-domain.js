@@ -14,6 +14,16 @@ exports.getPublicDomainBook = exports.searchPublicDomainBooks = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const GUTENDEX_BASE = "https://gutendex.com";
+async function fetchWithTimeout(url, ms) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ms);
+    try {
+        return await fetch(url, { signal: controller.signal });
+    }
+    finally {
+        clearTimeout(timer);
+    }
+}
 function summarize(b) {
     return {
         id: b.id,
@@ -152,7 +162,7 @@ exports.searchPublicDomainBooks = (0, https_1.onCall)({ cors: true, maxInstances
     if (!query)
         return { results: [] };
     const url = `${GUTENDEX_BASE}/books?search=${encodeURIComponent(query)}&languages=pt,en`;
-    const res = await fetch(url);
+    const res = await fetchWithTimeout(url, 9000);
     if (!res.ok) {
         throw new https_1.HttpsError("unavailable", "Catálogo de domínio público indisponível agora.");
     }
@@ -170,7 +180,7 @@ exports.getPublicDomainBook = (0, https_1.onCall)({ cors: true, timeoutSeconds: 
     const cached = await cacheRef.get();
     if (cached.exists)
         return cached.data();
-    const metaRes = await fetch(`${GUTENDEX_BASE}/books/${gutenbergId}`);
+    const metaRes = await fetchWithTimeout(`${GUTENDEX_BASE}/books/${gutenbergId}`, 9000);
     if (!metaRes.ok)
         throw new https_1.HttpsError("not-found", "Livro não encontrado no catálogo.");
     const meta = (await metaRes.json());
@@ -178,7 +188,7 @@ exports.getPublicDomainBook = (0, https_1.onCall)({ cors: true, timeoutSeconds: 
     if (!textUrl) {
         throw new https_1.HttpsError("failed-precondition", "Este título não tem uma versão em texto simples disponível.");
     }
-    const textRes = await fetch(textUrl);
+    const textRes = await fetchWithTimeout(textUrl, 25000);
     if (!textRes.ok)
         throw new https_1.HttpsError("internal", "Falha ao baixar o texto do livro.");
     const raw = await textRes.text();
