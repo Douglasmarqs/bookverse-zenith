@@ -21,7 +21,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import { initializeApp, getApps } from "firebase-admin/app";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 
 if (getApps().length === 0) {
   initializeApp();
@@ -101,11 +101,7 @@ export const askLumi = onCall<AskLumiRequest>(
     }
 
     try {
-      const genAI = new GoogleGenerativeAI(GEMINI_API_KEY.value());
-      const model = genAI.getGenerativeModel({
-        model: MODEL_NAME,
-        systemInstruction: buildSystemPrompt(context),
-      });
+      const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY.value() });
 
       // Gemini's chat API wants prior turns as "history" and the newest
       // message sent separately — mirrors how the client already splits
@@ -116,12 +112,16 @@ export const askLumi = onCall<AskLumiRequest>(
       }));
       const lastMessage = messages[messages.length - 1];
 
-      const chat = model.startChat({
+      const chat = ai.chats.create({
+        model: MODEL_NAME,
         history,
-        generationConfig: { maxOutputTokens: MAX_OUTPUT_TOKENS },
+        config: {
+          systemInstruction: buildSystemPrompt(context),
+          maxOutputTokens: MAX_OUTPUT_TOKENS,
+        },
       });
-      const result = await chat.sendMessage(lastMessage.text);
-      const reply = result.response.text().trim();
+      const result = await chat.sendMessage({ message: lastMessage.text });
+      const reply = (result.text ?? "").trim();
 
       return { reply: reply || "Não consegui pensar em uma resposta agora — tente reformular?" };
     } catch (err) {
