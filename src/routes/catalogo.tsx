@@ -53,15 +53,17 @@ const SHELVES: { key: string; subject: string; title: string; eyebrow: string }[
 function CatalogoPage() {
   const [trending, setTrending] = useState<OpenLibraryBook[]>([]);
   const [bestsellers, setBestsellers] = useState<OpenLibraryBook[]>([]);
-  const [shelves, setShelves] = useState<Record<string, OpenLibraryBook[]>>({});
   const [publicDomain, setPublicDomain] = useState<PublicDomainSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Only the above-the-fold rails are fetched on mount. The genre shelves
+  // fetch themselves when they scroll into view (see `LazyShelf`), so the
+  // page no longer fires 11 network requests at once and stays responsive.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [tr, best, pd, ...shelfResults] = await Promise.allSettled([
+        const [tr, best, pd] = await Promise.allSettled([
           trendingBooks("weekly", 12, {
             onUpdate: (r) => !cancelled && setTrending(r),
           }),
@@ -69,22 +71,11 @@ function CatalogoPage() {
             onUpdate: (r) => !cancelled && setBestsellers(r),
           }),
           searchPublicDomainBooks("classic literature", 12),
-          ...SHELVES.map((s) =>
-            booksBySubject(s.subject, 10, {
-              onUpdate: (r) => !cancelled && setShelves((prev) => ({ ...prev, [s.key]: r })),
-            }),
-          ),
         ]);
         if (cancelled) return;
         if (tr.status === "fulfilled") setTrending(tr.value);
         if (best.status === "fulfilled") setBestsellers(best.value);
         if (pd.status === "fulfilled") setPublicDomain(pd.value);
-        const map: Record<string, OpenLibraryBook[]> = {};
-        SHELVES.forEach((s, i) => {
-          const r = shelfResults[i];
-          if (r.status === "fulfilled") map[s.key] = r.value;
-        });
-        setShelves((prev) => ({ ...prev, ...map }));
       } catch (err) {
         console.warn("[catalogo] failed to load catalog data", err);
       } finally {
@@ -95,6 +86,7 @@ function CatalogoPage() {
       cancelled = true;
     };
   }, []);
+
 
   return (
     <div className="mx-auto max-w-7xl px-5 py-12 md:px-8">
