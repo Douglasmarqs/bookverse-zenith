@@ -14,7 +14,6 @@ import { useAuthUser, useInView } from "@/hooks/use-auth-user";
 import { LanguageBadge } from "@/components/language-badge";
 import { Carousel } from "@/components/carousel";
 
-
 export const Route = createFileRoute("/catalogo")({
   head: () => ({
     meta: [
@@ -87,7 +86,6 @@ function CatalogoPage() {
     };
   }, []);
 
-
   return (
     <div className="mx-auto max-w-7xl px-5 py-12 md:px-8">
       <p className="text-[11px] uppercase tracking-[0.28em] text-gold">Catálogo</p>
@@ -144,7 +142,6 @@ function CatalogoPage() {
       {SHELVES.map((s) => (
         <LazyShelf key={s.key} subject={s.subject} eyebrow={s.eyebrow} title={s.title} />
       ))}
-
     </div>
   );
 }
@@ -241,13 +238,11 @@ function ShelfSkeleton() {
   );
 }
 
-
 function OpenLibraryCard({ book, rank }: { book: OpenLibraryBook; rank?: number }) {
   const navigate = useNavigate();
   const user = useAuthUser();
   const [added, setAdded] = useState(false);
   const [saving, setSaving] = useState(false);
-
 
   async function add(e: React.MouseEvent) {
     e.preventDefault();
@@ -336,7 +331,6 @@ function PublicDomainCard({ book }: { book: PublicDomainSummary }) {
   const user = useAuthUser();
   const [added, setAdded] = useState(false);
   const [saving, setSaving] = useState(false);
-
 
   async function add(e: React.MouseEvent) {
     e.preventDefault();
