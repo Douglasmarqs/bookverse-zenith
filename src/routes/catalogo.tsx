@@ -208,18 +208,7 @@ function LazyShelf({
   return (
     <div ref={ref} className="content-auto">
       {books === null ? (
-        <section className="mt-14">
-          <div className="h-3 w-24 animate-pulse rounded bg-secondary" />
-          <div className="mt-4 h-7 w-64 animate-pulse rounded bg-secondary" />
-          <div className="mt-6 flex gap-5 overflow-hidden">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div
-                key={i}
-                className="aspect-[2/3] w-40 shrink-0 animate-pulse rounded-md bg-secondary sm:w-44"
-              />
-            ))}
-          </div>
-        </section>
+        <ShelfSkeleton />
       ) : books.length > 0 ? (
         <Shelf eyebrow={eyebrow} title={title}>
           <BookRail>
@@ -232,6 +221,26 @@ function LazyShelf({
     </div>
   );
 }
+
+/** Placeholder with the same silhouette as a loaded shelf, so content
+ * appearing never shifts the layout around. */
+function ShelfSkeleton() {
+  return (
+    <section className="mt-14">
+      <div className="h-3 w-24 animate-pulse rounded bg-secondary" />
+      <div className="mt-4 h-7 w-64 animate-pulse rounded bg-secondary" />
+      <div className="mt-6 flex gap-5 overflow-hidden">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div
+            key={i}
+            className="aspect-[2/3] w-40 shrink-0 animate-pulse rounded-md bg-secondary sm:w-44"
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 
 function OpenLibraryCard({ book, rank }: { book: OpenLibraryBook; rank?: number }) {
   const navigate = useNavigate();
