@@ -316,23 +316,25 @@ export async function searchPublicDomainBooks(
 export async function getPublicDomainBook(gutenbergId: number): Promise<Book> {
   const fb = getFirebase();
   let cloudFunctionTried = false;
-  if (fb) {
+  if (fb && !pdFnBreaker.isOpen()) {
     try {
       cloudFunctionTried = true;
       const fn = httpsCallable<{ gutenbergId: number }, Book>(
         getFunctions(fb.app),
         "getPublicDomainBook",
-        { timeout: 10000 },
+        { timeout: 8000 },
       );
       const res = await fn({ gutenbergId });
       return res.data;
     } catch (err) {
+      pdFnBreaker.trip();
       console.warn(
         "[public-domain] cloud function fetch failed, falling back to direct fetch",
         err,
       );
     }
   }
+
 
   try {
     return await directGetPublicDomainBook(gutenbergId);
