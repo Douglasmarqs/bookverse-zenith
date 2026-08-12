@@ -16,6 +16,18 @@
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { getFirebase } from "./firebase";
 import { searchOpenLibrary } from "./open-library";
+import { createBreaker, createInFlightMap, createLimiter } from "./net-utils";
+
+/** At most 4 metadata lookups in flight — a page with 60 covers otherwise
+ * saturates the browser's connection pool and the tab appears frozen. */
+const limitMeta = createLimiter(4);
+const inFlightMeta = createInFlightMap<BookMeta | null>();
+/** Callable Functions may not be deployed; Google Books may be over quota.
+ * Once either fails, skip it for a while instead of paying its timeout on
+ * every card. */
+const fnBreaker = createBreaker(5 * 60_000);
+const googleBreaker = createBreaker(10 * 60_000);
+
 
 export interface BookMeta {
   title: string;
@@ -194,21 +206,30 @@ export async function fetchBookMeta(title: string, author?: string): Promise<Boo
     return cached;
   }
 
+  return inFlightMeta(key, () => limitMeta(() => resolveBookMeta(key, title, author)));
+}
+
+async function resolveBookMeta(
+  key: string,
+  title: string,
+  author?: string,
+): Promise<BookMeta | null> {
   let meta: BookMeta | null = null;
   let resolved = false;
 
   const fb = getFirebase();
-  if (fb) {
+  if (fb && !fnBreaker.isOpen()) {
     try {
       const fn = httpsCallable<{ title: string; author?: string }, { meta: BookMeta | null }>(
         getFunctions(fb.app),
         "getGoogleBookMeta",
-        { timeout: 10000 },
+        { timeout: 6000 },
       );
       const res = await fn({ title, author });
       meta = res.data.meta;
       resolved = true;
     } catch (err) {
+      fnBreaker.trip();
       console.warn(
         "[google-books] cloud function lookup failed, falling back to direct fetch",
         err,
@@ -216,10 +237,11 @@ export async function fetchBookMeta(title: string, author?: string): Promise<Boo
     }
   }
 
-  if (!resolved) {
+  if (!resolved && !googleBreaker.isOpen()) {
     try {
       meta = await directFetchMeta(title, author);
     } catch (err) {
+      googleBreaker.trip();
       console.warn("[google-books] direct lookup failed", err);
       meta = null;
     }
@@ -248,6 +270,7 @@ export async function fetchBookMeta(title: string, author?: string): Promise<Boo
   return meta;
 }
 
+
 /** Full-text search across Google Books — used by the "Descobrir" catalog. */
 export async function searchBooks(
   query: string,
@@ -257,12 +280,12 @@ export async function searchBooks(
   if (!trimmed && !opts.category) return { results: [], networkError: false };
 
   const fb = getFirebase();
-  if (fb) {
+  if (fb && !fnBreaker.isOpen()) {
     try {
       const fn = httpsCallable<
         { query: string; category?: string; maxResults?: number },
         { results: BookMeta[]; error?: boolean }
-      >(getFunctions(fb.app), "searchGoogleBooks", { timeout: 10000 });
+      >(getFunctions(fb.app), "searchGoogleBooks", { timeout: 6000 });
       const res = await fn({
         query: trimmed,
         category: opts.category,
@@ -273,12 +296,14 @@ export async function searchBooks(
         networkError: !!res.data.error && res.data.results.length === 0,
       };
     } catch (err) {
+      fnBreaker.trip();
       console.warn(
         "[google-books] cloud function search failed, falling back to direct fetch",
         err,
       );
     }
   }
+
 
   try {
     const results = await directSearchBooks(trimmed, opts.category, opts.maxResults ?? 24);
