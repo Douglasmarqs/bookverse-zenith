@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Flame, Sparkles, Plus, Check, Loader2, BookOpenCheck } from "lucide-react";
 import { booksBySubject, trendingBooks, type OpenLibraryBook } from "@/lib/open-library";
 import {
@@ -10,10 +10,10 @@ import {
 import { addToLibrary } from "@/lib/library";
 import { toast } from "sonner";
 import { describeFirestoreError } from "@/lib/async-utils";
-import { subscribeAuth } from "@/lib/firebase";
+import { useAuthUser, useInView } from "@/hooks/use-auth-user";
 import { LanguageBadge } from "@/components/language-badge";
 import { Carousel } from "@/components/carousel";
-import type { User } from "firebase/auth";
+
 
 export const Route = createFileRoute("/catalogo")({
   head: () => ({
