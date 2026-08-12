@@ -12,6 +12,12 @@
  * than hanging (the reader page already shows that error to the user).
  */
 import { getFunctions, httpsCallable } from "firebase/functions";
+import { createBreaker } from "./net-utils";
+
+/** Cloud Functions may not be deployed in this environment — after the first
+ * failure, skip them for a while instead of waiting on a timeout each time. */
+const pdFnBreaker = createBreaker(5 * 60_000);
+
 import { getFirebase } from "./firebase";
 import type { Book, Chapter } from "./sample-book";
 
