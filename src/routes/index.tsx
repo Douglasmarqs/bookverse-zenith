@@ -379,7 +379,7 @@ function Home() {
       </Section>
 
       {/* SPLIT: RANKING + AI */}
-      <section className="mx-auto max-w-7xl px-5 py-10 md:px-8">
+      <section className="content-auto mx-auto max-w-7xl px-5 py-10 md:px-8">
         <div className="grid gap-6 lg:grid-cols-2">
           <RankingCard />
           <AICard />
@@ -414,7 +414,7 @@ function Home() {
       </Section>
 
       {/* CTA */}
-      <section className="mx-auto max-w-7xl px-5 pb-24 md:px-8">
+      <section className="content-auto mx-auto max-w-7xl px-5 pb-24 md:px-8">
         <div className="glass-plate relative overflow-hidden rounded-3xl px-8 py-14 md:px-14">
           <div className="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full bg-gold/20 blur-3xl" />
           <div className="relative grid gap-8 md:grid-cols-[1.4fr_1fr] md:items-center">
@@ -476,7 +476,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="mx-auto max-w-7xl px-5 py-10 md:px-8 md:py-14">
+    <section className="content-auto mx-auto max-w-7xl px-5 py-10 md:px-8 md:py-14">
       <header className="mb-7 flex items-end justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-gold">
