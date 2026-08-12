@@ -281,21 +281,23 @@ export async function searchPublicDomainBooks(
   if (!query.trim()) return [];
 
   const fb = getFirebase();
-  if (fb) {
+  if (fb && !pdFnBreaker.isOpen()) {
     try {
       const fn = httpsCallable<
         { query: string; maxResults?: number },
         { results: PublicDomainSummary[] }
-      >(getFunctions(fb.app), "searchPublicDomainBooks", { timeout: 10000 });
+      >(getFunctions(fb.app), "searchPublicDomainBooks", { timeout: 6000 });
       const res = await fn({ query, maxResults });
       return res.data.results ?? [];
     } catch (err) {
+      pdFnBreaker.trip();
       console.warn(
         "[public-domain] cloud function search failed, falling back to direct fetch",
         err,
       );
     }
   }
+
 
   try {
     return await directSearchPublicDomain(query, maxResults);
