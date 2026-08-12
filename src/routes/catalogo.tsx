@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Flame, Sparkles, Plus, Check, Loader2, BookOpenCheck } from "lucide-react";
 import { booksBySubject, trendingBooks, type OpenLibraryBook } from "@/lib/open-library";
 import {
@@ -10,10 +10,9 @@ import {
 import { addToLibrary } from "@/lib/library";
 import { toast } from "sonner";
 import { describeFirestoreError } from "@/lib/async-utils";
-import { subscribeAuth } from "@/lib/firebase";
+import { useAuthUser, useInView } from "@/hooks/use-auth-user";
 import { LanguageBadge } from "@/components/language-badge";
 import { Carousel } from "@/components/carousel";
-import type { User } from "firebase/auth";
 
 export const Route = createFileRoute("/catalogo")({
   head: () => ({
@@ -53,15 +52,17 @@ const SHELVES: { key: string; subject: string; title: string; eyebrow: string }[
 function CatalogoPage() {
   const [trending, setTrending] = useState<OpenLibraryBook[]>([]);
   const [bestsellers, setBestsellers] = useState<OpenLibraryBook[]>([]);
-  const [shelves, setShelves] = useState<Record<string, OpenLibraryBook[]>>({});
   const [publicDomain, setPublicDomain] = useState<PublicDomainSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Only the above-the-fold rails are fetched on mount. The genre shelves
+  // fetch themselves when they scroll into view (see `LazyShelf`), so the
+  // page no longer fires 11 network requests at once and stays responsive.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [tr, best, pd, ...shelfResults] = await Promise.allSettled([
+        const [tr, best, pd] = await Promise.allSettled([
           trendingBooks("weekly", 12, {
             onUpdate: (r) => !cancelled && setTrending(r),
           }),
@@ -69,22 +70,11 @@ function CatalogoPage() {
             onUpdate: (r) => !cancelled && setBestsellers(r),
           }),
           searchPublicDomainBooks("classic literature", 12),
-          ...SHELVES.map((s) =>
-            booksBySubject(s.subject, 10, {
-              onUpdate: (r) => !cancelled && setShelves((prev) => ({ ...prev, [s.key]: r })),
-            }),
-          ),
         ]);
         if (cancelled) return;
         if (tr.status === "fulfilled") setTrending(tr.value);
         if (best.status === "fulfilled") setBestsellers(best.value);
         if (pd.status === "fulfilled") setPublicDomain(pd.value);
-        const map: Record<string, OpenLibraryBook[]> = {};
-        SHELVES.forEach((s, i) => {
-          const r = shelfResults[i];
-          if (r.status === "fulfilled") map[s.key] = r.value;
-        });
-        setShelves((prev) => ({ ...prev, ...map }));
       } catch (err) {
         console.warn("[catalogo] failed to load catalog data", err);
       } finally {
@@ -107,67 +97,51 @@ function CatalogoPage() {
         via Open Library. Os títulos em domínio público podem ser lidos direto no app.
       </p>
 
-      {loading ? (
-        <div className="flex items-center gap-2 py-24 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Carregando catálogo…
-        </div>
+      {/* Each rail appears as soon as its own source answers — a single slow
+          API no longer holds the whole page behind one spinner. */}
+      {publicDomain.length > 0 ? (
+        <Shelf
+          eyebrow="Ler agora"
+          title="Clássicos em domínio público"
+          icon={<BookOpenCheck className="h-4 w-4" />}
+        >
+          <BookRail>
+            {publicDomain.map((b) => (
+              <PublicDomainCard key={b.id} book={b} />
+            ))}
+          </BookRail>
+        </Shelf>
       ) : (
-        <>
-          {publicDomain.length > 0 && (
-            <Shelf
-              eyebrow="Ler agora"
-              title="Clássicos em domínio público"
-              icon={<BookOpenCheck className="h-4 w-4" />}
-            >
-              <BookRail>
-                {publicDomain.map((b) => (
-                  <PublicDomainCard key={b.id} book={b} />
-                ))}
-              </BookRail>
-            </Shelf>
-          )}
-
-          {trending.length > 0 && (
-            <Shelf
-              eyebrow="Em alta"
-              title="Tendências da semana"
-              icon={<Flame className="h-4 w-4" />}
-            >
-              <BookRail>
-                {trending.map((b, i) => (
-                  <OpenLibraryCard key={b.workKey + i} book={b} rank={i + 1} />
-                ))}
-              </BookRail>
-            </Shelf>
-          )}
-
-          {bestsellers.length > 0 && (
-            <Shelf
-              eyebrow="Mais vendidos"
-              title="Bestsellers"
-              icon={<Sparkles className="h-4 w-4" />}
-            >
-              <BookRail>
-                {bestsellers.map((b, i) => (
-                  <OpenLibraryCard key={b.workKey + i} book={b} />
-                ))}
-              </BookRail>
-            </Shelf>
-          )}
-
-          {SHELVES.map((s) =>
-            shelves[s.key]?.length ? (
-              <Shelf key={s.key} eyebrow={s.eyebrow} title={s.title}>
-                <BookRail>
-                  {shelves[s.key].map((b, i) => (
-                    <OpenLibraryCard key={b.workKey + i} book={b} />
-                  ))}
-                </BookRail>
-              </Shelf>
-            ) : null,
-          )}
-        </>
+        loading && <ShelfSkeleton />
       )}
+
+      {trending.length > 0 ? (
+        <Shelf eyebrow="Em alta" title="Tendências da semana" icon={<Flame className="h-4 w-4" />}>
+          <BookRail>
+            {trending.map((b, i) => (
+              <OpenLibraryCard key={b.workKey + i} book={b} rank={i + 1} />
+            ))}
+          </BookRail>
+        </Shelf>
+      ) : (
+        loading && <ShelfSkeleton />
+      )}
+
+      {bestsellers.length > 0 ? (
+        <Shelf eyebrow="Mais vendidos" title="Bestsellers" icon={<Sparkles className="h-4 w-4" />}>
+          <BookRail>
+            {bestsellers.map((b, i) => (
+              <OpenLibraryCard key={b.workKey + i} book={b} />
+            ))}
+          </BookRail>
+        </Shelf>
+      ) : (
+        loading && <ShelfSkeleton />
+      )}
+
+      {SHELVES.map((s) => (
+        <LazyShelf key={s.key} subject={s.subject} eyebrow={s.eyebrow} title={s.title} />
+      ))}
     </div>
   );
 }
@@ -201,12 +175,74 @@ function BookRail({ children }: { children: React.ReactNode }) {
   return <Carousel>{children}</Carousel>;
 }
 
+/** A genre shelf that only fetches its subject once it nears the viewport. */
+function LazyShelf({
+  subject,
+  eyebrow,
+  title,
+}: {
+  subject: string;
+  eyebrow: string;
+  title: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref);
+  const [books, setBooks] = useState<OpenLibraryBook[] | null>(null);
+
+  useEffect(() => {
+    if (!inView) return;
+    let cancelled = false;
+    booksBySubject(subject, 10, {
+      onUpdate: (r) => !cancelled && setBooks(r),
+    })
+      .then((r) => !cancelled && setBooks(r))
+      .catch(() => !cancelled && setBooks([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [inView, subject]);
+
+  return (
+    <div ref={ref} className="content-auto">
+      {books === null ? (
+        <ShelfSkeleton />
+      ) : books.length > 0 ? (
+        <Shelf eyebrow={eyebrow} title={title}>
+          <BookRail>
+            {books.map((b, i) => (
+              <OpenLibraryCard key={b.workKey + i} book={b} />
+            ))}
+          </BookRail>
+        </Shelf>
+      ) : null}
+    </div>
+  );
+}
+
+/** Placeholder with the same silhouette as a loaded shelf, so content
+ * appearing never shifts the layout around. */
+function ShelfSkeleton() {
+  return (
+    <section className="mt-14">
+      <div className="h-3 w-24 animate-pulse rounded bg-secondary" />
+      <div className="mt-4 h-7 w-64 animate-pulse rounded bg-secondary" />
+      <div className="mt-6 flex gap-5 overflow-hidden">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div
+            key={i}
+            className="aspect-[2/3] w-40 shrink-0 animate-pulse rounded-md bg-secondary sm:w-44"
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function OpenLibraryCard({ book, rank }: { book: OpenLibraryBook; rank?: number }) {
   const navigate = useNavigate();
-  const [user, setUser] = useState<User | null>(null);
+  const user = useAuthUser();
   const [added, setAdded] = useState(false);
   const [saving, setSaving] = useState(false);
-  useEffect(() => subscribeAuth(setUser), []);
 
   async function add(e: React.MouseEvent) {
     e.preventDefault();
@@ -292,10 +328,9 @@ function OpenLibraryCard({ book, rank }: { book: OpenLibraryBook; rank?: number 
 
 function PublicDomainCard({ book }: { book: PublicDomainSummary }) {
   const navigate = useNavigate();
-  const [user, setUser] = useState<User | null>(null);
+  const user = useAuthUser();
   const [added, setAdded] = useState(false);
   const [saving, setSaving] = useState(false);
-  useEffect(() => subscribeAuth(setUser), []);
 
   async function add(e: React.MouseEvent) {
     e.preventDefault();
