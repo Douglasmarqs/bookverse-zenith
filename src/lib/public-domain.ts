@@ -286,7 +286,7 @@ export async function searchPublicDomainBooks(
       const fn = httpsCallable<
         { query: string; maxResults?: number },
         { results: PublicDomainSummary[] }
-      >(getFunctions(fb.app), "searchPublicDomainBooks");
+      >(getFunctions(fb.app), "searchPublicDomainBooks", { timeout: 10000 });
       const res = await fn({ query, maxResults });
       return res.data.results ?? [];
     } catch (err) {
@@ -314,6 +314,7 @@ export async function getPublicDomainBook(gutenbergId: number): Promise<Book> {
       const fn = httpsCallable<{ gutenbergId: number }, Book>(
         getFunctions(fb.app),
         "getPublicDomainBook",
+        { timeout: 10000 },
       );
       const res = await fn({ gutenbergId });
       return res.data;

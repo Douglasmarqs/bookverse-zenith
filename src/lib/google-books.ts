@@ -203,6 +203,7 @@ export async function fetchBookMeta(title: string, author?: string): Promise<Boo
       const fn = httpsCallable<{ title: string; author?: string }, { meta: BookMeta | null }>(
         getFunctions(fb.app),
         "getGoogleBookMeta",
+        { timeout: 10000 },
       );
       const res = await fn({ title, author });
       meta = res.data.meta;
@@ -261,7 +262,7 @@ export async function searchBooks(
       const fn = httpsCallable<
         { query: string; category?: string; maxResults?: number },
         { results: BookMeta[]; error?: boolean }
-      >(getFunctions(fb.app), "searchGoogleBooks");
+      >(getFunctions(fb.app), "searchGoogleBooks", { timeout: 10000 });
       const res = await fn({
         query: trimmed,
         category: opts.category,

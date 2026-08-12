@@ -61,8 +61,6 @@ function storage(): Storage | null {
  * returned immediately, then refreshed in the background. */
 const freshUntil = new Map<string, number>();
 
-
-
 /** Reads the raw persistent entry — including expired ones, so callers can
  * implement stale-while-revalidate. Returns undefined only when the entry is
  * missing, malformed, or from an older schema version. */
@@ -125,14 +123,22 @@ export function invalidateOpenLibraryCache(): void {
   }
 }
 
+/** Every fetch in this module is bounded — an unresponsive/blocked network
+ * to openlibrary.org must fail within a few seconds, never hang the tab. */
+const FETCH_TIMEOUT_MS = 8000;
+
 async function cachedFetchJson(url: string): Promise<any | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: controller.signal });
     if (!res.ok) throw new Error(`Open Library ${res.status}`);
     return await res.json();
   } catch (err) {
     console.warn(`[open-library] fetch failed`, err);
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -219,7 +225,6 @@ async function withCache(
   return p;
 }
 
-
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -243,8 +248,7 @@ export async function booksBySubject(
         .filter((w) => w.title && w.key)
         .map((w) => ({
           title: w.title as string,
-          author:
-            (w.authors?.map((a: any) => a.name).join(", ") as string) ?? "Autor desconhecido",
+          author: (w.authors?.map((a: any) => a.name).join(", ") as string) ?? "Autor desconhecido",
           cover: w.cover_id ? COVER(w.cover_id) : null,
           workKey: w.key as string,
           firstPublishYear: w.first_publish_year,
@@ -313,4 +317,3 @@ export async function searchOpenLibrary(
     opts,
   );
 }
-

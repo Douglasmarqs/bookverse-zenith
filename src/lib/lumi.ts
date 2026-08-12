@@ -4,7 +4,7 @@
  * model API key never touches the browser.
  */
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { ensureUser, getFirebase } from "./firebase";
+import { ensureUserOrThrow, getFirebase } from "./firebase";
 import type { LumiContext } from "./lumi-panel-store";
 
 export interface LumiMessage {
@@ -14,6 +14,24 @@ export interface LumiMessage {
 
 interface AskLumiResponse {
   reply: string;
+}
+
+function friendlyAuthError(err: unknown): string {
+  const code = (err as { code?: string })?.code ?? "";
+  const map: Record<string, string> = {
+    "auth/admin-restricted-operation":
+      "Login anônimo está desabilitado no Firebase Console (Authentication → Sign-in method → Anonymous → habilitar).",
+    "auth/network-request-failed": "Falha de rede ao iniciar a sessão. Verifique sua conexão.",
+    "auth/configuration-not-found":
+      "A configuração de Authentication não foi encontrada no Firebase Console.",
+    "auth/api-key-not-valid.-please-pass-a-valid-api-key.":
+      "A chave de API do Firebase configurada é inválida.",
+    "auth/invalid-api-key": "A chave de API do Firebase configurada é inválida.",
+  };
+  if (map[code]) return map[code];
+  return code
+    ? `Não foi possível iniciar uma sessão para conversar com a Lumi (${code}).`
+    : "Não foi possível iniciar uma sessão para conversar com a Lumi agora. Tente novamente em instantes.";
 }
 
 /**
@@ -31,18 +49,17 @@ export async function askLumi(
   // askLumi requires an authenticated caller (any session works, including
   // anonymous) — make sure one exists even if the visitor never touched a
   // page that signs them in first (e.g. clicking "IA" straight from the nav).
-  const user = await ensureUser();
-  if (!user) {
-    throw new Error(
-      "Não foi possível iniciar uma sessão para conversar com a Lumi agora. Tente novamente em instantes.",
-    );
+  try {
+    await ensureUserOrThrow();
+  } catch (err) {
+    throw new Error(friendlyAuthError(err));
   }
 
   const functions = getFunctions(fb.app);
   const callable = httpsCallable<
     { messages: LumiMessage[]; context?: LumiContext | null },
     AskLumiResponse
-  >(functions, "askLumi");
+  >(functions, "askLumi", { timeout: 30000 });
 
   try {
     const res = await callable({ messages, context: context ?? null });
@@ -57,6 +74,10 @@ export async function askLumi(
     if (code.includes("unauthenticated")) {
       throw new Error("Faça login para conversar com a Lumi.");
     }
-    throw new Error("Lumi não conseguiu responder agora. Tente novamente em instantes.");
+    throw new Error(
+      code
+        ? `Lumi não conseguiu responder agora (${code}).`
+        : "Lumi não conseguiu responder agora. Tente novamente em instantes.",
+    );
   }
 }

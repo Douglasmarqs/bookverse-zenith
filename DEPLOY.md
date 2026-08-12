@@ -1,5 +1,49 @@
 # Diagnóstico rápido — capas, catálogo e login
 
+## 🆕 Atualização URGENTE — corrigido o travamento ao clicar em livros
+
+### O bug real do travamento
+
+Achei a causa: a busca no Open Library (usada como 3ª tentativa quando o
+Google Books falha) **não tinha nenhum limite de tempo** — diferente de
+todo o resto do código, que já tinha proteção contra isso. Se a rede
+travasse ali, o navegador ficava esperando indefinidamente, sem erro, sem
+aviso — exatamente a sensação de "trava tudo" ao clicar num livro.
+
+Além disso, as chamadas às Cloud Functions não tinham limite de tempo
+configurado — o padrão do Firebase é **70 segundos**. Então, no seu caso
+específico (Cloud Functions ainda não publicadas), cada clique podia
+ficar esperando até 70s só nessa etapa, antes mesmo de cair nas
+alternativas seguintes.
+
+**Corrigido em 6 lugares**: toda chamada de rede do app (Open Library,
+Cloud Functions do navegador, e também dentro das próprias Cloud
+Functions no servidor) agora tem um limite de tempo real — no pior caso,
+alguns segundos de espera com uma mensagem clara, nunca mais uma tela
+travada sem explicação.
+
+### Por que o "CATÁLOGO GERAL" ainda aparecia no seu print
+
+Aquele texto **não existe mais no código** há várias atualizações — o
+print era de uma versão desatualizada do site publicado. Isso costuma
+acontecer quando o código é atualizado aqui mas ainda não foi
+reenviado pro GitHub/Vercel. Confirme que o zip mais recente foi
+publicado de verdade (commit + push, ou reupload no Lovable) antes de
+testar de novo.
+
+### Erros agora mostram a causa exata
+
+Login e Lumi mostravam mensagens genéricas tipo "Não foi possível
+concluir" sem dizer o motivo. Agora, quando o erro não é um dos
+conhecidos, a mensagem mostra o **código técnico exato** entre
+parênteses — assim, se algo ainda falhar, me manda o print e eu já sei
+exatamente o que verificar, sem precisar adivinhar.
+
+**Suspeita mais provável para os erros de login/Lumi**: no Firebase
+Console → Authentication → Sign-in method, confirme que **Anonymous** e
+**Email/Password** (e Google, se você usa) estão com o status
+"Habilitado". Isso é separado de tudo que já configuramos até aqui.
+
 ## 🆕 Atualização — Lumi migrada pra Gemini (gratuito) + correção real de tema no leitor
 
 ### IA trocada de Anthropic para Gemini

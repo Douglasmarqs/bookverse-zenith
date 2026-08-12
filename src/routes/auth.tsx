@@ -607,5 +607,11 @@ function friendlyError(err: unknown): string {
       "Login anônimo/automático está desabilitado no Firebase Console.",
     "auth/too-many-requests": "Muitas tentativas seguidas. Aguarde um momento e tente novamente.",
   };
-  return map[code] ?? "Não foi possível concluir. Tente novamente.";
+  if (map[code]) return map[code];
+  // Unrecognized code — show it raw instead of a generic message, so
+  // whoever's debugging (you, or me if you send a screenshot) can see
+  // exactly what Firebase actually said instead of guessing blind.
+  return code
+    ? `Não foi possível concluir (${code}). Tente novamente.`
+    : "Não foi possível concluir. Tente novamente.";
 }

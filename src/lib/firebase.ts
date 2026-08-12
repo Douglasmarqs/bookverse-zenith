@@ -112,6 +112,29 @@ export function ensureUser(): Promise<User | null> {
   });
 }
 
+/** Same as `ensureUser`, but rejects with the real Firebase error instead
+ * of silently resolving null — use this where the caller needs to show a
+ * specific diagnostic (e.g. "Anonymous sign-in disabled in console")
+ * rather than a generic fallback message. */
+export function ensureUserOrThrow(): Promise<User> {
+  const fb = getFirebase();
+  if (!fb) throw new Error("Firebase não está configurado neste ambiente.");
+  const { auth } = fb;
+  return new Promise((resolve, reject) => {
+    if (auth.currentUser) return resolve(auth.currentUser);
+    const unsub = onAuthStateChanged(auth, (u) => {
+      if (u) {
+        unsub();
+        resolve(u);
+      }
+    });
+    signInAnonymously(auth).catch((err) => {
+      unsub();
+      reject(err);
+    });
+  });
+}
+
 /** Subscribe to auth state changes. */
 export function subscribeAuth(cb: (user: User | null) => void): () => void {
   const fb = getFirebase();

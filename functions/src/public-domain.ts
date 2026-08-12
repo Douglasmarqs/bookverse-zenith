@@ -13,6 +13,16 @@ import { getFirestore } from "firebase-admin/firestore";
 
 const GUTENDEX_BASE = "https://gutendex.com";
 
+async function fetchWithTimeout(url: string, ms: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 interface GutendexAuthor {
   name: string;
 }
@@ -197,7 +207,7 @@ export const searchPublicDomainBooks = onCall<{ query?: string; maxResults?: num
     if (!query) return { results: [] as PublicDomainSummary[] };
 
     const url = `${GUTENDEX_BASE}/books?search=${encodeURIComponent(query)}&languages=pt,en`;
-    const res = await fetch(url);
+    const res = await fetchWithTimeout(url, 9000);
     if (!res.ok) {
       throw new HttpsError("unavailable", "Catálogo de domínio público indisponível agora.");
     }
@@ -220,7 +230,7 @@ export const getPublicDomainBook = onCall<{ gutenbergId: number }>(
     const cached = await cacheRef.get();
     if (cached.exists) return cached.data();
 
-    const metaRes = await fetch(`${GUTENDEX_BASE}/books/${gutenbergId}`);
+    const metaRes = await fetchWithTimeout(`${GUTENDEX_BASE}/books/${gutenbergId}`, 9000);
     if (!metaRes.ok) throw new HttpsError("not-found", "Livro não encontrado no catálogo.");
     const meta = (await metaRes.json()) as GutendexBook;
 
@@ -232,7 +242,7 @@ export const getPublicDomainBook = onCall<{ gutenbergId: number }>(
       );
     }
 
-    const textRes = await fetch(textUrl);
+    const textRes = await fetchWithTimeout(textUrl, 25000);
     if (!textRes.ok) throw new HttpsError("internal", "Falha ao baixar o texto do livro.");
     const raw = await textRes.text();
     const clean = stripBoilerplate(raw);
