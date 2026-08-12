@@ -24,7 +24,7 @@ exports.askLumi = exports.getGoogleBookMeta = exports.searchGoogleBooks = export
 const https_1 = require("firebase-functions/v2/https");
 const params_1 = require("firebase-functions/params");
 const app_1 = require("firebase-admin/app");
-const generative_ai_1 = require("@google/generative-ai");
+const genai_1 = require("@google/genai");
 if ((0, app_1.getApps)().length === 0) {
     (0, app_1.initializeApp)();
 }
@@ -76,11 +76,7 @@ exports.askLumi = (0, https_1.onCall)({ secrets: [GEMINI_API_KEY], cors: true, m
         }
     }
     try {
-        const genAI = new generative_ai_1.GoogleGenerativeAI(GEMINI_API_KEY.value());
-        const model = genAI.getGenerativeModel({
-            model: MODEL_NAME,
-            systemInstruction: buildSystemPrompt(context),
-        });
+        const ai = new genai_1.GoogleGenAI({ apiKey: GEMINI_API_KEY.value() });
         // Gemini's chat API wants prior turns as "history" and the newest
         // message sent separately — mirrors how the client already splits
         // these (everything but the last message is history).
@@ -89,12 +85,16 @@ exports.askLumi = (0, https_1.onCall)({ secrets: [GEMINI_API_KEY], cors: true, m
             parts: [{ text: m.text }],
         }));
         const lastMessage = messages[messages.length - 1];
-        const chat = model.startChat({
+        const chat = ai.chats.create({
+            model: MODEL_NAME,
             history,
-            generationConfig: { maxOutputTokens: MAX_OUTPUT_TOKENS },
+            config: {
+                systemInstruction: buildSystemPrompt(context),
+                maxOutputTokens: MAX_OUTPUT_TOKENS,
+            },
         });
-        const result = await chat.sendMessage(lastMessage.text);
-        const reply = result.response.text().trim();
+        const result = await chat.sendMessage({ message: lastMessage.text });
+        const reply = (result.text ?? "").trim();
         return { reply: reply || "Não consegui pensar em uma resposta agora — tente reformular?" };
     }
     catch (err) {
