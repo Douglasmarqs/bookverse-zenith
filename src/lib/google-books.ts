@@ -16,6 +16,18 @@
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { getFirebase } from "./firebase";
 import { searchOpenLibrary } from "./open-library";
+import { createBreaker, createInFlightMap, createLimiter } from "./net-utils";
+
+/** At most 4 metadata lookups in flight — a page with 60 covers otherwise
+ * saturates the browser's connection pool and the tab appears frozen. */
+const limitMeta = createLimiter(4);
+const inFlightMeta = createInFlightMap<BookMeta | null>();
+/** Callable Functions may not be deployed; Google Books may be over quota.
+ * Once either fails, skip it for a while instead of paying its timeout on
+ * every card. */
+const fnBreaker = createBreaker(5 * 60_000);
+const googleBreaker = createBreaker(10 * 60_000);
+
 
 export interface BookMeta {
   title: string;
