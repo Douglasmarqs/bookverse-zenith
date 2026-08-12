@@ -293,3 +293,23 @@
   background-size: 200% 100%;
   animation: shimmer-line 3s linear infinite;
 }
+
+/* Skips layout/paint work for offscreen sections (long shelf pages scroll
+   noticeably smoother on low-end phones). */
+@utility content-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 420px;
+}
+
+/* Honor the OS "reduce motion" setting — infinite float/shimmer animations
+   are the main source of jank on weaker devices. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

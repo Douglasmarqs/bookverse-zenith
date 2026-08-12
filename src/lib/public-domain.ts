@@ -12,6 +12,12 @@
  * than hanging (the reader page already shows that error to the user).
  */
 import { getFunctions, httpsCallable } from "firebase/functions";
+import { createBreaker } from "./net-utils";
+
+/** Cloud Functions may not be deployed in this environment — after the first
+ * failure, skip them for a while instead of waiting on a timeout each time. */
+const pdFnBreaker = createBreaker(5 * 60_000);
+
 import { getFirebase } from "./firebase";
 import type { Book, Chapter } from "./sample-book";
 
@@ -281,21 +287,23 @@ export async function searchPublicDomainBooks(
   if (!query.trim()) return [];
 
   const fb = getFirebase();
-  if (fb) {
+  if (fb && !pdFnBreaker.isOpen()) {
     try {
       const fn = httpsCallable<
         { query: string; maxResults?: number },
         { results: PublicDomainSummary[] }
-      >(getFunctions(fb.app), "searchPublicDomainBooks", { timeout: 10000 });
+      >(getFunctions(fb.app), "searchPublicDomainBooks", { timeout: 6000 });
       const res = await fn({ query, maxResults });
       return res.data.results ?? [];
     } catch (err) {
+      pdFnBreaker.trip();
       console.warn(
         "[public-domain] cloud function search failed, falling back to direct fetch",
         err,
       );
     }
   }
+
 
   try {
     return await directSearchPublicDomain(query, maxResults);
@@ -308,23 +316,25 @@ export async function searchPublicDomainBooks(
 export async function getPublicDomainBook(gutenbergId: number): Promise<Book> {
   const fb = getFirebase();
   let cloudFunctionTried = false;
-  if (fb) {
+  if (fb && !pdFnBreaker.isOpen()) {
     try {
       cloudFunctionTried = true;
       const fn = httpsCallable<{ gutenbergId: number }, Book>(
         getFunctions(fb.app),
         "getPublicDomainBook",
-        { timeout: 10000 },
+        { timeout: 8000 },
       );
       const res = await fn({ gutenbergId });
       return res.data;
     } catch (err) {
+      pdFnBreaker.trip();
       console.warn(
         "[public-domain] cloud function fetch failed, falling back to direct fetch",
         err,
       );
     }
   }
+
 
   try {
     return await directGetPublicDomainBook(gutenbergId);
