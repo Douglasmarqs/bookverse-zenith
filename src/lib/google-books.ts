@@ -280,12 +280,12 @@ export async function searchBooks(
   if (!trimmed && !opts.category) return { results: [], networkError: false };
 
   const fb = getFirebase();
-  if (fb) {
+  if (fb && !fnBreaker.isOpen()) {
     try {
       const fn = httpsCallable<
         { query: string; category?: string; maxResults?: number },
         { results: BookMeta[]; error?: boolean }
-      >(getFunctions(fb.app), "searchGoogleBooks", { timeout: 10000 });
+      >(getFunctions(fb.app), "searchGoogleBooks", { timeout: 6000 });
       const res = await fn({
         query: trimmed,
         category: opts.category,
@@ -296,12 +296,14 @@ export async function searchBooks(
         networkError: !!res.data.error && res.data.results.length === 0,
       };
     } catch (err) {
+      fnBreaker.trip();
       console.warn(
         "[google-books] cloud function search failed, falling back to direct fetch",
         err,
       );
     }
   }
+
 
   try {
     const results = await directSearchBooks(trimmed, opts.category, opts.maxResults ?? 24);
