@@ -147,17 +147,10 @@ function CatalogoPage() {
             </Shelf>
           )}
 
-          {SHELVES.map((s) =>
-            shelves[s.key]?.length ? (
-              <Shelf key={s.key} eyebrow={s.eyebrow} title={s.title}>
-                <BookRail>
-                  {shelves[s.key].map((b, i) => (
-                    <OpenLibraryCard key={b.workKey + i} book={b} />
-                  ))}
-                </BookRail>
-              </Shelf>
-            ) : null,
-          )}
+          {SHELVES.map((s) => (
+            <LazyShelf key={s.key} subject={s.subject} eyebrow={s.eyebrow} title={s.title} />
+          ))}
+
         </>
       )}
     </div>
