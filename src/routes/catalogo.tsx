@@ -99,60 +99,52 @@ function CatalogoPage() {
         via Open Library. Os títulos em domínio público podem ser lidos direto no app.
       </p>
 
-      {loading ? (
-        <div className="flex items-center gap-2 py-24 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Carregando catálogo…
-        </div>
+      {/* Each rail appears as soon as its own source answers — a single slow
+          API no longer holds the whole page behind one spinner. */}
+      {publicDomain.length > 0 ? (
+        <Shelf
+          eyebrow="Ler agora"
+          title="Clássicos em domínio público"
+          icon={<BookOpenCheck className="h-4 w-4" />}
+        >
+          <BookRail>
+            {publicDomain.map((b) => (
+              <PublicDomainCard key={b.id} book={b} />
+            ))}
+          </BookRail>
+        </Shelf>
       ) : (
-        <>
-          {publicDomain.length > 0 && (
-            <Shelf
-              eyebrow="Ler agora"
-              title="Clássicos em domínio público"
-              icon={<BookOpenCheck className="h-4 w-4" />}
-            >
-              <BookRail>
-                {publicDomain.map((b) => (
-                  <PublicDomainCard key={b.id} book={b} />
-                ))}
-              </BookRail>
-            </Shelf>
-          )}
-
-          {trending.length > 0 && (
-            <Shelf
-              eyebrow="Em alta"
-              title="Tendências da semana"
-              icon={<Flame className="h-4 w-4" />}
-            >
-              <BookRail>
-                {trending.map((b, i) => (
-                  <OpenLibraryCard key={b.workKey + i} book={b} rank={i + 1} />
-                ))}
-              </BookRail>
-            </Shelf>
-          )}
-
-          {bestsellers.length > 0 && (
-            <Shelf
-              eyebrow="Mais vendidos"
-              title="Bestsellers"
-              icon={<Sparkles className="h-4 w-4" />}
-            >
-              <BookRail>
-                {bestsellers.map((b, i) => (
-                  <OpenLibraryCard key={b.workKey + i} book={b} />
-                ))}
-              </BookRail>
-            </Shelf>
-          )}
-
-          {SHELVES.map((s) => (
-            <LazyShelf key={s.key} subject={s.subject} eyebrow={s.eyebrow} title={s.title} />
-          ))}
-
-        </>
+        loading && <ShelfSkeleton />
       )}
+
+      {trending.length > 0 ? (
+        <Shelf eyebrow="Em alta" title="Tendências da semana" icon={<Flame className="h-4 w-4" />}>
+          <BookRail>
+            {trending.map((b, i) => (
+              <OpenLibraryCard key={b.workKey + i} book={b} rank={i + 1} />
+            ))}
+          </BookRail>
+        </Shelf>
+      ) : (
+        loading && <ShelfSkeleton />
+      )}
+
+      {bestsellers.length > 0 ? (
+        <Shelf eyebrow="Mais vendidos" title="Bestsellers" icon={<Sparkles className="h-4 w-4" />}>
+          <BookRail>
+            {bestsellers.map((b, i) => (
+              <OpenLibraryCard key={b.workKey + i} book={b} />
+            ))}
+          </BookRail>
+        </Shelf>
+      ) : (
+        loading && <ShelfSkeleton />
+      )}
+
+      {SHELVES.map((s) => (
+        <LazyShelf key={s.key} subject={s.subject} eyebrow={s.eyebrow} title={s.title} />
+      ))}
+
     </div>
   );
 }
