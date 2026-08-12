@@ -186,12 +186,67 @@ function BookRail({ children }: { children: React.ReactNode }) {
   return <Carousel>{children}</Carousel>;
 }
 
+/** A genre shelf that only fetches its subject once it nears the viewport. */
+function LazyShelf({
+  subject,
+  eyebrow,
+  title,
+}: {
+  subject: string;
+  eyebrow: string;
+  title: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref);
+  const [books, setBooks] = useState<OpenLibraryBook[] | null>(null);
+
+  useEffect(() => {
+    if (!inView) return;
+    let cancelled = false;
+    booksBySubject(subject, 10, {
+      onUpdate: (r) => !cancelled && setBooks(r),
+    })
+      .then((r) => !cancelled && setBooks(r))
+      .catch(() => !cancelled && setBooks([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [inView, subject]);
+
+  return (
+    <div ref={ref} className="content-auto">
+      {books === null ? (
+        <section className="mt-14">
+          <div className="h-3 w-24 animate-pulse rounded bg-secondary" />
+          <div className="mt-4 h-7 w-64 animate-pulse rounded bg-secondary" />
+          <div className="mt-6 flex gap-5 overflow-hidden">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className="aspect-[2/3] w-40 shrink-0 animate-pulse rounded-md bg-secondary sm:w-44"
+              />
+            ))}
+          </div>
+        </section>
+      ) : books.length > 0 ? (
+        <Shelf eyebrow={eyebrow} title={title}>
+          <BookRail>
+            {books.map((b, i) => (
+              <OpenLibraryCard key={b.workKey + i} book={b} />
+            ))}
+          </BookRail>
+        </Shelf>
+      ) : null}
+    </div>
+  );
+}
+
 function OpenLibraryCard({ book, rank }: { book: OpenLibraryBook; rank?: number }) {
   const navigate = useNavigate();
-  const [user, setUser] = useState<User | null>(null);
+  const user = useAuthUser();
   const [added, setAdded] = useState(false);
   const [saving, setSaving] = useState(false);
-  useEffect(() => subscribeAuth(setUser), []);
+
 
   async function add(e: React.MouseEvent) {
     e.preventDefault();
