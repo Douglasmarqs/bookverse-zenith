@@ -332,10 +332,10 @@ function OpenLibraryCard({ book, rank }: { book: OpenLibraryBook; rank?: number 
 
 function PublicDomainCard({ book }: { book: PublicDomainSummary }) {
   const navigate = useNavigate();
-  const [user, setUser] = useState<User | null>(null);
+  const user = useAuthUser();
   const [added, setAdded] = useState(false);
   const [saving, setSaving] = useState(false);
-  useEffect(() => subscribeAuth(setUser), []);
+
 
   async function add(e: React.MouseEvent) {
     e.preventDefault();
