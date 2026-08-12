@@ -206,21 +206,30 @@ export async function fetchBookMeta(title: string, author?: string): Promise<Boo
     return cached;
   }
 
+  return inFlightMeta(key, () => limitMeta(() => resolveBookMeta(key, title, author)));
+}
+
+async function resolveBookMeta(
+  key: string,
+  title: string,
+  author?: string,
+): Promise<BookMeta | null> {
   let meta: BookMeta | null = null;
   let resolved = false;
 
   const fb = getFirebase();
-  if (fb) {
+  if (fb && !fnBreaker.isOpen()) {
     try {
       const fn = httpsCallable<{ title: string; author?: string }, { meta: BookMeta | null }>(
         getFunctions(fb.app),
         "getGoogleBookMeta",
-        { timeout: 10000 },
+        { timeout: 6000 },
       );
       const res = await fn({ title, author });
       meta = res.data.meta;
       resolved = true;
     } catch (err) {
+      fnBreaker.trip();
       console.warn(
         "[google-books] cloud function lookup failed, falling back to direct fetch",
         err,
@@ -228,10 +237,11 @@ export async function fetchBookMeta(title: string, author?: string): Promise<Boo
     }
   }
 
-  if (!resolved) {
+  if (!resolved && !googleBreaker.isOpen()) {
     try {
       meta = await directFetchMeta(title, author);
     } catch (err) {
+      googleBreaker.trip();
       console.warn("[google-books] direct lookup failed", err);
       meta = null;
     }
@@ -259,6 +269,7 @@ export async function fetchBookMeta(title: string, author?: string): Promise<Boo
   writeSessionCache(key, meta);
   return meta;
 }
+
 
 /** Full-text search across Google Books — used by the "Descobrir" catalog. */
 export async function searchBooks(
