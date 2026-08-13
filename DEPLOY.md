@@ -1,5 +1,32 @@
 # Diagnóstico rápido — capas, catálogo e login
 
+## 🆕 Atualização — Lumi migrada de Gemini pra Groq (chave AQ. quebrada pelo Google)
+
+### Por que trocou de novo
+
+O Google começou a emitir chaves do Gemini num formato novo (`AQ.Ab...`
+em vez do `AIzaSy...` de sempre) e, no momento desta atualização, essas
+chaves novas estavam sendo rejeitadas pela própria API do Gemini com erro
+de autenticação — bug conhecido e ainda aberto do lado do Google, sem
+previsão de correção. Reaproveitar uma chave `AIzaSy...` antiga também
+esbarrou em restrição de API na consola do Google Cloud.
+
+Pra não ficar refém disso, migrei a `askLumi` pra usar o **Groq**
+(modelo Llama 3.3 70B) em vez do Gemini — mesma ideia (chave gratuita,
+sem cartão), API compatível com o formato da OpenAI, sem essa dor de
+formato de chave mudando por baixo dos panos.
+
+1. **aistudio.google.com não é mais necessário** — em vez disso, use
+   **console.groq.com** → API Keys → Create API Key (chave começa com
+   `gsk_...`).
+2. `firebase functions:secrets:set GROQ_API_KEY` (troca o nome do
+   secret — `GEMINI_API_KEY` fica órfão, pode ignorar ou remover).
+3. `cd functions && npm install && npm run deploy`
+
+Veja o passo a passo completo em `functions/README.md`, seção "Passo 0".
+O plano Blaze do Firebase continua sendo exigido pelo mesmo motivo de
+sempre (Cloud Functions acessarem a internet), independente da IA.
+
 ## 🆕 Atualização URGENTE — corrigido o travamento ao clicar em livros
 
 ### O bug real do travamento

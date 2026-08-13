@@ -1,14 +1,15 @@
 /**
- * askLumi — callable Cloud Function that proxies chat turns to Gemini on
+ * askLumi — callable Cloud Function that proxies chat turns to Groq on
  * behalf of the "Lumi" owl reading companion. The API key never reaches
  * the browser: it lives only as a Firebase secret bound to this function.
  *
- * Uses Gemini specifically because Google AI Studio issues API keys with
- * a real free tier (no credit card required to get started) — see
- * /functions/README.md for the full setup walkthrough.
+ * Uses Groq specifically because it has a genuinely free, no-credit-card
+ * tier (rate-limited, not credit-limited) served through an OpenAI-style
+ * chat completions API — see /functions/README.md for the full setup
+ * walkthrough.
  *
  * Deploy:
- *   firebase functions:secrets:set GEMINI_API_KEY
+ *   firebase functions:secrets:set GROQ_API_KEY
  *   cd functions && npm install && npm run deploy
  *
  * Note: Cloud Functions themselves still require Firebase's Blaze
@@ -21,7 +22,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import { initializeApp, getApps } from "firebase-admin/app";
-import { GoogleGenAI } from "@google/genai";
+import Groq from "groq-sdk";
 
 if (getApps().length === 0) {
   initializeApp();
@@ -30,13 +31,12 @@ if (getApps().length === 0) {
 export { searchPublicDomainBooks, getPublicDomainBook } from "./public-domain";
 export { searchGoogleBooks, getGoogleBookMeta } from "./google-books";
 
-const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
+const GROQ_API_KEY = defineSecret("GROQ_API_KEY");
 
-// If your Google AI Studio key doesn't have access to this exact model
-// name (Google occasionally renames/retires models), check the current
-// list at https://ai.google.dev/gemini-api/docs/models and update this
+// If this exact model gets retired/renamed on Groq's side, check the
+// current list at https://console.groq.com/docs/models and update this
 // string — everything else in this function stays the same.
-const MODEL_NAME = "gemini-2.0-flash";
+const MODEL_NAME = "llama-3.3-70b-versatile";
 
 interface LumiMessage {
   role: "user" | "assistant";
@@ -81,7 +81,7 @@ function buildSystemPrompt(context?: LumiContext | null): string {
 }
 
 export const askLumi = onCall<AskLumiRequest>(
-  { secrets: [GEMINI_API_KEY], cors: true, maxInstances: 10 },
+  { secrets: [GROQ_API_KEY], cors: true, maxInstances: 10 },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Faça login para conversar com a Lumi.");
@@ -101,31 +101,25 @@ export const askLumi = onCall<AskLumiRequest>(
     }
 
     try {
-      const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY.value() });
+      const groq = new Groq({ apiKey: GROQ_API_KEY.value() });
 
-      // Gemini's chat API wants prior turns as "history" and the newest
-      // message sent separately — mirrors how the client already splits
-      // these (everything but the last message is history).
-      const history = messages.slice(0, -1).map((m) => ({
-        role: m.role === "assistant" ? ("model" as const) : ("user" as const),
-        parts: [{ text: m.text }],
-      }));
-      const lastMessage = messages[messages.length - 1];
-
-      const chat = ai.chats.create({
+      // Groq's chat completions API is OpenAI-shaped: one flat "messages"
+      // array with role "system" | "user" | "assistant" — LumiMessage's
+      // roles already line up 1:1, no remapping needed like Gemini's
+      // separate history/model split required.
+      const chatCompletion = await groq.chat.completions.create({
         model: MODEL_NAME,
-        history,
-        config: {
-          systemInstruction: buildSystemPrompt(context),
-          maxOutputTokens: MAX_OUTPUT_TOKENS,
-        },
+        messages: [
+          { role: "system", content: buildSystemPrompt(context) },
+          ...messages.map((m) => ({ role: m.role, content: m.text })),
+        ],
+        max_completion_tokens: MAX_OUTPUT_TOKENS,
       });
-      const result = await chat.sendMessage({ message: lastMessage.text });
-      const reply = (result.text ?? "").trim();
+      const reply = (chatCompletion.choices[0]?.message?.content ?? "").trim();
 
       return { reply: reply || "Não consegui pensar em uma resposta agora — tente reformular?" };
     } catch (err) {
-      console.error("[askLumi] Gemini call failed", err);
+      console.error("[askLumi] Groq call failed", err);
       throw new HttpsError("internal", "Lumi não conseguiu responder agora.");
     }
   },

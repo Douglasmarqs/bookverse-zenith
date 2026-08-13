@@ -2,9 +2,10 @@
 
 Contém cinco funções:
 - `askLumi` — dá poder real ao painel de IA (a coruja Lumi), usando a
-  **API do Gemini (Google)** — escolhida de propósito porque o Google AI
-  Studio emite chaves com um nível gratuito de verdade, sem precisar
-  cadastrar cartão de crédito pra começar.
+  **API do Groq** (Llama 3.3 70B) — escolhida de propósito porque o Groq
+  emite chaves com um nível gratuito de verdade (limitado por taxa de
+  requisições, não por créditos que acabam), sem precisar cadastrar
+  cartão de crédito pra começar.
 - `searchPublicDomainBooks` e `getPublicDomainBook` — buscam e entregam
   **texto completo real** de livros em domínio público (Machado de Assis,
   Eça de Queirós, clássicos internacionais etc.) via [Project Gutenberg]
@@ -22,19 +23,18 @@ O frontend chama tudo isso via `httpsCallable` (veja `src/lib/lumi.ts`,
 `src/lib/public-domain.ts` e `src/lib/google-books.ts`) — nenhuma chave de
 API nem lógica de parsing fica no navegador.
 
-## Passo 0 — conseguir uma chave gratuita do Gemini
+## Passo 0 — conseguir uma chave gratuita do Groq
 
-1. Acesse **[aistudio.google.com](https://aistudio.google.com/)** com
-   qualquer conta Google.
-2. No menu, clique em **Get API key** → **Create API key**.
-3. Escolha um projeto do Google Cloud (pode ser um novo, criado na hora)
-   e copie a chave gerada (começa com algo como `AIza...`).
-4. Isso já é suficiente — o nível gratuito do Gemini não exige cartão de
-   crédito. Se precisar de mais volume no futuro, dá pra vincular
-   faturamento depois, mas não é necessário pra começar.
+1. Acesse **[console.groq.com](https://console.groq.com/)** e crie uma
+   conta (e-mail, GitHub ou Google — sem cartão de crédito).
+2. No menu lateral, vá em **API Keys** → **Create API Key**.
+3. Copie a chave gerada (começa com `gsk_...`).
+4. Isso já é suficiente — o nível gratuito do Groq não exige cartão de
+   crédito. Ele é limitado por taxa de requisições (requisições/minuto e
+   por dia), não por créditos que acabam, então não tem susto de fatura.
 
 **Importante:** isso cobre só o custo do modelo de IA em si. As Cloud
-Functions do Firebase (o "backend" que chama o Gemini) continuam exigindo
+Functions do Firebase (o "backend" que chama o Groq) continuam exigindo
 o plano **Blaze** (pay-as-you-go) do Firebase — é um requisito do
 Firebase pra qualquer function fazer chamadas de rede, independente de
 qual IA você usa. O Blaze tem cota gratuita mensal generosa; um app
@@ -52,8 +52,8 @@ firebase use bookverse-8147a   # já é o padrão definido em .firebaserc
 cd functions
 npm install
 
-# guarda a chave do Gemini como secret do Firebase (só é usada por askLumi)
-firebase functions:secrets:set GEMINI_API_KEY
+# guarda a chave do Groq como secret do Firebase (só é usada por askLumi)
+firebase functions:secrets:set GROQ_API_KEY
 
 # build + deploy das 5 funções
 npm run deploy
@@ -66,13 +66,13 @@ cd functions
 npm run deploy
 ```
 
-## Trocando o modelo do Gemini
+## Trocando o modelo do Groq
 
-O nome do modelo usado (`gemini-2.0-flash`) fica em uma única constante
-no topo de `src/index.ts` (`MODEL_NAME`). Se esse modelo específico não
-estiver disponível pra sua chave, ou o Google lançar uma versão mais
-nova, confira a lista atual em
-[ai.google.dev/gemini-api/docs/models](https://ai.google.dev/gemini-api/docs/models)
+O nome do modelo usado (`llama-3.3-70b-versatile`) fica em uma única
+constante no topo de `src/index.ts` (`MODEL_NAME`). Se esse modelo
+específico for descontinuado, ou você quiser testar outro (ex: um menor
+e mais rápido), confira a lista atual em
+[console.groq.com/docs/models](https://console.groq.com/docs/models)
 e troque só essa constante — o resto da function não muda.
 
 ## Firestore — regras necessárias
