@@ -68,7 +68,7 @@ npm run deploy
 
 ## Trocando o modelo do Groq
 
-O nome do modelo usado (`llama-3.3-70b-versatile`) fica em uma única
+O nome do modelo usado (`openai/gpt-oss-120b`) fica em uma única
 constante no topo de `src/index.ts` (`MODEL_NAME`). Se esse modelo
 específico for descontinuado, ou você quiser testar outro (ex: um menor
 e mais rápido), confira a lista atual em

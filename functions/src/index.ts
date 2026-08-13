@@ -36,7 +36,7 @@ const GROQ_API_KEY = defineSecret("GROQ_API_KEY");
 // If this exact model gets retired/renamed on Groq's side, check the
 // current list at https://console.groq.com/docs/models and update this
 // string — everything else in this function stays the same.
-const MODEL_NAME = "llama-3.3-70b-versatile";
+const MODEL_NAME = "openai/gpt-oss-120b";
 
 interface LumiMessage {
   role: "user" | "assistant";
