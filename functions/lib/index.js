@@ -42,7 +42,7 @@ const GROQ_API_KEY = (0, params_1.defineSecret)("GROQ_API_KEY");
 // If this exact model gets retired/renamed on Groq's side, check the
 // current list at https://console.groq.com/docs/models and update this
 // string — everything else in this function stays the same.
-const MODEL_NAME = "llama-3.3-70b-versatile";
+const MODEL_NAME = "openai/gpt-oss-120b";
 const MAX_MESSAGES = 20;
 const MAX_MESSAGE_LENGTH = 4000;
 const MAX_OUTPUT_TOKENS = 600;
