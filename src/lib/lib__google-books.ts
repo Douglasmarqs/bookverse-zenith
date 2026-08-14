@@ -1,0 +1,344 @@
+/**
+ * Google Books integration — resolves real cover art and metadata for a
+ * title/author pair.
+ *
+ * Requests go through the `getGoogleBookMeta` / `searchGoogleBooks` Cloud
+ * Functions first (server-side egress is reliable everywhere), and only
+ * fall back to a direct browser fetch if Firebase/Functions aren't
+ * available. This two-layer approach means the catalog keeps working even
+ * when the visitor's network/browser blocks direct calls to
+ * `googleapis.com` (a common side-effect of ad/privacy blockers and some
+ * corporate networks) — see DEPLOY.md item 2 for the original symptom.
+ *
+ * Results are cached in-memory + sessionStorage so we don't refetch the
+ * same title twice in a session.
+ */
+import { getFunctions, httpsCallable } from "firebase/functions";
+import { getFirebase } from "./firebase";
+import { searchOpenLibrary } from "./open-library";
+import { createBreaker, createInFlightMap, createLimiter } from "./net-utils";
+
+/** At most 4 metadata lookups in flight — a page with 60 covers otherwise
+ * saturates the browser's connection pool and the tab appears frozen. */
+const limitMeta = createLimiter(4);
+const inFlightMeta = createInFlightMap<BookMeta | null>();
+/** Callable Functions may not be deployed; Google Books may be over quota.
+ * Once either fails, skip it for a while instead of paying its timeout on
+ * every card. */
+const fnBreaker = createBreaker(5 * 60_000);
+const googleBreaker = createBreaker(10 * 60_000);
+
+
+export interface BookMeta {
+  title: string;
+  author: string;
+  cover: string | null;
+  description?: string;
+  previewLink?: string;
+  averageRating?: number;
+  ratingsCount?: number;
+  categories?: string[];
+  /** Set when this title can be read in-app (public-domain full text).
+   * Points at the `/reader/$bookId` id — see `public-domain.ts`. */
+  readerId?: string | null;
+}
+
+const CACHE_PREFIX = "bookverse:gbooks:";
+const memCache = new Map<string, BookMeta | null>();
+
+function cacheKey(title: string, author?: string) {
+  return `${title.trim().toLowerCase()}::${(author ?? "").trim().toLowerCase()}`;
+}
+
+function readSessionCache(key: string): BookMeta | null | undefined {
+  if (typeof window === "undefined") return undefined;
+  try {
+    const raw = sessionStorage.getItem(CACHE_PREFIX + key);
+    if (raw === null) return undefined;
+    return JSON.parse(raw) as BookMeta | null;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeSessionCache(key: string, value: BookMeta | null) {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(CACHE_PREFIX + key, JSON.stringify(value));
+  } catch {
+    // storage full/unavailable — ignore, mem cache still works
+  }
+}
+
+/** Upgrades a Google Books thumbnail to a larger, https, non-curl image. */
+function upgradeCoverUrl(url: string): string {
+  return url.replace("http://", "https://").replace("zoom=1", "zoom=2").replace("&edge=curl", "");
+}
+
+async function fetchWithTimeout(url: string, ms: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Maps our (Portuguese) category chips to query terms that actually return
+ * results from Google Books — the `subject:` operator only matches Google's
+ * internal (mostly English) subject taxonomy, so a literal `subject:Ficção`
+ * matches almost nothing. Plain keywords in the free-text query work far
+ * better and still bias results toward the right shelf. */
+const CATEGORY_QUERY: Record<string, string> = {
+  Ficção: "ficção",
+  Clássicos: "clássicos da literatura",
+  "Ficção científica": "ficção científica",
+  Poesia: "poesia",
+  Ensaios: "ensaios",
+  Filosofia: "filosofia",
+  Biografias: "biografia",
+  Romance: "romance",
+  Mistério: "mistério suspense",
+};
+
+export interface BookSearchResult {
+  results: BookMeta[];
+  /** True when the request itself failed (network/CORS/quota) — distinct
+   * from a request that succeeded but matched nothing. */
+  networkError: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Direct-fetch fallback (used only if the Cloud Function path is unavailable)
+// ---------------------------------------------------------------------------
+
+async function directFetchMeta(title: string, author?: string): Promise<BookMeta | null> {
+  const q = author ? `intitle:${title} inauthor:${author}` : `intitle:${title}`;
+  const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(
+    q,
+  )}&maxResults=1&printType=books`;
+  const res = await fetchWithTimeout(url, 8000);
+  if (!res.ok) throw new Error(`Google Books ${res.status}`);
+  const data = (await res.json()) as { items?: GoogleVolumeItem[] };
+  const info = data.items?.[0]?.volumeInfo;
+  return info
+    ? {
+        title: info.title ?? title,
+        author: info.authors?.join(", ") ?? author ?? "",
+        cover: info.imageLinks?.thumbnail ? upgradeCoverUrl(info.imageLinks.thumbnail) : null,
+        description: info.description,
+        previewLink: info.previewLink,
+        averageRating: info.averageRating,
+        ratingsCount: info.ratingsCount,
+        categories: info.categories,
+      }
+    : null;
+}
+
+interface GoogleVolumeInfo {
+  title?: string;
+  authors?: string[];
+  imageLinks?: { thumbnail?: string };
+  description?: string;
+  previewLink?: string;
+  averageRating?: number;
+  ratingsCount?: number;
+  categories?: string[];
+}
+
+interface GoogleVolumeItem {
+  volumeInfo?: GoogleVolumeInfo;
+}
+
+async function directSearchBooks(
+  query: string,
+  category?: string,
+  maxResults = 24,
+): Promise<BookMeta[]> {
+  const categoryTerm = category ? (CATEGORY_QUERY[category] ?? category) : "";
+  const parts: string[] = [];
+  if (query) parts.push(query);
+  if (categoryTerm && categoryTerm !== query) parts.push(categoryTerm);
+  const q = parts.join(" ").trim();
+  if (!q) return [];
+
+  const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(
+    q,
+  )}&maxResults=${maxResults}&printType=books`;
+  const res = await fetchWithTimeout(url, 8000);
+  if (!res.ok) throw new Error(`Google Books ${res.status}`);
+  const data = (await res.json()) as { items?: GoogleVolumeItem[] };
+  const items = data.items ?? [];
+  return items
+    .filter((it) => it.volumeInfo?.title)
+    .map((it) => {
+      const info = it.volumeInfo as GoogleVolumeInfo;
+      return {
+        title: info.title as string,
+        author: info.authors?.join(", ") ?? "Autor desconhecido",
+        cover: info.imageLinks?.thumbnail ? upgradeCoverUrl(info.imageLinks.thumbnail) : null,
+        description: info.description,
+        previewLink: info.previewLink,
+        averageRating: info.averageRating,
+        ratingsCount: info.ratingsCount,
+        categories: info.categories,
+      } satisfies BookMeta;
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Public API — Cloud Function first, direct fetch fallback
+// ---------------------------------------------------------------------------
+
+/**
+ * Looks up a single book's real cover + metadata by title (and optionally
+ * author, which improves match accuracy). Returns null if nothing is found —
+ * callers should fall back to a placeholder cover in that case.
+ */
+export async function fetchBookMeta(title: string, author?: string): Promise<BookMeta | null> {
+  const key = cacheKey(title, author);
+  if (memCache.has(key)) return memCache.get(key)!;
+
+  const cached = readSessionCache(key);
+  if (cached !== undefined) {
+    memCache.set(key, cached);
+    return cached;
+  }
+
+  return inFlightMeta(key, () => limitMeta(() => resolveBookMeta(key, title, author)));
+}
+
+async function resolveBookMeta(
+  key: string,
+  title: string,
+  author?: string,
+): Promise<BookMeta | null> {
+  let meta: BookMeta | null = null;
+  let resolved = false;
+
+  const fb = getFirebase();
+  if (fb && !fnBreaker.isOpen()) {
+    try {
+      const fn = httpsCallable<
+        { title: string; author?: string },
+        { meta: BookMeta | null; error?: boolean }
+      >(getFunctions(fb.app), "getGoogleBookMeta", { timeout: 6000 });
+      const res = await fn({ title, author });
+      if (!res.data.error) {
+        meta = res.data.meta;
+        resolved = true;
+      } else {
+        console.warn("[google-books] cloud function meta lookup reported a soft error, trying fallbacks");
+      }
+    } catch (err) {
+      fnBreaker.trip();
+      console.warn(
+        "[google-books] cloud function lookup failed, falling back to direct fetch",
+        err,
+      );
+    }
+  }
+
+  if (!resolved && !googleBreaker.isOpen()) {
+    try {
+      meta = await directFetchMeta(title, author);
+    } catch (err) {
+      googleBreaker.trip();
+      console.warn("[google-books] direct lookup failed", err);
+      meta = null;
+    }
+  }
+
+  // Last resort: Open Library's search API tends to work even in networks
+  // that block Google's domains (it's a different host entirely), so it
+  // can still surface a real cover/author instead of a placeholder.
+  if (!meta) {
+    try {
+      const olResults = await searchOpenLibrary(author ? `${title} ${author}` : title, 1);
+      if (olResults[0]) {
+        meta = {
+          title: olResults[0].title,
+          author: olResults[0].author,
+          cover: olResults[0].cover,
+        };
+      }
+    } catch (err) {
+      console.warn("[google-books] open library fallback failed", err);
+    }
+  }
+
+  memCache.set(key, meta);
+  writeSessionCache(key, meta);
+  return meta;
+}
+
+
+/** Full-text search across Google Books — used by the "Descobrir" catalog. */
+export async function searchBooks(
+  query: string,
+  opts: { category?: string; maxResults?: number } = {},
+): Promise<BookSearchResult> {
+  const trimmed = query.trim();
+  if (!trimmed && !opts.category) return { results: [], networkError: false };
+
+  const fb = getFirebase();
+  if (fb && !fnBreaker.isOpen()) {
+    try {
+      const fn = httpsCallable<
+        { query: string; category?: string; maxResults?: number },
+        { results: BookMeta[]; error?: boolean }
+      >(getFunctions(fb.app), "searchGoogleBooks", { timeout: 6000 });
+      const res = await fn({
+        query: trimmed,
+        category: opts.category,
+        maxResults: opts.maxResults,
+      });
+      // A "soft" error — the function ran fine but Google Books itself
+      // failed inside it (rate limit/quota is the common case for keyless
+      // requests from a shared Cloud Functions IP) — is not a reason to
+      // give up. Fall through to the same direct-fetch → Open Library
+      // chain used when the function call throws outright, instead of
+      // surfacing "network blocked" while two working fallbacks sit
+      // unused right below.
+      if (!(res.data.error && res.data.results.length === 0)) {
+        return { results: res.data.results, networkError: false };
+      }
+      console.warn("[google-books] cloud function reported a soft error, trying fallbacks");
+    } catch (err) {
+      fnBreaker.trip();
+      console.warn(
+        "[google-books] cloud function search failed, falling back to direct fetch",
+        err,
+      );
+    }
+  }
+
+
+  try {
+    const results = await directSearchBooks(trimmed, opts.category, opts.maxResults ?? 24);
+    return { results, networkError: false };
+  } catch (err) {
+    console.warn("[google-books] direct search failed", err);
+  }
+
+  // Both the Cloud Function and a direct browser fetch to Google failed —
+  // likely the visitor's network blocks Google's domains entirely (ad/
+  // privacy blockers, some corporate/school networks). Open Library is a
+  // different host and commonly still reachable, so fall back to it
+  // rather than showing an empty, dead-end error state.
+  try {
+    const categoryTerm = opts.category ? (CATEGORY_QUERY[opts.category] ?? opts.category) : "";
+    const q = [trimmed, categoryTerm].filter(Boolean).join(" ").trim() || trimmed;
+    const olResults = await searchOpenLibrary(q, opts.maxResults ?? 24);
+    // We got a real answer from a working source — even if it's empty,
+    // that's "no results", not "the network is blocked".
+    return {
+      results: olResults.map((b) => ({ title: b.title, author: b.author, cover: b.cover })),
+      networkError: false,
+    };
+  } catch (err) {
+    console.warn("[google-books] open library fallback search failed", err);
+    return { results: [], networkError: true };
+  }
+}
