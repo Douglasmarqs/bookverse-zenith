@@ -8,15 +8,14 @@ import {
   Bookmark,
   Flame,
   Sparkles,
-  Star,
   Trophy,
   Clock3,
   Play,
 } from "lucide-react";
 
 import heroImg from "@/assets/hero-library.webp";
-import owl from "@/assets/owl-mascot.webp";
 import b1 from "@/assets/book-1.webp";
+import { LumiMascot } from "@/components/lumi-mascot";
 import { BookCover } from "@/components/book-cover";
 import { Carousel } from "@/components/carousel";
 import { LanguageBadge } from "@/components/language-badge";
@@ -205,25 +204,51 @@ function Home() {
               </div>
               <div className="mt-6 text-center">
                 <p className="text-[11px] uppercase tracking-[0.25em] text-gold">
-                  Destaque da semana
+                  Leitura em destaque
                 </p>
                 <h3 className="mt-2 font-display text-xl font-semibold">A Casa dos Espíritos</h3>
                 <p className="mt-1 text-sm text-muted-foreground">Isabel Allende</p>
-                <div className="mt-4 flex items-center justify-center gap-1 text-gold">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <Star key={i} className="h-3.5 w-3.5 fill-current" />
-                  ))}
-                  <span className="ml-2 text-xs text-muted-foreground">4.9 · 12.4k</span>
+                <div className="mt-4 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+                  <BookOpenCheck className="h-3.5 w-3.5 text-gold" />
+                  Texto completo disponível no leitor
                 </div>
               </div>
             </div>
 
-            <img
-              src={owl}
-              alt=""
-              width={1024}
-              height={1024}
-              className="animate-float absolute -bottom-6 -left-4 hidden h-32 w-32 select-none md:block"
+            {/* Real, live #1 from this week's actual trending list (Open
+                Library) — sits beside the curated reader demo so the hero
+                shows genuine trending data without swapping out the one
+                book that has a working in-app reader. */}
+            {bestsellers[0] && (
+              <Link
+                to="/livro/$slug"
+                params={{ slug: slugFor(bestsellers[0].title, bestsellers[0].author) || "livro" }}
+                search={{ title: bestsellers[0].title, author: bestsellers[0].author }}
+                className="group absolute -top-4 right-4 flex w-52 items-center gap-3 rounded-2xl border border-border/60 bg-card/90 p-3 shadow-lg backdrop-blur transition hover:border-gold/40 md:-right-6"
+              >
+                {bestsellers[0].cover ? (
+                  <img
+                    src={bestsellers[0].cover}
+                    alt=""
+                    className="h-14 w-10 shrink-0 rounded object-cover"
+                  />
+                ) : (
+                  <div className="grid h-14 w-10 shrink-0 place-items-center rounded bg-secondary" />
+                )}
+                <div className="min-w-0">
+                  <p className="flex items-center gap-1 text-[10px] uppercase tracking-widest text-gold">
+                    <Flame className="h-3 w-3" /> Nº1 em alta agora
+                  </p>
+                  <p className="mt-1 truncate text-xs font-medium text-foreground">
+                    {bestsellers[0].title}
+                  </p>
+                </div>
+              </Link>
+            )}
+
+            <LumiMascot
+              size={128}
+              className="absolute -bottom-6 -left-4 hidden md:block"
             />
           </div>
         </div>
@@ -443,14 +468,7 @@ function Home() {
                 </Link>
               </div>
             </div>
-            <img
-              src={owl}
-              alt=""
-              width={1024}
-              height={1024}
-              loading="lazy"
-              className="mx-auto h-48 w-48 md:h-56 md:w-56"
-            />
+            <LumiMascot size={208} className="mx-auto" />
           </div>
         </div>
       </section>

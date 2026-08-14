@@ -24,7 +24,7 @@ import {
   getFirebaseKeyDebugInfo,
 } from "../lib/firebase";
 import heroImg from "@/assets/hero-library.webp";
-import owl from "@/assets/owl-mascot.webp";
+import { LumiMascot } from "@/components/lumi-mascot";
 
 export const Route = createFileRoute("/auth")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -211,7 +211,7 @@ function AuthPage() {
         </div>
 
         <div className="relative flex items-center gap-4">
-          <img src={owl} alt="" className="h-16 w-16" />
+          <LumiMascot size={64} />
           <p className="max-w-[220px] text-xs leading-relaxed text-muted-foreground">
             "Estou aqui pra ler junto com você." — Lumi, a coruja da BookVerse
           </p>

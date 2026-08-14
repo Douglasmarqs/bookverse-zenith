@@ -1,7 +1,25 @@
 // Sample book content — will be replaced by real data from APIs / Firebase later.
 import book1Cover from "@/assets/book-1.webp";
 
-export type Chapter = { id: string; title: string; paragraphs: string[] };
+export type Chapter = {
+  id: string;
+  title: string;
+  /** Plain text paragraphs, in reading order — the source of truth for
+   * search, AI context, and paragraph-indexed highlights/notes. Always
+   * present, even for chapters that also have `blocks`. */
+  paragraphs: string[];
+  /** Optional richer, order-preserving representation that interleaves
+   * inline images between paragraphs (EPUBs can embed illustrations
+   * anywhere in a chapter's body, the way Kindle books do). Each "text"
+   * block points at its index in `paragraphs` so highlighting/notes keep
+   * working unchanged. When absent (plain-text books, or EPUBs imported
+   * before this existed), the reader falls back to rendering `paragraphs`
+   * directly — fully backward compatible, no migration needed. */
+  blocks?: ChapterBlock[];
+};
+export type ChapterBlock =
+  | { type: "text"; paragraphIndex: number }
+  | { type: "image"; src: string; alt?: string };
 export type Book = {
   id: string;
   title: string;

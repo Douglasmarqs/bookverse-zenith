@@ -590,7 +590,24 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
             />
           </header>
 
-          {chapter.paragraphs.map((p: string, i: number) => {
+          {(
+            chapter.blocks ??
+            chapter.paragraphs.map((_, i) => ({ type: "text" as const, paragraphIndex: i }))
+          ).map((block, blockKey) => {
+            if (block.type === "image") {
+              return (
+                <figure key={`img-${blockKey}`} className="my-8 flex flex-col items-center">
+                  <img
+                    src={block.src}
+                    alt={block.alt ?? ""}
+                    loading="lazy"
+                    className="max-h-[70vh] w-auto max-w-full rounded-lg object-contain [box-shadow:0_8px_30px_rgba(0,0,0,0.25)]"
+                  />
+                </figure>
+              );
+            }
+            const i = block.paragraphIndex;
+            const p = chapter.paragraphs[i];
             const highlight = currentHighlight(i);
             const isActive = activeParagraph === i;
             const isEditingNote = highlight && editingNoteFor === highlight.id;

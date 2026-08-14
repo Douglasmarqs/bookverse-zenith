@@ -101,6 +101,12 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { name: "author", content: "BookVerse" },
       { name: "theme-color", content: "#0E0B08" },
+      // iOS doesn't read the web manifest for "Add to Home Screen" — these
+      // three meta tags are what make it install as a standalone app with
+      // the right icon/status bar there instead of just a bookmark.
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
+      { name: "apple-mobile-web-app-title", content: "BookVerse" },
       { property: "og:title", content: "BookVerse — Sua biblioteca literária premium" },
       {
         property: "og:description",
@@ -112,6 +118,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     links: [
       { rel: "stylesheet", href: appCss },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: "/icons/favicon-32.png", type: "image/png", sizes: "32x32" },
+      { rel: "icon", href: "/icons/favicon-16.png", type: "image/png", sizes: "16x16" },
+      { rel: "apple-touch-icon", href: "/icons/apple-touch-icon.png", sizes: "180x180" },
+      { rel: "manifest", href: "/manifest.webmanifest" },
     ],
   }),
   shellComponent: RootShell,

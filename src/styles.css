@@ -275,6 +275,108 @@
   animation: float-slow 6s ease-in-out infinite;
 }
 
+/* Lumi mascot — layered so each piece can animate independently without
+   fighting over the `transform` property:
+     outer wrapper → lumi-float   (bob + gentle head-tilt, like it's
+                                    curious and looking around)
+     the <img> itself → lumi-breathe (very subtle scale pulse, like it's
+                                    breathing while it reads)
+     eyelid overlays → lumi-blink (closed by default via scaleY(0); briefly
+                                    opens the "shut" pose to fake a blink,
+                                    at slightly offset delays per eye so
+                                    they don't blink in perfectly robotic
+                                    unison) */
+@keyframes lumi-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-5px) rotate(-1.6deg);
+  }
+  50% {
+    transform: translateY(-9px) rotate(0deg);
+  }
+  75% {
+    transform: translateY(-5px) rotate(1.6deg);
+  }
+}
+@utility lumi-float {
+  animation: lumi-float 5.5s ease-in-out infinite;
+}
+
+@keyframes lumi-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.018);
+  }
+}
+@utility lumi-breathe {
+  animation: lumi-breathe 3.2s ease-in-out infinite;
+  transform-origin: 50% 60%;
+}
+/* Faster, slightly bigger pulse used while Lumi is "thinking" in the chat
+   panel — same keyframe, quicker cadence reads as active/attentive. */
+@utility lumi-breathe-active {
+  animation: lumi-breathe 1.1s ease-in-out infinite;
+  transform-origin: 50% 60%;
+}
+
+@keyframes lumi-blink {
+  0%,
+  90%,
+  100% {
+    transform: scaleY(0);
+  }
+  93%,
+  96% {
+    transform: scaleY(1);
+  }
+  94.5% {
+    transform: scaleY(0.15);
+  }
+}
+@utility lumi-eyelid {
+  position: absolute;
+  top: 23.4%;
+  height: 22.6%;
+  width: 20.1%;
+  border-radius: 999px;
+  background: #f4e6cf;
+  transform: scaleY(0);
+  animation: lumi-blink 5.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Small tactile "wiggle" for clickable mascot instances (the Lumi button,
+   the chat header icon) — a quick, springy nudge on hover/press so the
+   character visibly reacts to being touched, not just idling. */
+@keyframes lumi-wiggle {
+  0%,
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+  30% {
+    transform: rotate(-8deg) scale(1.08);
+  }
+  60% {
+    transform: rotate(6deg) scale(1.06);
+  }
+  80% {
+    transform: rotate(-3deg) scale(1.02);
+  }
+}
+@utility lumi-interactive {
+  transition: transform 150ms ease;
+}
+.lumi-interactive:hover,
+.lumi-interactive:focus-visible {
+  animation: lumi-wiggle 550ms ease-in-out;
+}
+
 @keyframes shimmer-line {
   0% {
     background-position: -200% 0;

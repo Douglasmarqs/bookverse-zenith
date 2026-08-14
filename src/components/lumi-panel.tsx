@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Sparkles, X, Send, Loader2, Trash2 } from "lucide-react";
-import owl from "@/assets/owl-mascot.webp";
+import { LumiMascot } from "@/components/lumi-mascot";
 import {
   closeLumiPanel,
   openLumiPanel,
@@ -115,7 +115,7 @@ export function LumiPanel() {
       />
       <div className="relative flex h-full w-full max-w-md flex-col border-l border-border/60 bg-background shadow-2xl animate-in slide-in-from-right duration-300">
         <div className="flex items-center gap-3 border-b border-border/60 px-5 py-4">
-          <img src={owl} alt="" className="h-9 w-9" />
+          <LumiMascot size={36} />
           <div className="min-w-0 flex-1">
             <p className="font-display text-base font-semibold">Lumi</p>
             <p className="truncate text-xs text-muted-foreground">
@@ -165,7 +165,8 @@ export function LumiPanel() {
           {loading && (
             <div className="flex justify-start">
               <div className="flex items-center gap-2 rounded-2xl border border-border/60 bg-card px-4 py-2.5 text-sm text-muted-foreground">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Lumi está pensando…
+                <LumiMascot size={20} blink={false} thinking />
+                Lumi está pensando…
               </div>
             </div>
           )}
@@ -228,9 +229,10 @@ export function LumiButton({
   return (
     <button
       onClick={() => openLumiPanel(context ?? null)}
-      className="mt-6 inline-flex items-center gap-2 rounded-full bg-foreground/95 px-5 py-2.5 text-sm font-medium text-background hover:bg-foreground"
+      className="mt-6 inline-flex items-center gap-2.5 rounded-full bg-foreground/95 py-2 pl-2 pr-5 text-sm font-medium text-background hover:bg-foreground"
     >
-      <Sparkles className="h-3.5 w-3.5" /> {label}
+      <LumiMascot size={32} blink={false} interactive />
+      {label}
     </button>
   );
 }
