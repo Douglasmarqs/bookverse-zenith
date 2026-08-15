@@ -22,6 +22,7 @@ import { LanguageBadge } from "@/components/language-badge";
 import { LumiButton } from "@/components/lumi-panel";
 import { subscribeRanking, type RankingRow } from "@/lib/ranking";
 import { subscribeUserProfile } from "@/lib/user-profile";
+import { maybeShowReadingReminder } from "@/lib/reading-reminder";
 import { subscribeLibrary, slugFor, type LibraryEntry } from "@/lib/library";
 import { subscribeAuth } from "@/lib/firebase";
 import {
@@ -118,6 +119,16 @@ function Home() {
       unsubProfile();
       unsubLibrary();
     };
+  }, [homeUser]);
+
+  useEffect(() => {
+    if (!homeUser || homeUser.isAnonymous) return;
+    const unsub = subscribeUserProfile(homeUser.uid, (p) => {
+      const today = new Date();
+      const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+      maybeShowReadingReminder(p?.lastActiveDate === todayKey);
+    });
+    return unsub;
   }, [homeUser]);
 
   return (
@@ -351,6 +362,7 @@ function Home() {
           title="Leia agora, texto completo e gratuito"
           action="Ver mais"
           actionTo="/descobrir"
+          actionSearch={{ categoria: "Clássicos" }}
           icon={<BookOpenCheck className="h-4 w-4" />}
         >
           <div className="grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 lg:grid-cols-6">
@@ -483,6 +495,7 @@ function Section({
   title,
   action,
   actionTo,
+  actionSearch,
   icon,
   children,
 }: {
@@ -490,6 +503,7 @@ function Section({
   title: string;
   action?: string;
   actionTo?: "/descobrir" | "/biblioteca" | "/desafios" | "/catalogo";
+  actionSearch?: Record<string, string>;
   icon?: React.ReactNode;
   children: React.ReactNode;
 }) {
@@ -508,6 +522,7 @@ function Section({
         {action && actionTo && (
           <Link
             to={actionTo}
+            search={actionSearch}
             className="shrink-0 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-gold transition"
           >
             {action} <ArrowRight className="h-3.5 w-3.5" />

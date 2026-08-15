@@ -28,8 +28,14 @@ export interface UserProfile {
   displayName: string;
   email: string | null;
   photoURL: string | null;
+  /** A user-uploaded photo, stored as a small JPEG data URL — kept
+   * separate from `photoURL` (which tracks the provider's photo, e.g.
+   * Google) so `ensureUserProfile` re-syncing that field on sign-in never
+   * clobbers a photo the person chose themselves. Takes priority over
+   * `photoURL` but not over `avatarEmoji` (see UserAvatar). */
+  customPhotoDataUrl?: string | null;
   /** A short emoji chosen from the in-app avatar picker — takes priority
-   * over `photoURL` for display when set (see components that render it). */
+   * over both photo fields for display when set (see components that render it). */
   avatarEmoji?: string | null;
   xp: number;
   booksCompleted: number;
@@ -235,7 +241,7 @@ export async function incrementBooksCompleted(uid: string): Promise<void> {
  * Throws on failure so the settings page can show a clear error. */
 export async function updateProfileFields(
   uid: string,
-  patch: { displayName?: string; avatarEmoji?: string | null },
+  patch: { displayName?: string; avatarEmoji?: string | null; customPhotoDataUrl?: string | null },
 ): Promise<void> {
   const fb = getFirebase();
   if (!fb) throw new Error("O login não está disponível neste ambiente agora.");

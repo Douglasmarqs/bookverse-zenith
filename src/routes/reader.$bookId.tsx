@@ -14,6 +14,7 @@ import {
   StickyNote,
   X as XIcon,
   Trash2,
+  Share2,
 } from "lucide-react";
 
 import { SAMPLE_BOOK, type Book } from "@/lib/sample-book";
@@ -45,6 +46,7 @@ import { awardXp, incrementBooksCompleted, recordReadingActivity } from "@/lib/u
 import { markAsReading, setLibraryStatus, slugFor } from "@/lib/library";
 import { toast } from "sonner";
 import { describeFirestoreError } from "@/lib/async-utils";
+import { ReaderPageSkeleton } from "@/components/reader-page-skeleton";
 
 export const Route = createFileRoute("/reader/$bookId")({
   head: () => ({
@@ -158,14 +160,7 @@ function EpubBookLoader({ uid, localId }: { uid: string; localId: string }) {
   }
 
   if (!book) {
-    return (
-      <div className="mx-auto grid min-h-[calc(100vh-8rem)] max-w-md place-items-center px-6 text-center">
-        <div>
-          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-gold/30 border-t-gold" />
-          <p className="mt-4 text-sm text-muted-foreground">Abrindo seu arquivo…</p>
-        </div>
-      </div>
-    );
+    return <ReaderPageSkeleton label="Abrindo seu arquivo…" />;
   }
 
   return <ReaderPage uid={uid} book={book} />;
@@ -222,14 +217,7 @@ function GutenbergBookLoader({ uid, gutenbergId }: { uid: string; gutenbergId: n
   }
 
   if (!book) {
-    return (
-      <div className="mx-auto grid min-h-[calc(100vh-8rem)] max-w-md place-items-center px-6 text-center">
-        <div>
-          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-gold/30 border-t-gold" />
-          <p className="mt-4 text-sm text-muted-foreground">Baixando o livro…</p>
-        </div>
-      </div>
-    );
+    return <ReaderPageSkeleton label="Baixando o livro…" />;
   }
 
   return <ReaderPage uid={uid} book={book} />;
@@ -422,6 +410,30 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       }
     } catch (err) {
       toast.error(describeFirestoreError(err, "Não foi possível salvar o destaque agora."));
+    }
+  }
+
+  async function handleShareHighlight(paragraphIndex: number) {
+    const quote = chapter.paragraphs[paragraphIndex]?.trim();
+    if (!quote) return;
+    const text = `"${quote}"\n— ${book.title}${book.author ? `, ${book.author}` : ""}\n\nLido no BookVerse 🦉`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ text, title: book.title });
+        return;
+      }
+      await navigator.clipboard.writeText(text);
+      toast.success("Trecho copiado — cole onde quiser compartilhar.");
+    } catch (err) {
+      // AbortError just means the person closed the native share sheet —
+      // not an actual failure, so it shouldn't show an error toast.
+      if (err instanceof Error && err.name === "AbortError") return;
+      try {
+        await navigator.clipboard.writeText(text);
+        toast.success("Trecho copiado — cole onde quiser compartilhar.");
+      } catch {
+        toast.error("Não foi possível compartilhar esse trecho agora.");
+      }
     }
   }
 
@@ -673,6 +685,12 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                           className="inline-flex items-center gap-1 rounded-full px-2 py-1 hover:opacity-70"
                         >
                           <StickyNote className="h-3.5 w-3.5" /> Nota
+                        </button>
+                        <button
+                          onClick={() => void handleShareHighlight(i)}
+                          className="inline-flex items-center gap-1 rounded-full px-2 py-1 hover:opacity-70"
+                        >
+                          <Share2 className="h-3.5 w-3.5" /> Compartilhar
                         </button>
                         <button
                           onClick={() => void handleHighlight(i, highlight.color)}

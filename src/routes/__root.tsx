@@ -24,6 +24,7 @@ import { isFirebaseConfigured } from "../lib/firebase";
 import { SiteHeader } from "../components/site-header";
 import { SiteFooter } from "../components/site-footer";
 import { LumiPanel } from "../components/lumi-panel";
+import { InstallPwaBanner } from "../components/install-pwa";
 import { Toaster } from "../components/ui/sonner";
 
 function NotFoundComponent() {
@@ -165,6 +166,14 @@ function ConfigBanner() {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch((err) => {
+        console.warn("[sw] registration failed", err);
+      });
+    }
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <div className="flex min-h-screen flex-col">
@@ -175,6 +184,7 @@ function RootComponent() {
         </main>
         <SiteFooter />
         <LumiPanel />
+        <InstallPwaBanner />
         <Toaster position="bottom-center" theme="dark" richColors />
       </div>
     </QueryClientProvider>

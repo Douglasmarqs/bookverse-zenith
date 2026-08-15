@@ -2,6 +2,7 @@ import type { User } from "firebase/auth";
 
 type MinimalProfile = {
   avatarEmoji?: string | null;
+  customPhotoDataUrl?: string | null;
   photoURL?: string | null;
   displayName?: string | null;
 };
@@ -13,11 +14,11 @@ const SIZES = {
 } as const;
 
 /**
- * Renders, in priority order: the chosen emoji avatar, the account's photo
- * (Google profile picture), or a colored initial. Used anywhere a user's
- * avatar shows up so all three stay visually consistent. Accepts any
- * object with the three display fields — the full `UserProfile`, a
- * `RankingRow`, or anything else shaped the same way.
+ * Renders, in priority order: the chosen emoji avatar, a photo the person
+ * uploaded themselves, the account's provider photo (e.g. Google), or a
+ * colored initial. Used anywhere a user's avatar shows up so all four stay
+ * visually consistent. Accepts any object with the display fields — the
+ * full `UserProfile`, a `RankingRow`, or anything else shaped the same way.
  */
 export function UserAvatar({
   profile,
@@ -31,7 +32,7 @@ export function UserAvatar({
   className?: string;
 }) {
   const emoji = profile?.avatarEmoji;
-  const photo = profile?.photoURL ?? user?.photoURL;
+  const photo = profile?.customPhotoDataUrl || profile?.photoURL || user?.photoURL;
   const name = (profile?.displayName || user?.displayName || user?.email || "Leitor").trim();
   const base = `grid shrink-0 place-items-center rounded-full bg-gold/10 ring-1 ring-gold/40 ${SIZES[size]} ${className}`;
 

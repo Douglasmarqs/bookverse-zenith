@@ -12,6 +12,9 @@ import {
   EyeOff,
   Flame,
   Palette,
+  Camera,
+  X,
+  BellRing,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { User } from "firebase/auth";
@@ -27,7 +30,13 @@ import { subscribeLibrary } from "@/lib/library";
 import { getLevelInfo } from "@/lib/achievements";
 import { describeFirestoreError } from "@/lib/async-utils";
 import { UserAvatar } from "@/components/user-avatar";
+import { LumiMascot } from "@/components/lumi-mascot";
 import { AVATAR_EMOJIS } from "@/lib/avatar-emojis";
+import { downscaleImageFile } from "@/lib/image-utils";
+import {
+  notificationPermission,
+  requestNotificationPermission,
+} from "@/lib/reading-reminder";
 import { useSiteTheme } from "@/hooks/use-site-theme";
 import { THEME_LABEL, THEME_PREVIEW, allThemes } from "@/lib/theme";
 
@@ -71,6 +80,24 @@ function PerfilPage({ user }: { user: User }) {
   const [name, setName] = useState("");
   const [nameSaving, setNameSaving] = useState(false);
   const [avatarSaving, setAvatarSaving] = useState<string | null>(null);
+  const [photoSaving, setPhotoSaving] = useState(false);
+  const [notifSupport, setNotifSupport] = useState<NotificationPermission | "unsupported">(
+    "default",
+  );
+
+  useEffect(() => {
+    setNotifSupport(notificationPermission());
+  }, []);
+
+  async function handleEnableNotifications() {
+    const result = await requestNotificationPermission();
+    setNotifSupport(result);
+    if (result === "granted") {
+      toast.success("Lembretes ativados — a Lumi vai te dar um toque quando precisar.");
+    } else if (result === "denied") {
+      toast.error("Notificações bloqueadas. Você pode ativar depois nas configurações do navegador.");
+    }
+  }
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -119,12 +146,50 @@ function PerfilPage({ user }: { user: User }) {
   async function handlePickAvatar(emoji: string) {
     setAvatarSaving(emoji);
     try {
-      await updateProfileFields(user.uid, { avatarEmoji: emoji });
+      // Emoji and a custom photo are mutually exclusive as the "chosen"
+      // avatar — clearing the other keeps the profile doc small and
+      // avoids ambiguity about which one is actually active.
+      await updateProfileFields(user.uid, { avatarEmoji: emoji, customPhotoDataUrl: null });
       toast.success("Avatar atualizado.");
     } catch (err) {
       toast.error(describeFirestoreError(err, "Não foi possível salvar o avatar agora."));
     } finally {
       setAvatarSaving(null);
+    }
+  }
+
+  async function handlePhotoSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Escolha um arquivo de imagem.");
+      return;
+    }
+    setPhotoSaving(true);
+    try {
+      // 320px is plenty for a circular avatar even on a retina display,
+      // and keeps the encoded JPEG comfortably under Firestore's 1MB
+      // per-document limit (typically 15–50KB at this size).
+      const dataUrl = await downscaleImageFile(file, 320, 0.85);
+      await updateProfileFields(user.uid, { customPhotoDataUrl: dataUrl, avatarEmoji: null });
+      toast.success("Foto de perfil atualizada.");
+    } catch (err) {
+      toast.error(describeFirestoreError(err, "Não foi possível salvar a foto agora."));
+    } finally {
+      setPhotoSaving(false);
+    }
+  }
+
+  async function handleRemovePhoto() {
+    setPhotoSaving(true);
+    try {
+      await updateProfileFields(user.uid, { customPhotoDataUrl: null });
+      toast.success("Foto removida.");
+    } catch (err) {
+      toast.error(describeFirestoreError(err, "Não foi possível remover a foto agora."));
+    } finally {
+      setPhotoSaving(false);
     }
   }
 
@@ -190,7 +255,36 @@ function PerfilPage({ user }: { user: User }) {
 
       {/* Summary header */}
       <div className="mt-8 flex flex-wrap items-center gap-5 rounded-2xl border border-border/60 bg-card/40 p-6">
-        <UserAvatar profile={profile} user={user} size="lg" />
+        <div className="group relative shrink-0">
+          <UserAvatar profile={profile} user={user} size="lg" />
+          <label
+            className={`absolute -bottom-1 -right-1 grid h-8 w-8 cursor-pointer place-items-center rounded-full bg-gold text-primary-foreground ring-2 ring-background transition hover:scale-105 ${photoSaving ? "pointer-events-none opacity-70" : ""}`}
+            title="Trocar foto de perfil"
+          >
+            {photoSaving ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Camera className="h-3.5 w-3.5" />
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={handlePhotoSelected}
+              disabled={photoSaving}
+            />
+          </label>
+          {profile?.customPhotoDataUrl && (
+            <button
+              onClick={handleRemovePhoto}
+              disabled={photoSaving}
+              title="Remover foto"
+              className="absolute -top-1 -right-1 grid h-6 w-6 place-items-center rounded-full bg-secondary text-foreground ring-2 ring-background transition hover:bg-destructive/80 hover:text-destructive-foreground disabled:opacity-60"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </div>
         <div className="min-w-0">
           <p className="truncate font-display text-xl font-medium">
             {profile?.displayName || user.displayName || "Leitor"}
@@ -234,7 +328,9 @@ function PerfilPage({ user }: { user: User }) {
       <section className="mt-10 rounded-2xl border border-border/60 bg-card/40 p-6">
         <h2 className="font-display text-xl font-medium">Editar perfil</h2>
 
-        <p className="mt-5 text-sm text-muted-foreground">Escolha um avatar</p>
+        <p className="mt-5 text-sm text-muted-foreground">
+          Escolha um avatar — ou use sua própria foto pelo ícone de câmera acima
+        </p>
         <div className="mt-3 flex flex-wrap gap-2">
           {AVATAR_EMOJIS.map((emoji) => (
             <button
@@ -312,6 +408,39 @@ function PerfilPage({ user }: { user: User }) {
               <span className="text-xs font-medium">{THEME_LABEL[t]}</span>
             </button>
           ))}
+        </div>
+      </section>
+
+      {/* Reading reminders */}
+      <section className="mt-6 rounded-2xl border border-border/60 bg-card/40 p-6">
+        <h2 className="flex items-center gap-2 font-display text-xl font-medium">
+          <BellRing className="h-4 w-4 text-gold" /> Lembretes de leitura
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          A Lumi te avisa, no máximo uma vez por dia e só enquanto o app estiver aberto, se você
+          ainda não leu nada hoje.
+        </p>
+        <div className="mt-4 flex items-center gap-3">
+          <LumiMascot size={40} blink={false} />
+          {notifSupport === "unsupported" ? (
+            <p className="text-sm text-muted-foreground">
+              Seu navegador não aceita notificações.
+            </p>
+          ) : notifSupport === "granted" ? (
+            <p className="text-sm text-emerald-500">Ativados — bom te ter por perto. 🦉</p>
+          ) : notifSupport === "denied" ? (
+            <p className="text-sm text-muted-foreground">
+              Bloqueados nas configurações do navegador. Para ativar, libere notificações para
+              este site e recarregue a página.
+            </p>
+          ) : (
+            <button
+              onClick={handleEnableNotifications}
+              className="inline-flex items-center gap-1.5 rounded-full bg-gold px-4 py-2 text-sm font-medium text-primary-foreground"
+            >
+              <BellRing className="h-3.5 w-3.5" /> Ativar lembretes
+            </button>
+          )}
         </div>
       </section>
 

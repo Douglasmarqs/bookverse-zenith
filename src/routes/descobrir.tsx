@@ -22,6 +22,7 @@ import { searchOpenLibrary, trendingBooks, type OpenLibraryBook } from "@/lib/op
 import { addToLibrary } from "@/lib/library";
 import { subscribeAuth } from "@/lib/firebase";
 import { LanguageBadge } from "@/components/language-badge";
+import { BookGridSkeleton } from "@/components/book-grid-skeleton";
 import type { User } from "firebase/auth";
 import { useNavigate } from "@tanstack/react-router";
 
@@ -251,9 +252,7 @@ function DescobrirPage() {
             <BookOpenCheck className="h-3.5 w-3.5" /> Domínio público — leia agora, texto completo
           </div>
           {publicDomainLoading ? (
-            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Buscando…
-            </div>
+            <BookGridSkeleton count={4} columns="grid-cols-2 sm:grid-cols-3 lg:grid-cols-4" />
           ) : (
             <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 lg:grid-cols-4">
               {publicDomain.map((book) => {
@@ -325,9 +324,7 @@ function DescobrirPage() {
               : "Open Library — tendências da semana"}
           </div>
           {openLibraryLoading ? (
-            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Buscando…
-            </div>
+            <BookGridSkeleton count={6} />
           ) : (
             <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 lg:grid-cols-6">
               {openLibrary.map((book, i) => {
@@ -382,9 +379,7 @@ function DescobrirPage() {
           Catálogo geral — capa e sinopse reais, leitura via loja/parceiro
         </p>
         {loading ? (
-          <div className="flex items-center gap-2 py-16 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Buscando livros…
-          </div>
+          <BookGridSkeleton count={10} columns="grid-cols-2 sm:grid-cols-3 lg:grid-cols-5" />
         ) : networkError ? (
           <div className="flex flex-col items-center gap-3 py-16 text-center text-sm text-muted-foreground">
             <WifiOff className="h-5 w-5" />
