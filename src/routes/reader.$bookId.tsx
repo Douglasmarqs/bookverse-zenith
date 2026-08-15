@@ -41,6 +41,7 @@ import {
 } from "@/lib/annotations";
 import { ReaderSettingsPanel } from "@/components/reader/settings-panel";
 import { useRequireAuth } from "@/hooks/use-require-auth";
+import { useSiteTheme } from "@/hooks/use-site-theme";
 import { openLumiPanel } from "@/lib/lumi-panel-store";
 import { awardXp, incrementBooksCompleted, recordReadingActivity } from "@/lib/user-profile";
 import { markAsReading, setLibraryStatus, slugFor } from "@/lib/library";
@@ -285,8 +286,18 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   const [saved, setSaved] = useState(true);
   const [hydrated, setHydrated] = useState(false);
 
+  // Paginated mode: content is laid out in CSS columns exactly as wide as
+  // the visible container, so each "column" is one full page — navigation
+  // moves horizontally by exactly one measured page width at a time.
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageCount, setPageCount] = useState(1);
+  const [pageWidthPx, setPageWidthPx] = useState(0);
+  const pendingRatioRef = useRef<number | null>(null);
+  const isProgrammaticScroll = useRef(false);
+
   const contentRef = useRef<HTMLDivElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const snapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Opening a book counts as "starting" it — track it in the library so it
   // shows up under "Minha biblioteca" / "Continue lendo" and can be resumed.
@@ -298,14 +309,21 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
 
   // Hydrate settings + progress after mount (avoid SSR mismatch).
   useEffect(() => {
-    setSettings(loadSettings());
+    const s = loadSettings();
+    setSettings(s);
     void loadProgressRemote(book.id).then((p) => {
       if (p) {
         setChapterIndex(Math.min(p.chapterIndex, book.chapters.length - 1));
-        requestAnimationFrame(() => {
-          const el = contentRef.current;
-          if (el) el.scrollTop = p.scrollRatio * (el.scrollHeight - el.clientHeight);
-        });
+        pendingRatioRef.current = p.scrollRatio;
+        if (s.mode === "scroll") {
+          requestAnimationFrame(() => {
+            const el = contentRef.current;
+            if (el) el.scrollTop = p.scrollRatio * (el.scrollHeight - el.clientHeight);
+            pendingRatioRef.current = null;
+          });
+        }
+        // Paginated mode: left for the page-measurement effect below to
+        // consume once it knows how many pages this chapter actually has.
       }
       setHydrated(true);
     });
@@ -340,7 +358,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   }, [chapterIndex, queueSave]);
 
   const goto = useCallback(
-    (i: number) => {
+    (i: number, edgeRatio: 0 | 1 = 0) => {
       const clamped = Math.max(0, Math.min(book.chapters.length - 1, i));
       if (clamped > chapterIndex) {
         void awardXp(uid, 20);
@@ -353,20 +371,144 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
         }
       }
       setChapterIndex(clamped);
-      setScrollRatio(0);
+      setScrollRatio(edgeRatio);
       setActiveParagraph(null);
       setEditingNoteFor(null);
-      requestAnimationFrame(() => {
-        const el = contentRef.current;
-        if (el) el.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
-      });
-      queueSave({ chapterIndex: clamped, scrollRatio: 0, updatedAt: Date.now() });
+      if (settings.mode === "paginated") {
+        // Consumed by the page-measurement effect below once it knows how
+        // many pages the newly-loaded chapter actually has — edgeRatio 1
+        // means "land on the last page" (flipping backward into a chapter
+        // should feel like arriving at its end, not its start).
+        pendingRatioRef.current = edgeRatio;
+      } else {
+        requestAnimationFrame(() => {
+          const el = contentRef.current;
+          if (el)
+            el.scrollTo({
+              top: edgeRatio * (el.scrollHeight - el.clientHeight),
+              behavior: "instant" as ScrollBehavior,
+            });
+        });
+      }
+      queueSave({ chapterIndex: clamped, scrollRatio: edgeRatio, updatedAt: Date.now() });
       setTocOpen(false);
     },
-    [book.chapters.length, book.title, book.author, chapterIndex, queueSave, uid],
+    [book.chapters.length, book.title, book.author, chapterIndex, queueSave, settings.mode, uid],
   );
 
-  const theme = THEME_STYLES[settings.theme];
+  // Track the container's visible width — each CSS column is set to
+  // exactly this wide, so precisely one page shows in the viewport at a
+  // time (rather than "roughly this size", which is what column-width
+  // alone would give you, and could show 2+ pages side by side on a wide
+  // screen).
+  useEffect(() => {
+    if (settings.mode !== "paginated") return;
+    const el = contentRef.current;
+    if (!el) return;
+    const update = () => setPageWidthPx(el.clientWidth);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [settings.mode]);
+
+  // Recompute how many pages the current chapter takes at this width/font/
+  // spacing, and land on the right one — either a restored/edge position
+  // from `goto`, or roughly where we already were if just the font size
+  // (etc.) changed under our feet.
+  useEffect(() => {
+    if (settings.mode !== "paginated" || pageWidthPx <= 0) return;
+    const el = contentRef.current;
+    if (!el) return;
+    const raf = requestAnimationFrame(() => {
+      const count = Math.max(1, Math.round(el.scrollWidth / pageWidthPx));
+      setPageCount(count);
+      const pendingRatio = pendingRatioRef.current;
+      const target =
+        pendingRatio !== null
+          ? Math.round(pendingRatio * (count - 1))
+          : Math.min(pageIndex, count - 1);
+      pendingRatioRef.current = null;
+      el.scrollTo({ left: target * pageWidthPx, behavior: "instant" as ScrollBehavior });
+      setPageIndex(target);
+    });
+    return () => cancelAnimationFrame(raf);
+    // pageIndex is read but intentionally not a dependency — it would
+    // fight the "stay near current position" logic above on every page turn.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    settings.mode,
+    pageWidthPx,
+    chapterIndex,
+    settings.fontSize,
+    settings.lineHeight,
+    settings.margin,
+    settings.maxWidth,
+    settings.font,
+  ]);
+
+  const goToPage = useCallback(
+    (targetPage: number) => {
+      if (targetPage < 0) {
+        goto(chapterIndex - 1, 1);
+        return;
+      }
+      if (targetPage >= pageCount) {
+        goto(chapterIndex + 1, 0);
+        return;
+      }
+      const el = contentRef.current;
+      if (!el || pageWidthPx <= 0) return;
+      isProgrammaticScroll.current = true;
+      el.scrollTo({ left: targetPage * pageWidthPx, behavior: "smooth" });
+      setPageIndex(targetPage);
+      const r = pageCount > 1 ? targetPage / (pageCount - 1) : 0;
+      setScrollRatio(r);
+      queueSave({ chapterIndex, scrollRatio: r, updatedAt: Date.now() });
+      setTimeout(() => {
+        isProgrammaticScroll.current = false;
+      }, 500);
+    },
+    [chapterIndex, pageCount, pageWidthPx, goto, queueSave],
+  );
+
+  // Native swipe/drag is left free (no CSS scroll-snap — it can't target
+  // individual CSS-column boundaries), then snapped to the nearest page
+  // once the gesture settles. Skipped while a `goToPage` call is already
+  // animating its own scroll, so the two don't fight each other.
+  const onPaginatedScroll = useCallback(() => {
+    if (isProgrammaticScroll.current) return;
+    if (snapTimer.current) clearTimeout(snapTimer.current);
+    snapTimer.current = setTimeout(() => {
+      const el = contentRef.current;
+      if (!el || pageWidthPx <= 0) return;
+      const nearest = Math.max(0, Math.min(pageCount - 1, Math.round(el.scrollLeft / pageWidthPx)));
+      if (Math.abs(el.scrollLeft - nearest * pageWidthPx) > 2) {
+        el.scrollTo({ left: nearest * pageWidthPx, behavior: "smooth" });
+      }
+      setPageIndex(nearest);
+      const r = pageCount > 1 ? nearest / (pageCount - 1) : 0;
+      setScrollRatio(r);
+      queueSave({ chapterIndex, scrollRatio: r, updatedAt: Date.now() });
+    }, 120);
+  }, [pageWidthPx, pageCount, chapterIndex, queueSave]);
+
+  // Keyboard page-turning on desktop — ignored while typing in a note or
+  // any other input so arrow keys still work normally there.
+  useEffect(() => {
+    if (settings.mode !== "paginated") return;
+    function onKeyDown(e: KeyboardEvent) {
+      const tag = (document.activeElement?.tagName ?? "").toLowerCase();
+      if (tag === "input" || tag === "textarea") return;
+      if (e.key === "ArrowRight") goToPage(pageIndex + 1);
+      else if (e.key === "ArrowLeft") goToPage(pageIndex - 1);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [settings.mode, pageIndex, goToPage]);
+
+  const [siteTheme, setSiteTheme] = useSiteTheme();
+  const theme = THEME_STYLES[siteTheme];
   const chapter = book.chapters[chapterIndex];
 
   const overallProgress = useMemo(() => {
@@ -490,14 +632,15 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   const contentStyle: React.CSSProperties =
     settings.mode === "paginated"
       ? {
-          columnWidth: `${settings.maxWidth}ch`,
-          columnGap: "4rem",
+          columnWidth: pageWidthPx > 0 ? `${pageWidthPx}px` : "100%",
+          columnGap: "0px",
           columnFill: "auto",
           height: "100%",
           overflowY: "hidden",
           overflowX: "auto",
-          scrollSnapType: "x mandatory",
-          padding: `2rem ${settings.margin}px`,
+          scrollbarWidth: "none",
+          padding: "2.5rem 0",
+          boxSizing: "border-box",
         }
       : {
           overflowY: "auto",
@@ -567,23 +710,31 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       </header>
 
       {/* Content */}
-      <div
-        ref={contentRef}
-        onScroll={settings.mode === "scroll" ? onScroll : undefined}
-        style={contentStyle}
-        className="flex-1"
-      >
-        <article
-          className="mx-auto"
-          style={{
-            maxWidth: settings.mode === "paginated" ? "none" : `${settings.maxWidth}ch`,
-            fontFamily: readerFontFamily,
-            fontSize: `${settings.fontSize}px`,
-            lineHeight: settings.lineHeight,
-            color: theme.fg,
-          }}
+      <div className="relative flex-1 overflow-hidden">
+        <div
+          ref={contentRef}
+          onScroll={
+            settings.mode === "scroll"
+              ? onScroll
+              : settings.mode === "paginated"
+                ? onPaginatedScroll
+                : undefined
+          }
+          style={contentStyle}
+          className="h-full"
         >
-          <header className="mb-10">
+          <article
+            className="mx-auto"
+            style={{
+              maxWidth: `${settings.maxWidth}ch`,
+              paddingInline: settings.mode === "paginated" ? `${settings.margin}px` : undefined,
+              fontFamily: readerFontFamily,
+              fontSize: `${settings.fontSize}px`,
+              lineHeight: settings.lineHeight,
+              color: theme.fg,
+            }}
+          >
+          <header className="mb-10" style={{ breakInside: "avoid" }}>
             <p
               className="text-[11px] uppercase tracking-[0.25em]"
               style={{ color: theme.accent, fontFamily: "var(--font-sans)" }}
@@ -608,7 +759,11 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
           ).map((block, blockKey) => {
             if (block.type === "image") {
               return (
-                <figure key={`img-${blockKey}`} className="my-8 flex flex-col items-center">
+                <figure
+                  key={`img-${blockKey}`}
+                  className="my-8 flex flex-col items-center"
+                  style={{ breakInside: "avoid" }}
+                >
                   <img
                     src={block.src}
                     alt={block.alt ?? ""}
@@ -624,7 +779,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
             const isActive = activeParagraph === i;
             const isEditingNote = highlight && editingNoteFor === highlight.id;
             return (
-              <div key={i} className="relative">
+              <div key={i} className="relative" style={{ breakInside: "avoid" }}>
                 <p
                   onClick={() => setActiveParagraph(isActive ? null : i)}
                   className="mb-1 cursor-pointer rounded-sm px-2 -mx-2 py-0.5 [hyphens:auto] [text-align:justify] transition-colors"
@@ -776,6 +931,24 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
             </button>
           </nav>
         </article>
+        </div>
+
+        {settings.mode === "paginated" && (
+          <>
+            <button
+              onClick={() => goToPage(pageIndex - 1)}
+              disabled={pageIndex === 0 && chapterIndex === 0}
+              aria-label="Página anterior"
+              className="absolute inset-y-0 left-0 w-[15%] min-w-10 cursor-pointer disabled:cursor-default"
+            />
+            <button
+              onClick={() => goToPage(pageIndex + 1)}
+              disabled={pageIndex === pageCount - 1 && chapterIndex === book.chapters.length - 1}
+              aria-label="Próxima página"
+              className="absolute inset-y-0 right-0 w-[15%] min-w-10 cursor-pointer disabled:cursor-default"
+            />
+          </>
+        )}
       </div>
 
       {/* Progress rail */}
@@ -795,7 +968,9 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
             />
           </div>
           <span className="tabular-nums">
-            Cap. {chapterIndex + 1}/{book.chapters.length}
+            {settings.mode === "paginated"
+              ? `Pág. ${pageIndex + 1}/${pageCount} · Cap. ${chapterIndex + 1}/${book.chapters.length}`
+              : `Cap. ${chapterIndex + 1}/${book.chapters.length}`}
           </span>
         </div>
       </div>
@@ -807,6 +982,8 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
         settings={settings}
         onChange={(patch) => setSettings((s) => ({ ...s, ...patch }))}
         theme={theme}
+        siteTheme={siteTheme}
+        onSiteThemeChange={setSiteTheme}
       />
 
       {/* Table of contents / highlights / bookmarks */}

@@ -14,6 +14,10 @@ export type ReaderFont = "serif" | "sans";
 export type ReaderMode = "scroll" | "paginated";
 
 export interface ReaderSettings {
+  /** @deprecated Reading theme is now unified with the site-wide theme
+   * (see useSiteTheme / lib/theme.ts) — this field is kept only so
+   * settings already saved to localStorage/Firestore before that change
+   * don't break on load. Nothing reads it anymore. */
   theme: ReaderTheme;
   font: ReaderFont;
   fontSize: number;
@@ -36,7 +40,7 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
   lineHeight: 1.7,
   margin: 32,
   maxWidth: 66,
-  mode: "scroll",
+  mode: "paginated",
 };
 
 const SETTINGS_KEY = "bookverse:reader:settings";

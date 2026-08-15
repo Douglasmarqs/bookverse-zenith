@@ -4,6 +4,7 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
@@ -165,6 +166,11 @@ function ConfigBanner() {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  // The reader is its own full-screen (fixed inset-0) experience with its
+  // own header/nav — stacking the global site chrome on top of it was
+  // literally two headers overlapping at the same spot on mobile.
+  const isReaderRoute = pathname.startsWith("/reader/");
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
@@ -177,14 +183,14 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <div className="flex min-h-screen flex-col">
-        <ConfigBanner />
-        <SiteHeader />
+        {!isReaderRoute && <ConfigBanner />}
+        {!isReaderRoute && <SiteHeader />}
         <main className="flex-1">
           <Outlet />
         </main>
-        <SiteFooter />
-        <LumiPanel />
-        <InstallPwaBanner />
+        {!isReaderRoute && <SiteFooter />}
+        {!isReaderRoute && <LumiPanel />}
+        {!isReaderRoute && <InstallPwaBanner />}
         <Toaster position="bottom-center" theme="dark" richColors />
       </div>
     </QueryClientProvider>

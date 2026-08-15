@@ -1,7 +1,8 @@
 import { X, Type, AlignJustify, Rows3, Columns2 } from "lucide-react";
-import type { ReaderSettings, ReaderTheme, ReaderFont, ReaderMode } from "@/lib/reader-store";
+import type { ReaderSettings, ReaderFont, ReaderMode } from "@/lib/reader-store";
+import type { SiteTheme } from "@/lib/theme";
 
-/** Matches the shape of THEME_STYLES[settings.theme] in reader.$bookId.tsx —
+/** Matches the shape of THEME_STYLES[siteTheme] in reader.$bookId.tsx —
  * kept as a separate type here to avoid a route -> component import cycle. */
 export interface ReaderThemeColors {
   bg: string;
@@ -17,9 +18,11 @@ interface Props {
   settings: ReaderSettings;
   onChange: (patch: Partial<ReaderSettings>) => void;
   theme: ReaderThemeColors;
+  siteTheme: SiteTheme;
+  onSiteThemeChange: (t: SiteTheme) => void;
 }
 
-const THEME_SWATCHES: { value: ReaderTheme; label: string; bg: string; fg: string }[] = [
+const THEME_SWATCHES: { value: SiteTheme; label: string; bg: string; fg: string }[] = [
   { value: "light", label: "Claro", bg: "#FFFFFF", fg: "#1A1A1A" },
   { value: "paper", label: "Papel", bg: "#F2ECE1", fg: "#2A2420" },
   { value: "sepia", label: "Sépia", bg: "#EFE0C0", fg: "#3A2818" },
@@ -28,15 +31,22 @@ const THEME_SWATCHES: { value: ReaderTheme; label: string; bg: string; fg: strin
 
 /**
  * This panel deliberately does NOT use the sitewide `bg-background` /
- * `text-foreground` / etc. Tailwind classes — those follow the site-wide
- * Claro/Sépia/Papel/Escuro theme (see lib/theme.ts), which is a separate,
- * independent setting from the reader's own theme. Using the site theme
- * here would make the settings panel visually clash with whatever reading
- * theme is actually active (e.g. a dark site theme showing a dark panel
- * floating over a Sépia reading page). Every color below comes from the
- * `theme` prop instead, so this panel always matches the page behind it.
+ * `text-foreground` / etc. Tailwind classes — it's styled entirely from
+ * the `theme` prop instead, so it always matches the page behind it even
+ * mid-transition. As of the theme unification, `theme` IS derived from
+ * the site-wide setting (see reader.$bookId.tsx), so the "Tema" swatches
+ * below write directly to that shared setting rather than a separate
+ * reader-only one — one theme, everywhere in the app.
  */
-export function ReaderSettingsPanel({ open, onClose, settings, onChange, theme }: Props) {
+export function ReaderSettingsPanel({
+  open,
+  onClose,
+  settings,
+  onChange,
+  theme,
+  siteTheme,
+  onSiteThemeChange,
+}: Props) {
   return (
     <>
       <div
@@ -77,11 +87,11 @@ export function ReaderSettingsPanel({ open, onClose, settings, onChange, theme }
               {THEME_SWATCHES.map((t) => (
                 <button
                   key={t.value}
-                  onClick={() => onChange({ theme: t.value })}
+                  onClick={() => onSiteThemeChange(t.value)}
                   className="flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition"
                   style={{
-                    borderColor: settings.theme === t.value ? theme.accent : theme.rule,
-                    boxShadow: settings.theme === t.value ? `0 0 0 1px ${theme.accent}` : "none",
+                    borderColor: siteTheme === t.value ? theme.accent : theme.rule,
+                    boxShadow: siteTheme === t.value ? `0 0 0 1px ${theme.accent}` : "none",
                   }}
                 >
                   <span
@@ -176,8 +186,8 @@ export function ReaderSettingsPanel({ open, onClose, settings, onChange, theme }
           className="px-5 py-4 text-xs"
           style={{ borderTop: `1px solid ${theme.rule}`, color: theme.muted }}
         >
-          Suas preferências são salvas automaticamente. O tema escolhido aqui é só para a leitura —
-          independente do tema do restante do site.
+          Suas preferências são salvas automaticamente. O tema é o mesmo do resto do app — mude
+          aqui ou em qualquer outra tela.
         </footer>
       </aside>
     </>
