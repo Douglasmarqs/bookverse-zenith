@@ -200,9 +200,59 @@ function DesafiosPage() {
             </div>
           </div>
 
+          {/* Trilhas temáticas */}
+          <div className="mt-12">
+            <div className="flex items-center gap-2">
+              <Compass className="h-4 w-4 text-gold" />
+              <h2 className="font-display text-xl font-medium">Trilhas temáticas</h2>
+              <span className="text-xs text-muted-foreground">· desafios com tema</span>
+            </div>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              {READING_TRACKS.map((t) => {
+                const done = Math.min(stats.booksCompleted, t.goal);
+                const progress = t.goal > 0 ? done / t.goal : 0;
+                return (
+                  <div
+                    key={t.id}
+                    className="rounded-2xl border border-border/60 bg-card/40 p-5 transition-colors hover:border-gold/30"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <h3 className="font-display text-base font-medium leading-snug">{t.title}</h3>
+                      <span className="shrink-0 rounded-full bg-gold/10 px-2 py-0.5 text-[10px] font-medium text-gold">
+                        +{t.xp} XP
+                      </span>
+                    </div>
+                    <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                      {t.description}
+                    </p>
+                    <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-secondary">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-gold to-gold-soft"
+                        style={{ width: `${Math.round(progress * 100)}%` }}
+                      />
+                    </div>
+                    <div className="mt-2 flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">
+                        {done} de {t.goal} {t.goal === 1 ? "livro" : "livros"}
+                      </p>
+                      <Link
+                        to="/descobrir"
+                        search={{ q: t.query, categoria: undefined }}
+                        className="text-xs font-medium text-gold hover:underline"
+                      >
+                        Ver livros →
+                      </Link>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Achievements */}
           <div className="mt-12">
             <h2 className="font-display text-xl font-medium">Conquistas</h2>
+
             {categories.map((cat) => {
               const items = ACHIEVEMENTS.filter((a) => a.category === cat);
               const Icon = CATEGORY_ICON[cat];
