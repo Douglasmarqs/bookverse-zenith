@@ -17,9 +17,14 @@ import {
   Share2,
 } from "lucide-react";
 
-import { SAMPLE_BOOK, type Book } from "@/lib/sample-book";
+import { getSampleBook, type Book } from "@/lib/sample-book";
 import { getPublicDomainBook, parseGutenbergReaderId } from "@/lib/public-domain";
-import { getEpubBook, isEpubReaderId } from "@/lib/epub-store";
+import {
+  downloadEpubBookFromCloud,
+  getEpubBook,
+  isEpubReaderId,
+  saveEpubBook,
+} from "@/lib/epub-store";
 import {
   loadProgressRemote,
   loadSettings,
@@ -66,7 +71,8 @@ export const Route = createFileRoute("/reader/$bookId")({
     | { source: "sample"; book: Book }
     | { source: "gutenberg"; gutenbergId: number }
     | { source: "epub"; localId: string } => {
-    if (params.bookId === SAMPLE_BOOK.id) return { source: "sample", book: SAMPLE_BOOK };
+    const sample = getSampleBook(params.bookId);
+    if (sample) return { source: "sample", book: sample };
     const gutenbergId = parseGutenbergReaderId(params.bookId);
     if (gutenbergId !== null) return { source: "gutenberg", gutenbergId };
     if (isEpubReaderId(params.bookId)) return { source: "epub", localId: params.bookId };
@@ -118,32 +124,44 @@ function GuardedReaderPage() {
 function EpubBookLoader({ uid, localId }: { uid: string; localId: string }) {
   const [book, setBook] = useState<Book | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [stage, setStage] = useState<"local" | "cloud">("local");
 
   useEffect(() => {
     let cancelled = false;
     setBook(null);
     setError(null);
-    getEpubBook(localId)
-      .then((b) => {
-        if (cancelled) return;
-        if (!b) {
-          setError(
-            "Este EPUB não foi encontrado neste navegador. Arquivos importados ficam salvos apenas no dispositivo onde foram adicionados — importe-o novamente aqui.",
-          );
-          return;
-        }
-        setBook(b);
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          console.warn("[reader] failed to load local epub", err);
-          setError("Não foi possível carregar este arquivo agora.");
-        }
+    setStage("local");
+
+    async function load() {
+      const local = await getEpubBook(localId).catch((err) => {
+        console.warn("[reader] failed to read local epub store", err);
+        return null;
       });
+      if (cancelled) return;
+      if (local) {
+        setBook(local);
+        return;
+      }
+      // Not on this device/browser — it may have been imported elsewhere
+      // and synced to Firebase Storage; fetch and cache it locally too.
+      setStage("cloud");
+      const cloudBook = await downloadEpubBookFromCloud(uid, localId);
+      if (cancelled) return;
+      if (cloudBook) {
+        setBook(cloudBook);
+        void saveEpubBook(cloudBook).catch(() => {});
+        return;
+      }
+      setError(
+        "Este EPUB não foi encontrado neste navegador nem na nuvem. Importe-o novamente em Minha biblioteca.",
+      );
+    }
+
+    void load();
     return () => {
       cancelled = true;
     };
-  }, [localId]);
+  }, [localId, uid]);
 
   if (error) {
     return (
@@ -161,7 +179,11 @@ function EpubBookLoader({ uid, localId }: { uid: string; localId: string }) {
   }
 
   if (!book) {
-    return <ReaderPageSkeleton label="Abrindo seu arquivo…" />;
+    return (
+      <ReaderPageSkeleton
+        label={stage === "cloud" ? "Sincronizando da nuvem…" : "Abrindo seu arquivo…"}
+      />
+    );
   }
 
   return <ReaderPage uid={uid} book={book} />;
@@ -421,7 +443,17 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     const el = contentRef.current;
     if (!el) return;
     const raf = requestAnimationFrame(() => {
-      const count = Math.max(1, Math.round(el.scrollWidth / pageWidthPx));
+      const rawPages = el.scrollWidth / pageWidthPx;
+      const wholePages = Math.floor(rawPages);
+      const remainder = rawPages - wholePages;
+      // Browsers can report scrollWidth a few px past an exact multiple of
+      // the measured page width (column-width is a hint, not an exact
+      // contract), and naive rounding turns that sliver into a whole
+      // extra, nearly-blank trailing page — especially visible on
+      // image-heavy chapters (comics, illustrated books) where one page
+      // is mostly a single picture. Only count the partial page if it
+      // holds a meaningful chunk of content.
+      const count = Math.max(1, remainder > 0.12 ? wholePages + 1 : Math.max(wholePages, 1));
       setPageCount(count);
       const pendingRatio = pendingRatioRef.current;
       const target =
@@ -734,203 +766,203 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
               color: theme.fg,
             }}
           >
-          <header className="mb-10" style={{ breakInside: "avoid" }}>
-            <p
-              className="text-[11px] uppercase tracking-[0.25em]"
-              style={{ color: theme.accent, fontFamily: "var(--font-sans)" }}
-            >
-              Capítulo {chapterIndex + 1} de {book.chapters.length}
-            </p>
-            <h1
-              className="mt-3 font-display text-3xl font-medium md:text-4xl"
-              style={{ color: theme.fg }}
-            >
-              {chapter.title}
-            </h1>
-            <div
-              className="mt-6 h-px w-16"
-              style={{ backgroundColor: theme.accent, opacity: 0.7 }}
-            />
-          </header>
+            <header className="mb-10" style={{ breakInside: "avoid" }}>
+              <p
+                className="text-[11px] uppercase tracking-[0.25em]"
+                style={{ color: theme.accent, fontFamily: "var(--font-sans)" }}
+              >
+                Capítulo {chapterIndex + 1} de {book.chapters.length}
+              </p>
+              <h1
+                className="mt-3 font-display text-3xl font-medium md:text-4xl"
+                style={{ color: theme.fg }}
+              >
+                {chapter.title}
+              </h1>
+              <div
+                className="mt-6 h-px w-16"
+                style={{ backgroundColor: theme.accent, opacity: 0.7 }}
+              />
+            </header>
 
-          {(
-            chapter.blocks ??
-            chapter.paragraphs.map((_, i) => ({ type: "text" as const, paragraphIndex: i }))
-          ).map((block, blockKey) => {
-            if (block.type === "image") {
-              return (
-                <figure
-                  key={`img-${blockKey}`}
-                  className="my-8 flex flex-col items-center"
-                  style={{ breakInside: "avoid" }}
-                >
-                  <img
-                    src={block.src}
-                    alt={block.alt ?? ""}
-                    loading="lazy"
-                    className="max-h-[70vh] w-auto max-w-full rounded-lg object-contain [box-shadow:0_8px_30px_rgba(0,0,0,0.25)]"
-                  />
-                </figure>
-              );
-            }
-            const i = block.paragraphIndex;
-            const p = chapter.paragraphs[i];
-            const highlight = currentHighlight(i);
-            const isActive = activeParagraph === i;
-            const isEditingNote = highlight && editingNoteFor === highlight.id;
-            return (
-              <div key={i} className="relative" style={{ breakInside: "avoid" }}>
-                <p
-                  onClick={() => setActiveParagraph(isActive ? null : i)}
-                  className="mb-1 cursor-pointer rounded-sm px-2 -mx-2 py-0.5 [hyphens:auto] [text-align:justify] transition-colors"
-                  style={
-                    highlight
-                      ? {
-                          backgroundColor: HIGHLIGHT_BG[highlight.color],
-                          boxShadow: `inset 3px 0 0 0 ${HIGHLIGHT_ACCENT[highlight.color]}`,
-                        }
-                      : undefined
-                  }
-                >
-                  {p}
-                </p>
-
-                {highlight?.note && !isEditingNote && (
-                  <button
-                    onClick={() => {
-                      setEditingNoteFor(highlight.id);
-                      setNoteDraft(highlight.note ?? "");
-                    }}
-                    className="mb-6 mt-1 flex items-start gap-2 rounded-lg border-l-2 py-1 pl-3 pr-2 text-left text-sm italic"
-                    style={{ borderColor: theme.accent, color: theme.muted }}
+            {(
+              chapter.blocks ??
+              chapter.paragraphs.map((_, i) => ({ type: "text" as const, paragraphIndex: i }))
+            ).map((block, blockKey) => {
+              if (block.type === "image") {
+                return (
+                  <figure
+                    key={`img-${blockKey}`}
+                    className="my-8 flex flex-col items-center"
+                    style={{ breakInside: "avoid" }}
                   >
-                    <StickyNote className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    {highlight.note}
-                  </button>
-                )}
-                {!highlight?.note && <div className="mb-6" />}
-
-                {isActive && (
-                  <div
-                    className="mb-4 -mt-1 flex flex-wrap items-center gap-2 rounded-2xl border px-3 py-2 text-xs"
-                    style={{ borderColor: theme.rule, fontFamily: "var(--font-sans)" }}
-                  >
-                    <Highlighter className="h-3.5 w-3.5" style={{ color: theme.muted }} />
-                    {(["gold", "green", "blue", "pink"] as HighlightColor[]).map((c) => (
-                      <button
-                        key={c}
-                        onClick={() => void handleHighlight(i, c)}
-                        aria-label={`Destacar em ${c}`}
-                        className="h-6 w-6 rounded-full ring-1 ring-black/10 transition hover:scale-110"
-                        style={{
-                          backgroundColor: HIGHLIGHT_ACCENT[c],
-                          outline: highlight?.color === c ? `2px solid ${theme.fg}` : "none",
-                          outlineOffset: "2px",
-                        }}
-                      />
-                    ))}
-                    <span className="mx-1 h-4 w-px" style={{ backgroundColor: theme.rule }} />
-                    {highlight ? (
-                      <>
-                        <button
-                          onClick={() => {
-                            setEditingNoteFor(highlight.id);
-                            setNoteDraft(highlight.note ?? "");
-                          }}
-                          className="inline-flex items-center gap-1 rounded-full px-2 py-1 hover:opacity-70"
-                        >
-                          <StickyNote className="h-3.5 w-3.5" /> Nota
-                        </button>
-                        <button
-                          onClick={() => void handleShareHighlight(i)}
-                          className="inline-flex items-center gap-1 rounded-full px-2 py-1 hover:opacity-70"
-                        >
-                          <Share2 className="h-3.5 w-3.5" /> Compartilhar
-                        </button>
-                        <button
-                          onClick={() => void handleHighlight(i, highlight.color)}
-                          className="inline-flex items-center gap-1 rounded-full px-2 py-1 hover:opacity-70"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" /> Remover
-                        </button>
-                      </>
-                    ) : (
-                      <span style={{ color: theme.muted }}>Toque numa cor pra destacar</span>
-                    )}
-                    <button
-                      onClick={() => setActiveParagraph(null)}
-                      className="ml-auto rounded-full p-1 hover:opacity-70"
-                    >
-                      <XIcon className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                )}
-
-                {isEditingNote && (
-                  <div
-                    className="mb-6 -mt-1 rounded-lg border p-3"
-                    style={{ borderColor: theme.rule }}
-                  >
-                    <textarea
-                      autoFocus
-                      value={noteDraft}
-                      onChange={(e) => setNoteDraft(e.target.value)}
-                      placeholder="Escreva uma anotação sobre este trecho..."
-                      rows={3}
-                      className="w-full resize-none rounded-md border bg-transparent p-2 text-sm outline-none"
-                      style={{
-                        borderColor: theme.rule,
-                        color: theme.fg,
-                        fontFamily: "var(--font-sans)",
-                      }}
+                    <img
+                      src={block.src}
+                      alt={block.alt ?? ""}
+                      loading="lazy"
+                      className="max-h-[calc(100vh-13rem)] w-auto max-w-full rounded-lg object-contain [box-shadow:0_8px_30px_rgba(0,0,0,0.25)]"
                     />
-                    <div className="mt-2 flex justify-end gap-2">
+                  </figure>
+                );
+              }
+              const i = block.paragraphIndex;
+              const p = chapter.paragraphs[i];
+              const highlight = currentHighlight(i);
+              const isActive = activeParagraph === i;
+              const isEditingNote = highlight && editingNoteFor === highlight.id;
+              return (
+                <div key={i} className="relative" style={{ breakInside: "avoid" }}>
+                  <p
+                    onClick={() => setActiveParagraph(isActive ? null : i)}
+                    className="mb-1 cursor-pointer rounded-sm px-2 -mx-2 py-0.5 [hyphens:auto] [text-align:justify] transition-colors"
+                    style={
+                      highlight
+                        ? {
+                            backgroundColor: HIGHLIGHT_BG[highlight.color],
+                            boxShadow: `inset 3px 0 0 0 ${HIGHLIGHT_ACCENT[highlight.color]}`,
+                          }
+                        : undefined
+                    }
+                  >
+                    {p}
+                  </p>
+
+                  {highlight?.note && !isEditingNote && (
+                    <button
+                      onClick={() => {
+                        setEditingNoteFor(highlight.id);
+                        setNoteDraft(highlight.note ?? "");
+                      }}
+                      className="mb-6 mt-1 flex items-start gap-2 rounded-lg border-l-2 py-1 pl-3 pr-2 text-left text-sm italic"
+                      style={{ borderColor: theme.accent, color: theme.muted }}
+                    >
+                      <StickyNote className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      {highlight.note}
+                    </button>
+                  )}
+                  {!highlight?.note && <div className="mb-6" />}
+
+                  {isActive && (
+                    <div
+                      className="mb-4 -mt-1 flex flex-wrap items-center gap-2 rounded-2xl border px-3 py-2 text-xs"
+                      style={{ borderColor: theme.rule, fontFamily: "var(--font-sans)" }}
+                    >
+                      <Highlighter className="h-3.5 w-3.5" style={{ color: theme.muted }} />
+                      {(["gold", "green", "blue", "pink"] as HighlightColor[]).map((c) => (
+                        <button
+                          key={c}
+                          onClick={() => void handleHighlight(i, c)}
+                          aria-label={`Destacar em ${c}`}
+                          className="h-6 w-6 rounded-full ring-1 ring-black/10 transition hover:scale-110"
+                          style={{
+                            backgroundColor: HIGHLIGHT_ACCENT[c],
+                            outline: highlight?.color === c ? `2px solid ${theme.fg}` : "none",
+                            outlineOffset: "2px",
+                          }}
+                        />
+                      ))}
+                      <span className="mx-1 h-4 w-px" style={{ backgroundColor: theme.rule }} />
+                      {highlight ? (
+                        <>
+                          <button
+                            onClick={() => {
+                              setEditingNoteFor(highlight.id);
+                              setNoteDraft(highlight.note ?? "");
+                            }}
+                            className="inline-flex items-center gap-1 rounded-full px-2 py-1 hover:opacity-70"
+                          >
+                            <StickyNote className="h-3.5 w-3.5" /> Nota
+                          </button>
+                          <button
+                            onClick={() => void handleShareHighlight(i)}
+                            className="inline-flex items-center gap-1 rounded-full px-2 py-1 hover:opacity-70"
+                          >
+                            <Share2 className="h-3.5 w-3.5" /> Compartilhar
+                          </button>
+                          <button
+                            onClick={() => void handleHighlight(i, highlight.color)}
+                            className="inline-flex items-center gap-1 rounded-full px-2 py-1 hover:opacity-70"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" /> Remover
+                          </button>
+                        </>
+                      ) : (
+                        <span style={{ color: theme.muted }}>Toque numa cor pra destacar</span>
+                      )}
                       <button
-                        onClick={() => {
-                          setEditingNoteFor(null);
-                          setNoteDraft("");
-                        }}
-                        className="rounded-full px-3 py-1.5 text-xs hover:opacity-70"
+                        onClick={() => setActiveParagraph(null)}
+                        className="ml-auto rounded-full p-1 hover:opacity-70"
                       >
-                        Cancelar
-                      </button>
-                      <button
-                        onClick={() => void handleSaveNote(highlight!.id)}
-                        className="rounded-full px-3 py-1.5 text-xs font-medium"
-                        style={{ backgroundColor: theme.accent, color: theme.bg }}
-                      >
-                        Salvar nota
+                        <XIcon className="h-3.5 w-3.5" />
                       </button>
                     </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+                  )}
 
-          {/* Chapter nav */}
-          <nav
-            className="mt-16 flex items-center justify-between border-t pt-6"
-            style={{ borderColor: theme.rule, fontFamily: "var(--font-sans)" }}
-          >
-            <button
-              onClick={() => goto(chapterIndex - 1)}
-              disabled={chapterIndex === 0}
-              className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition disabled:opacity-30"
-              style={{ borderColor: theme.rule, color: theme.fg }}
+                  {isEditingNote && (
+                    <div
+                      className="mb-6 -mt-1 rounded-lg border p-3"
+                      style={{ borderColor: theme.rule }}
+                    >
+                      <textarea
+                        autoFocus
+                        value={noteDraft}
+                        onChange={(e) => setNoteDraft(e.target.value)}
+                        placeholder="Escreva uma anotação sobre este trecho..."
+                        rows={3}
+                        className="w-full resize-none rounded-md border bg-transparent p-2 text-sm outline-none"
+                        style={{
+                          borderColor: theme.rule,
+                          color: theme.fg,
+                          fontFamily: "var(--font-sans)",
+                        }}
+                      />
+                      <div className="mt-2 flex justify-end gap-2">
+                        <button
+                          onClick={() => {
+                            setEditingNoteFor(null);
+                            setNoteDraft("");
+                          }}
+                          className="rounded-full px-3 py-1.5 text-xs hover:opacity-70"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          onClick={() => void handleSaveNote(highlight!.id)}
+                          className="rounded-full px-3 py-1.5 text-xs font-medium"
+                          style={{ backgroundColor: theme.accent, color: theme.bg }}
+                        >
+                          Salvar nota
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Chapter nav */}
+            <nav
+              className="mt-16 flex items-center justify-between border-t pt-6"
+              style={{ borderColor: theme.rule, fontFamily: "var(--font-sans)" }}
             >
-              <ChevronLeft className="h-4 w-4" /> Anterior
-            </button>
-            <button
-              onClick={() => goto(chapterIndex + 1)}
-              disabled={chapterIndex === book.chapters.length - 1}
-              className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition disabled:opacity-30"
-              style={{ backgroundColor: theme.accent, color: theme.bg }}
-            >
-              Próximo <ChevronRight className="h-4 w-4" />
-            </button>
-          </nav>
-        </article>
+              <button
+                onClick={() => goto(chapterIndex - 1)}
+                disabled={chapterIndex === 0}
+                className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition disabled:opacity-30"
+                style={{ borderColor: theme.rule, color: theme.fg }}
+              >
+                <ChevronLeft className="h-4 w-4" /> Anterior
+              </button>
+              <button
+                onClick={() => goto(chapterIndex + 1)}
+                disabled={chapterIndex === book.chapters.length - 1}
+                className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition disabled:opacity-30"
+                style={{ backgroundColor: theme.accent, color: theme.bg }}
+              >
+                Próximo <ChevronRight className="h-4 w-4" />
+              </button>
+            </nav>
+          </article>
         </div>
 
         {settings.mode === "paginated" && (

@@ -14,12 +14,12 @@ import {
 } from "lucide-react";
 
 import heroImg from "@/assets/hero-library.webp";
-import b1 from "@/assets/book-1.webp";
 import { LumiMascot } from "@/components/lumi-mascot";
-import { BookCover } from "@/components/book-cover";
+import { SAMPLE_BOOKS } from "@/lib/sample-book";
 import { Carousel } from "@/components/carousel";
 import { LanguageBadge } from "@/components/language-badge";
 import { LumiButton } from "@/components/lumi-panel";
+import { openLumiPanel } from "@/lib/lumi-panel-store";
 import { subscribeRanking, type RankingRow } from "@/lib/ranking";
 import { subscribeUserProfile } from "@/lib/user-profile";
 import { maybeShowReadingReminder } from "@/lib/reading-reminder";
@@ -70,6 +70,16 @@ function Home() {
   const [bestsellers, setBestsellers] = useState<OpenLibraryBook[]>([]);
   const [subjectBestsellers, setSubjectBestsellers] = useState<OpenLibraryBook[]>([]);
   const [continueReading, setContinueReading] = useState<LibraryEntry[]>([]);
+  // A different genre each time the homepage loads — one of the four
+  // fully-readable sample stories, so "Leitura em destaque" isn't always
+  // the same book. Starts on the first one (stable for SSR) and only
+  // randomizes after mount — picking randomly during the initial render
+  // would make the server and the client disagree on what to render,
+  // which React flags as a hydration mismatch.
+  const [featuredSample, setFeaturedSample] = useState(SAMPLE_BOOKS[0]);
+  useEffect(() => {
+    setFeaturedSample(SAMPLE_BOOKS[Math.floor(Math.random() * SAMPLE_BOOKS.length)]);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -167,7 +177,7 @@ function Home() {
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <Link
                 to="/reader/$bookId"
-                params={{ bookId: "casa-espiritos" }}
+                params={{ bookId: featuredSample.id }}
                 className="group inline-flex items-center gap-2 rounded-full bg-gold px-6 py-3.5 text-sm font-medium text-primary-foreground transition-transform hover:scale-[1.02] active:scale-[0.98]"
               >
                 Começar a ler
@@ -175,7 +185,7 @@ function Home() {
               </Link>
               <Link
                 to="/reader/$bookId"
-                params={{ bookId: "casa-espiritos" }}
+                params={{ bookId: featuredSample.id }}
                 className="inline-flex items-center gap-2 rounded-full border border-border px-6 py-3.5 text-sm font-medium text-foreground/85 hover:border-gold/50 hover:text-foreground"
               >
                 <Play className="h-4 w-4 text-gold" />
@@ -199,37 +209,45 @@ function Home() {
             </dl>
           </div>
 
-          {/* Featured book plate */}
+          {/* Lumi plate — the hero showcases the AI reading companion
+              instead of any single book, so it reads as "what this app
+              does for you" rather than "here's one specific title". */}
           <div className="relative flex items-center justify-center">
-            <div className="glass-plate relative w-full max-w-sm rounded-3xl p-6 [box-shadow:var(--shadow-plate)]">
-              <div className="relative">
-                <BookCover
-                  title="A Casa dos Espíritos"
-                  author="Isabel Allende"
-                  fallbackSrc={b1}
-                  width={800}
-                  height={1200}
-                  className="book-shadow mx-auto aspect-[2/3] w-56 rounded-md object-cover"
-                />
-                <div className="pointer-events-none absolute -inset-8 -z-10 rounded-full bg-gold/15 blur-3xl" />
+            <div className="glass-plate relative w-full max-w-sm rounded-3xl p-8 text-center [box-shadow:var(--shadow-plate)]">
+              <div className="relative mx-auto w-fit">
+                <LumiMascot size={140} interactive onClick={() => openLumiPanel(null)} />
+                <div className="pointer-events-none absolute -inset-10 -z-10 rounded-full bg-gold/15 blur-3xl" />
               </div>
-              <div className="mt-6 text-center">
-                <p className="text-[11px] uppercase tracking-[0.25em] text-gold">
-                  Leitura em destaque
-                </p>
-                <h3 className="mt-2 font-display text-xl font-semibold">A Casa dos Espíritos</h3>
-                <p className="mt-1 text-sm text-muted-foreground">Isabel Allende</p>
-                <div className="mt-4 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-                  <BookOpenCheck className="h-3.5 w-3.5 text-gold" />
-                  Texto completo disponível no leitor
-                </div>
+              <p className="mt-5 text-[11px] uppercase tracking-[0.25em] text-gold">
+                Sua companhia de leitura
+              </p>
+              <h3 className="mt-2 font-display text-xl font-semibold">Converse com a Lumi</h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                Resumos, recomendações parecidas com o que você já leu, e respostas pra qualquer
+                dúvida sobre o capítulo — direto enquanto você lê.
+              </p>
+              <div className="mt-5 flex flex-wrap justify-center gap-2">
+                {["Resumir capítulo", "Livros parecidos", "Tirar dúvidas"].map((chip) => (
+                  <span
+                    key={chip}
+                    className="rounded-full border border-border/60 bg-card/60 px-3 py-1 text-[11px] text-muted-foreground"
+                  >
+                    {chip}
+                  </span>
+                ))}
               </div>
+              <button
+                onClick={() => openLumiPanel(null)}
+                className="mt-6 inline-flex items-center gap-2 rounded-full bg-gold px-6 py-3 text-sm font-medium text-primary-foreground transition-transform hover:scale-[1.02] active:scale-[0.98]"
+              >
+                Conversar com a Lumi
+                <ArrowRight className="h-4 w-4" />
+              </button>
             </div>
 
             {/* Real, live #1 from this week's actual trending list (Open
-                Library) — sits beside the curated reader demo so the hero
-                shows genuine trending data without swapping out the one
-                book that has a working in-app reader. */}
+                Library) — kept as a small honest real-data badge beside
+                the Lumi card. */}
             {bestsellers[0] && (
               <Link
                 to="/livro/$slug"
@@ -257,10 +275,7 @@ function Home() {
               </Link>
             )}
 
-            <LumiMascot
-              size={128}
-              className="absolute -bottom-6 -left-4 hidden md:block"
-            />
+            <LumiMascot size={128} className="absolute -bottom-6 -left-4 hidden md:block" />
           </div>
         </div>
 

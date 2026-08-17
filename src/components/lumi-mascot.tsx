@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import owl from "@/assets/owl-mascot.webp";
 
 /**
@@ -19,6 +19,7 @@ export function LumiMascot({
   thinking = false,
   interactive = false,
   blink = true,
+  onClick,
 }: {
   /** Rendered width/height in px — the artwork is square. */
   size?: number;
@@ -30,13 +31,34 @@ export function LumiMascot({
   /** Most instances should blink; disable for very small/decorative ones
    * (under ~28px the blink is imperceptible and not worth the DOM cost). */
   blink?: boolean;
+  /** Makes the mascot itself clickable (e.g. opening the Lumi chat panel). */
+  onClick?: () => void;
 }) {
   // Small per-instance random offset so multiple mascots on the same
-  // screen don't breathe/blink in perfect, uncanny unison.
-  const delay = useMemo(() => (-(Math.random() * 3)).toFixed(2), []);
+  // screen don't breathe/blink in perfect, uncanny unison. Starts at "no
+  // offset" (stable for SSR) and only randomizes after mount, since
+  // picking randomly during the initial render would make the server and
+  // client disagree on the rendered style attribute.
+  const [delay, setDelay] = useState("0");
+  useEffect(() => {
+    setDelay((-(Math.random() * 3)).toFixed(2));
+  }, []);
 
   return (
     <div
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
       className={`lumi-float relative inline-block select-none ${interactive ? "lumi-interactive cursor-pointer" : ""} ${className}`}
       style={{ width: size, height: size, animationDelay: `${delay}s` }}
     >
