@@ -78,3 +78,74 @@ export async function deleteEpubBook(id: string): Promise<void> {
   });
   db.close();
 }
+
+/* ------------------------------------------------------------------ *
+ * Cloud copy (Firestore, chunked)
+ *
+ * An imported EPUB lives in IndexedDB on the device it was imported
+ * from. To let the same book open on another device, we also store the
+ * parsed book as JSON split into chunks under
+ * `users/{uid}/epubFiles/{bookId}` + `.../chunks/{n}` — Firestore caps a
+ * single document at ~1MB, so a book must be split. Books above the
+ * ceiling below stay local-only (still perfectly readable there).
+ * ------------------------------------------------------------------ */
+
+const CHUNK_SIZE = 400_000; // characters, comfortably under the 1MB doc cap
+const MAX_CLOUD_CHARS = 6_000_000; // ~6MB of JSON — bigger books stay local
+
+export async function uploadEpubBookToCloud(uid: string, book: Book): Promise<boolean> {
+  const { getFirebase } = await import("./firebase");
+  const fb = getFirebase();
+  if (!fb) return false;
+  const json = JSON.stringify(book);
+  if (json.length > MAX_CLOUD_CHARS) return false;
+
+  const { doc, setDoc } = await import("firebase/firestore");
+  const chunks: string[] = [];
+  for (let i = 0; i < json.length; i += CHUNK_SIZE) chunks.push(json.slice(i, i + CHUNK_SIZE));
+
+  try {
+    await Promise.all(
+      chunks.map((data, i) =>
+        setDoc(doc(fb.db, "users", uid, "epubFiles", book.id, "chunks", String(i)), { data }),
+      ),
+    );
+    await setDoc(doc(fb.db, "users", uid, "epubFiles", book.id), {
+      chunks: chunks.length,
+      title: book.title,
+      author: book.author,
+      updatedAt: Date.now(),
+    });
+    return true;
+  } catch (err) {
+    console.warn("[epub] cloud upload failed (book stays local)", err);
+    return false;
+  }
+}
+
+export async function downloadEpubBookFromCloud(uid: string, id: string): Promise<Book | null> {
+  const { getFirebase } = await import("./firebase");
+  const fb = getFirebase();
+  if (!fb) return null;
+  try {
+    const { doc, getDoc } = await import("firebase/firestore");
+    const metaSnap = await getDoc(doc(fb.db, "users", uid, "epubFiles", id));
+    if (!metaSnap.exists()) return null;
+    const total = Number((metaSnap.data() as { chunks?: number }).chunks ?? 0);
+    if (!total) return null;
+    const parts = await Promise.all(
+      Array.from({ length: total }, (_, i) =>
+        getDoc(doc(fb.db, "users", uid, "epubFiles", id, "chunks", String(i))),
+      ),
+    );
+    let json = "";
+    for (const part of parts) {
+      if (!part.exists()) return null;
+      json += (part.data() as { data?: string }).data ?? "";
+    }
+    return JSON.parse(json) as Book;
+  } catch (err) {
+    console.warn("[epub] cloud download failed", err);
+    return null;
+  }
+}
