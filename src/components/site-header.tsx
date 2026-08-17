@@ -11,7 +11,6 @@ import { toast } from "sonner";
 
 const NAV = [
   { label: "Início", to: "/" as const },
-  { label: "Catálogo", to: "/catalogo" as const },
   { label: "Descobrir", to: "/descobrir" as const },
   { label: "Minha biblioteca", to: "/biblioteca" as const },
   { label: "Desafios", to: "/desafios" as const },
