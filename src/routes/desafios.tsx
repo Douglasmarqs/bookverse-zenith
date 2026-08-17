@@ -179,7 +179,7 @@ function DesafiosPage() {
                 return (
                   <div
                     key={m.id}
-                    className={`rounded-2xl border p-5 ${done ? "border-gold/40 bg-gold/5" : "border-border/60 bg-card/60"}`}
+                    className={`rounded-2xl border p-5 transition-colors ${done ? "border-gold/40 bg-gold/5" : "border-border/60 bg-card/60 hover:border-gold/25"}`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <h3 className="font-display text-base font-medium leading-snug">{m.title}</h3>
@@ -218,10 +218,10 @@ function DesafiosPage() {
                       return (
                         <div
                           key={a.id}
-                          className={`rounded-2xl border p-4 text-center transition ${
+                          className={`rounded-2xl border p-4 text-center transition-all hover:-translate-y-0.5 ${
                             unlocked
-                              ? "border-gold/40 bg-gold/5"
-                              : "border-border/60 bg-card/30 opacity-80"
+                              ? "border-gold/40 bg-gold/5 hover:shadow-[0_8px_24px_-8px_var(--gold)]"
+                              : "border-border/60 bg-card/30 opacity-80 hover:opacity-100"
                           }`}
                         >
                           <div
