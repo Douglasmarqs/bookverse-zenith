@@ -124,3 +124,71 @@ export const askLumi = onCall<AskLumiRequest>(
     }
   },
 );
+
+interface RecommendRequest {
+  /** Titles from the person's own library — completed reads weighted
+   * first by the caller, capped client-side before this is even sent. */
+  recentTitles: { title: string; author?: string }[];
+}
+
+/**
+ * askLumi's proactive sibling: instead of answering a question, this one
+ * looks at what's already in the person's library and suggests one book
+ * to read next — the "Lumi recommends" card on the homepage. Same secret,
+ * same model, same provider; just a different, single-shot prompt that
+ * asks for strict JSON back instead of a chat reply, so the client can
+ * render a proper recommendation card instead of parsing prose.
+ */
+export const recommendNextBook = onCall<RecommendRequest>(
+  { secrets: [GROQ_API_KEY], cors: true, maxInstances: 10 },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Faça login para receber recomendações.");
+    }
+    const titles = (request.data?.recentTitles ?? []).filter((t) => t?.title);
+    if (titles.length === 0) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Adicione alguns livros à sua biblioteca primeiro, aí eu consigo sugerir algo.",
+      );
+    }
+
+    const list = titles
+      .slice(0, 20)
+      .map((t) => `- "${t.title}"${t.author ? ` de ${t.author}` : ""}`)
+      .join("\n");
+    const prompt =
+      `Você é Lumi, a coruja bibliotecária do app de leitura BookVerse. ` +
+      `Esta é a lista de livros que a pessoa já tem na biblioteca ou já leu:\n${list}\n\n` +
+      `Sugira UM único próximo livro que ela provavelmente vai gostar, considerando os temas, ` +
+      `gêneros e estilos da lista acima. Pode ser um clássico, um best-seller ou uma obra menos ` +
+      `conhecida — mas não repita nenhum título que já está na lista. ` +
+      `Responda SOMENTE com um objeto JSON válido, sem markdown, sem texto antes ou depois, ` +
+      `exatamente neste formato: ` +
+      `{"title": "título do livro", "author": "nome do autor", "reason": "uma frase curta e ` +
+      `calorosa em português, explicando o motivo da indicação"}`;
+
+    try {
+      const groq = new Groq({ apiKey: GROQ_API_KEY.value() });
+      const completion = await groq.chat.completions.create({
+        model: MODEL_NAME,
+        messages: [{ role: "user", content: prompt }],
+        max_completion_tokens: 300,
+      });
+      const raw = (completion.choices[0]?.message?.content ?? "").trim();
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error("Lumi's reply didn't contain a JSON object");
+      const parsed = JSON.parse(jsonMatch[0]) as { title?: string; author?: string; reason?: string };
+      if (!parsed.title) throw new Error("Lumi's reply was missing a title");
+
+      return {
+        title: String(parsed.title).slice(0, 200),
+        author: parsed.author ? String(parsed.author).slice(0, 120) : "",
+        reason: parsed.reason ? String(parsed.reason).slice(0, 400) : "",
+      };
+    } catch (err) {
+      console.error("[recommendNextBook] Groq call failed", err);
+      throw new HttpsError("internal", "Lumi não conseguiu pensar numa recomendação agora.");
+    }
+  },
+);
