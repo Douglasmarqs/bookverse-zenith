@@ -1,16 +1,19 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import {
   Search,
   Plus,
   Check,
-  ExternalLink,
   Loader2,
-  WifiOff,
   BookOpenCheck,
+  Sparkles,
+  Quote,
+  Clock,
+  Compass,
+  Send,
   Flame,
+  Target,
 } from "lucide-react";
-import { searchBooks, type BookMeta } from "@/lib/google-books";
 import { toast } from "sonner";
 import { describeFirestoreError } from "@/lib/async-utils";
 import {
@@ -18,27 +21,31 @@ import {
   gutenbergReaderId,
   type PublicDomainSummary,
 } from "@/lib/public-domain";
-import { searchOpenLibrary, trendingBooks, type OpenLibraryBook } from "@/lib/open-library";
 import { addToLibrary } from "@/lib/library";
-import { subscribeAuth } from "@/lib/firebase";
 import { LanguageBadge } from "@/components/language-badge";
 import { BookGridSkeleton } from "@/components/book-grid-skeleton";
-import type { User } from "firebase/auth";
-import { useNavigate } from "@tanstack/react-router";
+import { useAuthUser } from "@/hooks/use-auth-user";
+import {
+  CURIOSITIES,
+  LUMI_PICKS,
+  READING_TRACKS,
+  RITUALS,
+  TELEGRAM_CHANNEL_URL,
+  rotate,
+} from "@/lib/editorial";
 
 const CATEGORIES = [
-  "Ficção",
   "Clássicos",
   "Ficção científica",
   "Poesia",
-  "Ensaios",
+  "Terror",
   "Filosofia",
-  "Biografias",
-  "Romance",
+  "Aventura",
+  "Contos",
   "Mistério",
 ];
 
-const DEFAULT_QUERY = "mais vendidos literatura";
+const DEFAULT_QUERY = "clássicos da literatura";
 
 export const Route = createFileRoute("/descobrir")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -47,8 +54,19 @@ export const Route = createFileRoute("/descobrir")({
   }),
   head: () => ({
     meta: [
-      { title: "Descobrir — BookVerse" },
-      { name: "description", content: "Busque livros reais e adicione à sua biblioteca." },
+      { title: "Descobrir livros para ler agora — BookVerse" },
+      {
+        name: "description",
+        content:
+          "Indicações comentadas pela Lumi, curiosidades literárias, rituais de leitura e clássicos de domínio público que abrem direto no leitor.",
+      },
+      { property: "og:title", content: "Descobrir livros para ler agora — BookVerse" },
+      {
+        property: "og:description",
+        content: "Curadoria comentada, trilhas de leitura e clássicos completos para ler no app.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: DescobrirPage,
@@ -57,81 +75,40 @@ export const Route = createFileRoute("/descobrir")({
 function DescobrirPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
+  const user = useAuthUser();
   const [query, setQuery] = useState(search.q ?? "");
-  const [results, setResults] = useState<BookMeta[]>([]);
+  const [books, setBooks] = useState<PublicDomainSummary[]>([]);
   const [loading, setLoading] = useState(false);
-  const [networkError, setNetworkError] = useState(false);
-  const [publicDomain, setPublicDomain] = useState<PublicDomainSummary[]>([]);
-  const [publicDomainLoading, setPublicDomainLoading] = useState(false);
-  const [openLibrary, setOpenLibrary] = useState<OpenLibraryBook[]>([]);
-  const [openLibraryLoading, setOpenLibraryLoading] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
-  const [added, setAdded] = useState<Set<string>>(new Set());
-  const [addedPublicDomain, setAddedPublicDomain] = useState<Set<number>>(new Set());
-  const [saving, setSaving] = useState<Set<string>>(new Set());
-  const [savingPublicDomain, setSavingPublicDomain] = useState<Set<number>>(new Set());
+  const [added, setAdded] = useState<Set<number>>(new Set());
+  const [saving, setSaving] = useState<Set<number>>(new Set());
+  const [curiosity, setCuriosity] = useState(0);
 
-  useEffect(() => subscribeAuth(setUser), []);
+  const picks = useMemo(() => rotate(LUMI_PICKS, 3), []);
+  const rituals = useMemo(() => rotate(RITUALS, 4), []);
 
   useEffect(() => {
     setQuery(search.q ?? "");
   }, [search.q]);
 
   useEffect(() => {
+    setCuriosity(Math.floor(Math.random() * CURIOSITIES.length));
+    const t = setInterval(() => setCuriosity((n) => (n + 1) % CURIOSITIES.length), 11000);
+    return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    setNetworkError(false);
-    const effectiveQuery = search.q ?? (search.categoria ? "" : DEFAULT_QUERY);
-    searchBooks(effectiveQuery, { category: search.categoria })
-      .then(({ results, networkError }) => {
-        if (cancelled) return;
-        setResults(results);
-        setNetworkError(networkError);
+    const effectiveQuery = search.q ?? search.categoria ?? DEFAULT_QUERY;
+    searchPublicDomainBooks(effectiveQuery, 12)
+      .then((r) => {
+        if (!cancelled) setBooks(r);
       })
       .catch(() => {
-        if (!cancelled) setNetworkError(true);
+        if (!cancelled) setBooks([]);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [search.q, search.categoria]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setPublicDomainLoading(true);
-    const effectiveQuery = search.q ?? search.categoria ?? DEFAULT_QUERY;
-    searchPublicDomainBooks(effectiveQuery, 8)
-      .then((r) => {
-        if (!cancelled) setPublicDomain(r);
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setPublicDomainLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [search.q, search.categoria]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setOpenLibraryLoading(true);
-    const q = search.q ?? search.categoria;
-    const onUpdate = (r: OpenLibraryBook[]) => {
-      if (!cancelled) setOpenLibrary(r);
-    };
-    const p = q
-      ? searchOpenLibrary(q, 12, { onUpdate })
-      : trendingBooks("weekly", 12, { onUpdate });
-    p.then((r) => {
-      if (!cancelled) setOpenLibrary(r);
-    })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setOpenLibraryLoading(false);
       });
     return () => {
       cancelled = true;
@@ -143,36 +120,13 @@ function DescobrirPage() {
     navigate({ to: "/descobrir", search: { q: query || undefined, categoria: search.categoria } });
   }
 
-  async function handleAdd(book: BookMeta) {
+  async function handleSave(book: { id: number; title: string; author: string; cover: string | null }) {
     if (!user || user.isAnonymous) {
       navigate({ to: "/auth", search: { redirect: "/descobrir" } });
       return;
     }
-    const key = `${book.title}::${book.author}`;
-    if (saving.has(key)) return;
-    setSaving((s) => new Set(s).add(key));
-    try {
-      await addToLibrary(user.uid, book, "quero-ler");
-      setAdded((s) => new Set(s).add(key));
-      toast.success("Adicionado à sua biblioteca.");
-    } catch (err) {
-      toast.error(describeFirestoreError(err, "Não foi possível adicionar este livro agora."));
-    } finally {
-      setSaving((s) => {
-        const next = new Set(s);
-        next.delete(key);
-        return next;
-      });
-    }
-  }
-
-  async function handleAddPublicDomain(book: PublicDomainSummary) {
-    if (!user || user.isAnonymous) {
-      navigate({ to: "/auth", search: { redirect: "/descobrir" } });
-      return;
-    }
-    if (savingPublicDomain.has(book.id)) return;
-    setSavingPublicDomain((s) => new Set(s).add(book.id));
+    if (saving.has(book.id)) return;
+    setSaving((s) => new Set(s).add(book.id));
     try {
       await addToLibrary(
         user.uid,
@@ -184,12 +138,12 @@ function DescobrirPage() {
         },
         "quero-ler",
       );
-      setAddedPublicDomain((s) => new Set(s).add(book.id));
+      setAdded((s) => new Set(s).add(book.id));
       toast.success("Salvo na sua biblioteca.");
     } catch (err) {
       toast.error(describeFirestoreError(err, "Não foi possível salvar este livro agora."));
     } finally {
-      setSavingPublicDomain((s) => {
+      setSaving((s) => {
         const next = new Set(s);
         next.delete(book.id);
         return next;
@@ -197,266 +151,322 @@ function DescobrirPage() {
     }
   }
 
+  const fact = CURIOSITIES[curiosity] ?? CURIOSITIES[0]!;
+
   return (
     <div className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-      <p className="text-[11px] uppercase tracking-[0.28em] text-gold">Descobrir</p>
-      <h1 className="mt-2 font-display text-4xl font-medium md:text-5xl">
-        Encontre seu próximo livro
-      </h1>
+      {/* Hero */}
+      <div className="relative overflow-hidden rounded-3xl border border-border/60 bg-card/40 p-7 md:p-10">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-gold/10 blur-3xl"
+        />
+        <div className="relative">
+          <p className="flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-gold">
+            <Compass className="h-3.5 w-3.5" /> Descobrir
+          </p>
+          <h1 className="mt-3 max-w-2xl font-display text-4xl font-medium leading-tight md:text-5xl">
+            Curadoria comentada, não uma vitrine de capas
+          </h1>
+          <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground">
+            Tudo o que aparece aqui é lido dentro do app: texto completo, tipografia ajustável,
+            marcações e progresso sincronizado. A Lumi comenta cada indicação como quem já leu.
+          </p>
 
-      <form onSubmit={runSearch} className="mt-8 flex max-w-xl items-center gap-2">
-        <div className="flex flex-1 items-center gap-3 rounded-full border border-border bg-secondary/30 px-4 py-3 focus-within:border-gold/60">
-          <Search className="h-4 w-4 text-muted-foreground" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar por título, autor…"
-            className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-          />
-        </div>
-        <button
-          type="submit"
-          className="rounded-full bg-gold px-5 py-3 text-sm font-medium text-primary-foreground"
-        >
-          Buscar
-        </button>
-      </form>
-
-      <div className="mt-6 flex flex-wrap gap-2.5">
-        {CATEGORIES.map((c) => {
-          const activeC = search.categoria === c;
-          return (
+          <form onSubmit={runSearch} className="mt-7 flex max-w-xl items-center gap-2">
+            <div className="flex flex-1 items-center gap-3 rounded-full border border-border bg-secondary/40 px-4 py-3 transition-colors focus-within:border-gold/60">
+              <Search className="h-4 w-4 text-muted-foreground" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Buscar por título, autor, tema…"
+                aria-label="Buscar livros"
+                className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              />
+            </div>
             <button
-              key={c}
-              onClick={() =>
-                navigate({
-                  to: "/descobrir",
-                  search: { q: search.q, categoria: activeC ? undefined : c },
-                })
-              }
-              className={`rounded-full border px-4 py-2 text-sm transition ${
-                activeC
-                  ? "border-gold bg-gold/10 text-gold"
-                  : "border-border bg-secondary/40 text-foreground/85 hover:border-gold/40 hover:text-gold"
-              }`}
+              type="submit"
+              className="rounded-full bg-gold px-5 py-3 text-sm font-medium text-primary-foreground transition-transform hover:-translate-y-0.5"
             >
-              {c}
+              Buscar
             </button>
-          );
-        })}
+          </form>
+
+          <div className="mt-5 flex flex-wrap gap-2.5">
+            {CATEGORIES.map((c) => {
+              const activeC = search.categoria === c;
+              return (
+                <button
+                  key={c}
+                  onClick={() =>
+                    navigate({
+                      to: "/descobrir",
+                      search: { q: search.q, categoria: activeC ? undefined : c },
+                    })
+                  }
+                  className={`rounded-full border px-4 py-1.5 text-sm transition ${
+                    activeC
+                      ? "border-gold bg-gold/10 text-gold"
+                      : "border-border bg-secondary/30 text-foreground/85 hover:border-gold/40 hover:text-gold"
+                  }`}
+                >
+                  {c}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
-      {(publicDomainLoading || publicDomain.length > 0) && (
-        <div className="mt-10">
-          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-gold">
-            <BookOpenCheck className="h-3.5 w-3.5" /> Domínio público — leia agora, texto completo
-          </div>
-          {publicDomainLoading ? (
-            <BookGridSkeleton count={4} columns="grid-cols-2 sm:grid-cols-3 lg:grid-cols-4" />
-          ) : (
-            <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 lg:grid-cols-4">
-              {publicDomain.map((book) => {
-                const isAdded = addedPublicDomain.has(book.id);
-                const isSaving = savingPublicDomain.has(book.id);
-                return (
-                  <div key={book.id} className="group">
-                    <Link to="/reader/$bookId" params={{ bookId: gutenbergReaderId(book.id) }}>
-                      <div className="relative">
-                        {book.cover ? (
-                          <img
-                            src={book.cover}
-                            alt={book.title}
-                            loading="lazy"
-                            className="book-shadow aspect-[2/3] w-full rounded-md object-cover transition-transform group-hover:-translate-y-1"
-                          />
-                        ) : (
-                          <div className="book-shadow grid aspect-[2/3] w-full place-items-center rounded-md bg-secondary p-3 text-center">
-                            <span className="font-display text-xs text-foreground/70">
-                              {book.title}
-                            </span>
-                          </div>
-                        )}
-                        <LanguageBadge languages={book.languages} />
-                      </div>
-                      <p className="mt-3 truncate font-display text-sm font-medium">{book.title}</p>
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground">{book.author}</p>
-                    </Link>
-                    <div className="mt-2 flex items-center gap-2">
-                      <Link
-                        to="/reader/$bookId"
-                        params={{ bookId: gutenbergReaderId(book.id) }}
-                        className="inline-flex items-center gap-1 text-[11px] font-medium text-gold"
-                      >
-                        <BookOpenCheck className="h-3 w-3" /> Ler agora
-                      </Link>
-                      <button
-                        onClick={() => handleAddPublicDomain(book)}
-                        disabled={isAdded || isSaving}
-                        className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 text-[11px] hover:border-gold/40 hover:text-gold disabled:opacity-60"
-                      >
-                        {isSaving ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : isAdded ? (
-                          <>
-                            <Check className="h-3 w-3" /> Salvo
-                          </>
-                        ) : (
-                          <>
-                            <Plus className="h-3 w-3" /> Salvar
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+      {/* Indicações da Lumi */}
+      <section className="mt-14">
+        <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-gold">
+          <Sparkles className="h-3.5 w-3.5" /> Indicações da Lumi — desta semana
         </div>
-      )}
+        <h2 className="mt-2 font-display text-2xl font-medium md:text-3xl">
+          Três livros com um porquê
+        </h2>
+        <div className="mt-6 grid gap-4 md:grid-cols-3">
+          {picks.map((p) => (
+            <article
+              key={p.gutenbergId}
+              className="flex flex-col rounded-2xl border border-border/60 bg-card/40 p-5 transition-all hover:-translate-y-1 hover:border-gold/40"
+            >
+              <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+                <Clock className="h-3 w-3" /> {Math.round(p.minutes / 60)}h de leitura · {p.mood}
+              </div>
+              <h3 className="mt-3 font-display text-lg font-medium leading-snug">{p.title}</h3>
+              <p className="text-xs text-muted-foreground">{p.author}</p>
+              <div className="mt-4 rounded-xl border border-gold/25 bg-gold/5 p-3">
+                <p className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.2em] text-gold">
+                  <Sparkles className="h-3 w-3" /> Lumi comenta
+                </p>
+                <p className="mt-2 text-sm leading-relaxed text-foreground/85">{p.lumiNote}</p>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-1.5">
+                {p.tags.map((t) => (
+                  <span
+                    key={t}
+                    className="rounded-full border border-border/60 px-2 py-0.5 text-[10px] text-muted-foreground"
+                  >
+                    {t}
+                  </span>
+                ))}
+              </div>
+              <div className="mt-5 flex items-center gap-3 pt-1">
+                <Link
+                  to="/reader/$bookId"
+                  params={{ bookId: gutenbergReaderId(p.gutenbergId) }}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-gold px-3.5 py-1.5 text-xs font-medium text-primary-foreground"
+                >
+                  <BookOpenCheck className="h-3.5 w-3.5" /> Ler agora
+                </Link>
+                <button
+                  onClick={() =>
+                    handleSave({
+                      id: p.gutenbergId,
+                      title: p.title,
+                      author: p.author,
+                      cover: null,
+                    })
+                  }
+                  disabled={added.has(p.gutenbergId) || saving.has(p.gutenbergId)}
+                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-gold disabled:opacity-60"
+                >
+                  {saving.has(p.gutenbergId) ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : added.has(p.gutenbergId) ? (
+                    <>
+                      <Check className="h-3.5 w-3.5" /> Salvo
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="h-3.5 w-3.5" /> Salvar
+                    </>
+                  )}
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
 
-      {(openLibraryLoading || openLibrary.length > 0) && (
-        <div className="mt-12">
-          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-gold">
-            <Flame className="h-3.5 w-3.5" />
-            {search.q || search.categoria
-              ? "Open Library — resultados"
-              : "Open Library — tendências da semana"}
+      {/* Curiosidade + rituais */}
+      <section className="mt-14 grid gap-4 lg:grid-cols-3">
+        <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-br from-card/60 to-card/20 p-6">
+          <Quote className="h-5 w-5 text-gold" />
+          <p className="mt-4 text-sm leading-relaxed text-foreground/90">{fact.text}</p>
+          <p className="mt-4 text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
+            {fact.source}
+          </p>
+          <div className="mt-5 flex gap-1.5">
+            {CURIOSITIES.map((_, i) => (
+              <span
+                key={i}
+                className={`h-1 w-5 rounded-full transition-colors ${
+                  i === curiosity ? "bg-gold" : "bg-border"
+                }`}
+              />
+            ))}
           </div>
-          {openLibraryLoading ? (
-            <BookGridSkeleton count={6} />
-          ) : (
-            <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 lg:grid-cols-6">
-              {openLibrary.map((book, i) => {
-                const key = `${book.title}::${book.author}`;
-                const isAdded = added.has(key);
-                const isSaving = saving.has(key);
-                return (
-                  <div key={book.workKey + i} className="group">
-                    {book.cover ? (
-                      <img
-                        src={book.cover}
-                        alt={book.title}
-                        loading="lazy"
-                        className="book-shadow aspect-[2/3] w-full rounded-md object-cover"
-                      />
-                    ) : (
-                      <div className="book-shadow grid aspect-[2/3] w-full place-items-center rounded-md bg-secondary p-3 text-center">
-                        <span className="font-display text-xs text-foreground/70">
-                          {book.title}
-                        </span>
-                      </div>
-                    )}
-                    <p className="mt-2.5 truncate font-display text-sm font-medium">{book.title}</p>
+        </div>
+        <div className="lg:col-span-2">
+          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-gold">
+            <Flame className="h-3.5 w-3.5" /> Rituais de leitura
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {rituals.map((r) => (
+              <div
+                key={r.title}
+                className="rounded-2xl border border-border/60 bg-card/30 p-4 transition-colors hover:border-gold/40"
+              >
+                <p className="font-display text-sm font-medium">{r.title}</p>
+                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{r.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Trilhas temáticas */}
+      <section className="mt-14">
+        <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-gold">
+          <Target className="h-3.5 w-3.5" /> Trilhas temáticas
+        </div>
+        <div className="mt-4 flex items-end justify-between gap-4">
+          <h2 className="font-display text-2xl font-medium md:text-3xl">
+            Desafios com tema, não só números
+          </h2>
+          <Link to="/desafios" className="shrink-0 text-xs text-gold hover:underline">
+            Ver conquistas →
+          </Link>
+        </div>
+        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {READING_TRACKS.map((t) => (
+            <div
+              key={t.id}
+              className="flex flex-col rounded-2xl border border-border/60 bg-card/30 p-5 transition-all hover:-translate-y-1 hover:border-gold/40"
+            >
+              <p className="text-[10px] uppercase tracking-[0.22em] text-gold">+{t.xp} XP</p>
+              <p className="mt-2 font-display text-base font-medium leading-snug">{t.title}</p>
+              <p className="mt-1.5 flex-1 text-xs leading-relaxed text-muted-foreground">
+                {t.description}
+              </p>
+              <Link
+                to="/descobrir"
+                search={{ q: t.query, categoria: undefined }}
+                className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-gold"
+              >
+                Começar trilha →
+              </Link>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Comunidade */}
+      <section className="mt-14 overflow-hidden rounded-3xl border border-gold/25 bg-gold/5 p-7 md:flex md:items-center md:justify-between md:gap-8 md:p-9">
+        <div className="max-w-xl">
+          <p className="flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-gold">
+            <Send className="h-3.5 w-3.5" /> Comunidade
+          </p>
+          <h2 className="mt-3 font-display text-2xl font-medium">
+            Chat de leitores e troca de EPUBs no Telegram
+          </h2>
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+            Um canal para indicações, dúvidas sobre o leitor e clubes de leitura mensais.
+          </p>
+        </div>
+        {TELEGRAM_CHANNEL_URL ? (
+          <a
+            href={TELEGRAM_CHANNEL_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-5 inline-flex shrink-0 items-center gap-2 rounded-full bg-gold px-5 py-3 text-sm font-medium text-primary-foreground md:mt-0"
+          >
+            <Send className="h-4 w-4" /> Entrar no canal
+          </a>
+        ) : (
+          <span className="mt-5 inline-flex shrink-0 items-center gap-2 rounded-full border border-gold/40 px-5 py-3 text-sm text-gold md:mt-0">
+            Link em breve
+          </span>
+        )}
+      </section>
+
+      {/* Catálogo legível */}
+      <section className="mt-14">
+        <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-gold">
+          <BookOpenCheck className="h-3.5 w-3.5" /> Texto completo — abre direto no leitor
+        </div>
+        <h2 className="mt-2 font-display text-2xl font-medium md:text-3xl">
+          {search.q || search.categoria ? "Resultados da sua busca" : "Domínio público em destaque"}
+        </h2>
+        {loading ? (
+          <BookGridSkeleton count={8} columns="grid-cols-2 sm:grid-cols-3 lg:grid-cols-4" />
+        ) : books.length === 0 ? (
+          <p className="py-14 text-sm text-muted-foreground">
+            Nada encontrado para essa busca. Tente outro termo, autor ou categoria.
+          </p>
+        ) : (
+          <div className="mt-6 grid grid-cols-2 gap-x-5 gap-y-9 sm:grid-cols-3 lg:grid-cols-4">
+            {books.map((book) => {
+              const isAdded = added.has(book.id);
+              const isSaving = saving.has(book.id);
+              return (
+                <div key={book.id} className="group">
+                  <Link to="/reader/$bookId" params={{ bookId: gutenbergReaderId(book.id) }}>
+                    <div className="relative">
+                      {book.cover ? (
+                        <img
+                          src={book.cover}
+                          alt={`Capa de ${book.title}`}
+                          loading="lazy"
+                          className="book-shadow aspect-[2/3] w-full rounded-md object-cover transition-transform group-hover:-translate-y-1"
+                        />
+                      ) : (
+                        <div className="book-shadow grid aspect-[2/3] w-full place-items-center rounded-md bg-secondary p-3 text-center transition-transform group-hover:-translate-y-1">
+                          <span className="font-display text-xs text-foreground/70">
+                            {book.title}
+                          </span>
+                        </div>
+                      )}
+                      <LanguageBadge languages={book.languages} />
+                    </div>
+                    <p className="mt-3 truncate font-display text-sm font-medium">{book.title}</p>
                     <p className="mt-0.5 truncate text-xs text-muted-foreground">{book.author}</p>
+                  </Link>
+                  <div className="mt-2 flex items-center gap-2">
+                    <Link
+                      to="/reader/$bookId"
+                      params={{ bookId: gutenbergReaderId(book.id) }}
+                      className="inline-flex items-center gap-1 text-[11px] font-medium text-gold"
+                    >
+                      <BookOpenCheck className="h-3 w-3" /> Ler agora
+                    </Link>
                     <button
-                      onClick={() => handleAdd(book)}
+                      onClick={() => handleSave(book)}
                       disabled={isAdded || isSaving}
-                      className="mt-2 inline-flex items-center gap-1 rounded-full border border-border/60 px-2.5 py-1 text-[11px] hover:border-gold/40 hover:text-gold disabled:opacity-60"
+                      className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 text-[11px] hover:border-gold/40 hover:text-gold disabled:opacity-60"
                     >
                       {isSaving ? (
                         <Loader2 className="h-3 w-3 animate-spin" />
                       ) : isAdded ? (
                         <>
-                          <Check className="h-3 w-3" /> Na biblioteca
+                          <Check className="h-3 w-3" /> Salvo
                         </>
                       ) : (
                         <>
-                          <Plus className="h-3 w-3" /> Adicionar
+                          <Plus className="h-3 w-3" /> Salvar
                         </>
                       )}
                     </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="mt-10">
-        <p className="text-[11px] uppercase tracking-[0.28em] text-muted-foreground">
-          Catálogo geral — capa e sinopse reais, leitura via loja/parceiro
-        </p>
-        {loading ? (
-          <BookGridSkeleton count={10} columns="grid-cols-2 sm:grid-cols-3 lg:grid-cols-5" />
-        ) : networkError ? (
-          <div className="flex flex-col items-center gap-3 py-16 text-center text-sm text-muted-foreground">
-            <WifiOff className="h-5 w-5" />
-            <p>
-              Não conseguimos falar com o Google Books agora (rede bloqueada ou instável).
-              <br />
-              Verifique sua conexão e tente novamente.
-            </p>
-          </div>
-        ) : results.length === 0 ? (
-          <p className="py-16 text-sm text-muted-foreground">
-            Nenhum livro encontrado para essa busca. Tente outro termo ou categoria.
-          </p>
-        ) : (
-          <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:grid-cols-3 lg:grid-cols-5">
-            {results.map((book) => {
-              const key = `${book.title}::${book.author}`;
-              const isAdded = added.has(key);
-              const isSaving = saving.has(key);
-              return (
-                <div key={key} className="group">
-                  <div className="relative">
-                    {book.cover ? (
-                      <img
-                        src={book.cover}
-                        alt={book.title}
-                        loading="lazy"
-                        className="book-shadow aspect-[2/3] w-full rounded-md object-cover"
-                      />
-                    ) : (
-                      <div className="book-shadow grid aspect-[2/3] w-full place-items-center rounded-md bg-secondary p-3 text-center">
-                        <span className="font-display text-xs text-foreground/70">
-                          {book.title}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="mt-3 min-w-0">
-                    <p className="truncate font-display text-sm font-medium">{book.title}</p>
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">{book.author}</p>
-                    <div className="mt-2 flex items-center gap-2">
-                      <button
-                        onClick={() => handleAdd(book)}
-                        disabled={isAdded || isSaving}
-                        className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2.5 py-1 text-[11px] hover:border-gold/40 hover:text-gold disabled:opacity-60"
-                      >
-                        {isSaving ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : isAdded ? (
-                          <>
-                            <Check className="h-3 w-3" /> Na biblioteca
-                          </>
-                        ) : (
-                          <>
-                            <Plus className="h-3 w-3" /> Adicionar
-                          </>
-                        )}
-                      </button>
-                      {book.previewLink && (
-                        <a
-                          href={book.previewLink}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="grid h-6 w-6 place-items-center rounded-full text-muted-foreground hover:text-gold"
-                          aria-label="Ver detalhes"
-                        >
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </a>
-                      )}
-                    </div>
                   </div>
                 </div>
               );
             })}
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }
