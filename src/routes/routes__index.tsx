@@ -32,7 +32,7 @@ import {
 import { trendingBooks, booksBySubject, type OpenLibraryBook } from "@/lib/open-library";
 import type { User } from "firebase/auth";
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/routes__index")({
   head: () => ({
     meta: [
       { title: "BookVerse — Sua biblioteca literária premium" },

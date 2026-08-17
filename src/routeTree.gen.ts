@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TermosRouteImport } from './routes/termos'
 import { Route as SobreRouteImport } from './routes/sobre'
+import { Route as Routes__indexRouteImport } from './routes/routes__index'
 import { Route as RankingRouteImport } from './routes/ranking'
 import { Route as PrivacidadeRouteImport } from './routes/privacidade'
 import { Route as PerfilRouteImport } from './routes/perfil'
@@ -32,6 +33,11 @@ const TermosRoute = TermosRouteImport.update({
 const SobreRoute = SobreRouteImport.update({
   id: '/sobre',
   path: '/sobre',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const Routes__indexRoute = Routes__indexRouteImport.update({
+  id: '/routes__index',
+  path: '/routes__index',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RankingRoute = RankingRouteImport.update({
@@ -106,6 +112,7 @@ export interface FileRoutesByFullPath {
   '/perfil': typeof PerfilRoute
   '/privacidade': typeof PrivacidadeRoute
   '/ranking': typeof RankingRoute
+  '/routes__index': typeof Routes__indexRoute
   '/sobre': typeof SobreRoute
   '/termos': typeof TermosRoute
   '/livro/$slug': typeof LivroSlugRoute
@@ -122,6 +129,7 @@ export interface FileRoutesByTo {
   '/perfil': typeof PerfilRoute
   '/privacidade': typeof PrivacidadeRoute
   '/ranking': typeof RankingRoute
+  '/routes__index': typeof Routes__indexRoute
   '/sobre': typeof SobreRoute
   '/termos': typeof TermosRoute
   '/livro/$slug': typeof LivroSlugRoute
@@ -139,6 +147,7 @@ export interface FileRoutesById {
   '/perfil': typeof PerfilRoute
   '/privacidade': typeof PrivacidadeRoute
   '/ranking': typeof RankingRoute
+  '/routes__index': typeof Routes__indexRoute
   '/sobre': typeof SobreRoute
   '/termos': typeof TermosRoute
   '/livro/$slug': typeof LivroSlugRoute
@@ -157,6 +166,7 @@ export interface FileRouteTypes {
     | '/perfil'
     | '/privacidade'
     | '/ranking'
+    | '/routes__index'
     | '/sobre'
     | '/termos'
     | '/livro/$slug'
@@ -173,6 +183,7 @@ export interface FileRouteTypes {
     | '/perfil'
     | '/privacidade'
     | '/ranking'
+    | '/routes__index'
     | '/sobre'
     | '/termos'
     | '/livro/$slug'
@@ -189,6 +200,7 @@ export interface FileRouteTypes {
     | '/perfil'
     | '/privacidade'
     | '/ranking'
+    | '/routes__index'
     | '/sobre'
     | '/termos'
     | '/livro/$slug'
@@ -206,6 +218,7 @@ export interface RootRouteChildren {
   PerfilRoute: typeof PerfilRoute
   PrivacidadeRoute: typeof PrivacidadeRoute
   RankingRoute: typeof RankingRoute
+  Routes__indexRoute: typeof Routes__indexRoute
   SobreRoute: typeof SobreRoute
   TermosRoute: typeof TermosRoute
   LivroSlugRoute: typeof LivroSlugRoute
@@ -226,6 +239,13 @@ declare module '@tanstack/react-router' {
       path: '/sobre'
       fullPath: '/sobre'
       preLoaderRoute: typeof SobreRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/routes__index': {
+      id: '/routes__index'
+      path: '/routes__index'
+      fullPath: '/routes__index'
+      preLoaderRoute: typeof Routes__indexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ranking': {
@@ -326,6 +346,7 @@ const rootRouteChildren: RootRouteChildren = {
   PerfilRoute: PerfilRoute,
   PrivacidadeRoute: PrivacidadeRoute,
   RankingRoute: RankingRoute,
+  Routes__indexRoute: Routes__indexRoute,
   SobreRoute: SobreRoute,
   TermosRoute: TermosRoute,
   LivroSlugRoute: LivroSlugRoute,
@@ -334,3 +355,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
