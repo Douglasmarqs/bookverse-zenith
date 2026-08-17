@@ -15,8 +15,6 @@ import {
 
 import heroImg from "@/assets/hero-library.webp";
 import { LumiMascot } from "@/components/lumi-mascot";
-import { LiteraryFactCard } from "@/components/literary-fact-card";
-import { LumiRecommendationCard } from "@/components/lumi-recommendation-card";
 import { SAMPLE_BOOKS } from "@/lib/sample-book";
 import { Carousel } from "@/components/carousel";
 import { LanguageBadge } from "@/components/language-badge";
@@ -72,7 +70,6 @@ function Home() {
   const [bestsellers, setBestsellers] = useState<OpenLibraryBook[]>([]);
   const [subjectBestsellers, setSubjectBestsellers] = useState<OpenLibraryBook[]>([]);
   const [continueReading, setContinueReading] = useState<LibraryEntry[]>([]);
-  const [libraryEntries, setLibraryEntries] = useState<LibraryEntry[]>([]);
   // A different genre each time the homepage loads — one of the four
   // fully-readable sample stories, so "Leitura em destaque" isn't always
   // the same book. Starts on the first one (stable for SSR) and only
@@ -119,7 +116,6 @@ function Home() {
     if (!homeUser || homeUser.isAnonymous) {
       setChallengeStats({ booksCompleted: 0, libraryCount: 0, xp: 0 });
       setContinueReading([]);
-      setLibraryEntries([]);
       return;
     }
     const unsubProfile = subscribeUserProfile(homeUser.uid, (p) =>
@@ -128,7 +124,6 @@ function Home() {
     const unsubLibrary = subscribeLibrary(homeUser.uid, (entries) => {
       setChallengeStats((s) => ({ ...s, libraryCount: entries.length }));
       setContinueReading(entries.filter((e) => e.status === "lendo").slice(0, 3));
-      setLibraryEntries(entries);
     });
     return () => {
       unsubProfile();
@@ -216,10 +211,8 @@ function Home() {
 
           {/* Lumi plate — the hero showcases the AI reading companion
               instead of any single book, so it reads as "what this app
-              does for you" rather than "here's one specific title". A
-              small rotating literary fact sits below it so the hero isn't
-              *just* Lumi. */}
-          <div className="relative flex flex-col items-center gap-4">
+              does for you" rather than "here's one specific title". */}
+          <div className="relative flex items-center justify-center">
             <div className="glass-plate relative w-full max-w-sm rounded-3xl p-8 text-center [box-shadow:var(--shadow-plate)]">
               <div className="relative mx-auto w-fit">
                 <LumiMascot size={140} interactive onClick={() => openLumiPanel(null)} />
@@ -251,8 +244,6 @@ function Home() {
                 <ArrowRight className="h-4 w-4" />
               </button>
             </div>
-
-            <LiteraryFactCard className="w-full max-w-sm" />
 
             {/* Real, live #1 from this week's actual trending list (Open
                 Library) — kept as a small honest real-data badge beside
@@ -290,13 +281,6 @@ function Home() {
 
         <div className="hairline mx-auto max-w-7xl" />
       </section>
-
-      {/* LUMI RECOMMENDATION — proactive, based on the person's own library */}
-      {homeUser && !homeUser.isAnonymous && (
-        <section className="mx-auto max-w-7xl px-5 pt-10 md:px-8">
-          <LumiRecommendationCard user={homeUser} libraryEntries={libraryEntries} />
-        </section>
-      )}
 
       {/* CONTINUE READING — real data from the signed-in user's library */}
       <Section
