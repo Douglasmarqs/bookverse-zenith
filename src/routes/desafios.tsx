@@ -1,6 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Trophy, Flame, Lock, Check, BookCheck, FileText, Library, Target } from "lucide-react";
+import {
+  Trophy,
+  Flame,
+  Lock,
+  Check,
+  BookCheck,
+  FileText,
+  Library,
+  Target,
+  Compass,
+} from "lucide-react";
 import { subscribeAuth } from "@/lib/firebase";
 import { subscribeUserProfile, type UserProfile } from "@/lib/user-profile";
 import { subscribeLibrary, type LibraryEntry } from "@/lib/library";
@@ -15,6 +25,7 @@ import {
   type AchievementStats,
 } from "@/lib/achievements";
 import { celebrateNewAchievements } from "@/lib/celebrate-achievements";
+import { READING_TRACKS } from "@/lib/editorial";
 import type { User } from "firebase/auth";
 
 export const Route = createFileRoute("/desafios")({
