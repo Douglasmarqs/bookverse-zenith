@@ -1,5 +1,7 @@
 // Sample book content — will be replaced by real data from APIs / Firebase later.
 import book1Cover from "@/assets/book-1.webp";
+import book2Cover from "@/assets/book-2.jpg";
+import book3Cover from "@/assets/book-3.jpg";
 
 export type Chapter = {
   id: string;
@@ -81,3 +83,36 @@ export const SAMPLE_BOOK: Book = {
     },
   ],
 };
+
+const SECOND_BOOK: Book = {
+  id: "vento-do-norte",
+  title: "O Vento do Norte",
+  author: "Helena Braga",
+  cover: book2Cover,
+  chapters: [
+    { id: "cap-1", title: "I. A chegada", paragraphs: lorem(11, "chegada") },
+    { id: "cap-2", title: "II. Cartas sem selo", paragraphs: lorem(13, "cartas") },
+    { id: "cap-3", title: "III. O farol", paragraphs: lorem(10, "farol") },
+    { id: "cap-4", title: "IV. Maré alta", paragraphs: lorem(12, "mare") },
+  ],
+};
+
+const THIRD_BOOK: Book = {
+  id: "arquivo-das-horas",
+  title: "O Arquivo das Horas",
+  author: "Tomás Vilar",
+  cover: book3Cover,
+  chapters: [
+    { id: "cap-1", title: "I. O catálogo", paragraphs: lorem(10, "catalogo") },
+    { id: "cap-2", title: "II. Sala de leitura", paragraphs: lorem(14, "leitura") },
+    { id: "cap-3", title: "III. Relógios paralelos", paragraphs: lorem(12, "relogios") },
+    { id: "cap-4", title: "IV. Última hora", paragraphs: lorem(9, "ultima") },
+  ],
+};
+
+/** Every fully-readable in-app demo title. */
+export const SAMPLE_BOOKS: Book[] = [SAMPLE_BOOK, SECOND_BOOK, THIRD_BOOK];
+
+export function getSampleBook(id: string): Book | null {
+  return SAMPLE_BOOKS.find((b) => b.id === id) ?? null;
+}
