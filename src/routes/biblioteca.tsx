@@ -24,7 +24,12 @@ import {
   type LibraryEntry,
   type LibraryStatus,
 } from "@/lib/library";
-import { deleteEpubBook, isEpubReaderId, saveEpubBook } from "@/lib/epub-store";
+import {
+  deleteEpubBook,
+  isEpubReaderId,
+  saveEpubBook,
+  uploadEpubBookToCloud,
+} from "@/lib/epub-store";
 
 export const Route = createFileRoute("/biblioteca")({
   head: () => ({
@@ -127,6 +132,8 @@ function BibliotecaPage({ uid }: { uid: string }) {
       const { parseEpubFile } = await import("@/lib/epub-parser");
       const book = await parseEpubFile(file);
       await saveEpubBook(book);
+      // Mirror to the cloud (best effort) so the same book opens on other devices.
+      void uploadEpubBookToCloud(uid, book);
       await addToLibrary(
         uid,
         { title: book.title, author: book.author, cover: book.cover, readerId: book.id },

@@ -34,7 +34,7 @@ export function UserAvatar({
   const emoji = profile?.avatarEmoji;
   const photo = profile?.customPhotoDataUrl || profile?.photoURL || user?.photoURL;
   const name = (profile?.displayName || user?.displayName || user?.email || "Leitor").trim();
-  const base = `grid shrink-0 place-items-center rounded-full bg-gold/10 ring-1 ring-gold/40 ${SIZES[size]} ${className}`;
+  const base = `relative grid shrink-0 place-items-center overflow-hidden rounded-full bg-gold/10 ring-1 ring-gold/40 ${SIZES[size]} ${className}`;
 
   if (emoji) {
     return (
@@ -46,7 +46,13 @@ export function UserAvatar({
   if (photo) {
     return (
       <span className={base}>
-        <img src={photo} alt="" className="h-full w-full rounded-full object-cover" />
+        {/* Positioned absolutely (not sized with h-full/w-full as a normal
+            grid child) so a non-square photo can't blow out the fixed-size
+            circle: images are replaced elements, and a display:grid track
+            sizes itself off the content's own intrinsic dimensions unless
+            the content is taken out of grid flow entirely. That grid
+            blowout was the cause of the oval, overflowing avatar. */}
+        <img src={photo} alt="" className="absolute inset-0 h-full w-full rounded-full object-cover" />
       </span>
     );
   }
