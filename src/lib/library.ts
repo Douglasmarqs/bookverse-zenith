@@ -25,18 +25,32 @@ import { awardXp, recordReadingActivity } from "./user-profile";
 import { withDeadline, withFallback } from "./async-utils";
 import type { BookMeta } from "./google-books";
 
-export type LibraryStatus = "quero-ler" | "lendo" | "concluido";
+export type LibraryStatus = "quero-ler" | "lendo" | "concluido" | "relendo" | "abandonado";
+
+export const LIBRARY_STATUSES: LibraryStatus[] = [
+  "lendo",
+  "quero-ler",
+  "concluido",
+  "relendo",
+  "abandonado",
+];
 
 export interface LibraryEntry extends BookMeta {
   id: string;
   status: LibraryStatus;
   addedAt?: unknown;
+  /** Marked as a favorite — an orthogonal flag, so a favorite book still
+   * lives on whichever shelf (status) it belongs to. */
+  favorite?: boolean;
+  /** 0–5 stars, in whole stars. `undefined`/0 means "not rated yet". */
+  rating?: number;
   /** Present when this title can be opened in the in-app reader (sample
    * book or a public-domain Gutenberg title). Absent for catalog-only
    * entries (Google Books / Open Library), which link out to a details
    * page instead. */
   readerId?: string | null;
 }
+
 
 const READ_TIMEOUT_MS = 5000;
 const WRITE_TIMEOUT_MS = 10000;
@@ -233,5 +247,34 @@ export function subscribeLibrary(uid: string, cb: (entries: LibraryEntry[]) => v
       console.warn("[library] subscribe failed", err);
       cb([]);
     },
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Favoritos e avaliação
+ *
+ * Ambos são campos independentes do status (uma "estante"): um livro pode
+ * estar em "Lendo" e ser favorito ao mesmo tempo, exatamente como no
+ * Skoob. Falham com Error amigável para o botão poder exibir um toast.
+ * ------------------------------------------------------------------ */
+
+export async function setFavorite(uid: string, id: string, favorite: boolean): Promise<void> {
+  const fb = getFirebase();
+  if (!fb) throw new Error("O login não está disponível neste ambiente agora.");
+  await withDeadline(
+    setDoc(doc(fb.db, "users", uid, "library", id), { favorite }, { merge: true }),
+    WRITE_TIMEOUT_MS,
+    "Não foi possível atualizar os favoritos agora. Tente novamente.",
+  );
+}
+
+export async function setRating(uid: string, id: string, rating: number): Promise<void> {
+  const fb = getFirebase();
+  if (!fb) throw new Error("O login não está disponível neste ambiente agora.");
+  const clamped = Math.max(0, Math.min(5, Math.round(rating)));
+  await withDeadline(
+    setDoc(doc(fb.db, "users", uid, "library", id), { rating: clamped }, { merge: true }),
+    WRITE_TIMEOUT_MS,
+    "Não foi possível salvar sua avaliação agora. Tente novamente.",
   );
 }

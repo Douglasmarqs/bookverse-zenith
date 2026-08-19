@@ -4,23 +4,28 @@ import {
   Trash2,
   BookOpen,
   BookOpenCheck,
-  ArrowUpRight,
   Loader2,
   UploadCloud,
   FileUp,
   Search,
   X,
   ChevronDown,
+  Heart,
+  Star,
 } from "lucide-react";
 import { toast } from "sonner";
 import { describeFirestoreError } from "@/lib/async-utils";
 import { useRequireAuth } from "@/hooks/use-require-auth";
+import { TelegramCard } from "@/components/telegram-card";
 import {
   addToLibrary,
   removeFromLibrary,
+  setFavorite,
   setLibraryStatus,
+  setRating,
   slugFor,
   subscribeLibrary,
+  LIBRARY_STATUSES,
   type LibraryEntry,
   type LibraryStatus,
 } from "@/lib/library";
@@ -30,6 +35,7 @@ import {
   saveEpubBook,
   uploadEpubBookToCloud,
 } from "@/lib/epub-store";
+
 
 export const Route = createFileRoute("/biblioteca")({
   head: () => ({
@@ -46,10 +52,22 @@ const STATUS_LABEL: Record<LibraryStatus, string> = {
   "quero-ler": "Quero ler",
   lendo: "Lendo",
   concluido: "Concluído",
+  relendo: "Relendo",
+  abandonado: "Abandonado",
 };
 
-type FilterTab = "todos" | LibraryStatus;
-type SortKey = "recent" | "title" | "author";
+/** Cor de "marcador de página" por estante, como nas capas do Skoob. */
+const STATUS_BADGE: Record<LibraryStatus, string> = {
+  lendo: "bg-gold/90 text-primary-foreground",
+  "quero-ler": "bg-background/85 text-foreground ring-1 ring-border/60",
+  concluido: "bg-emerald-500/85 text-white",
+  relendo: "bg-sky-500/85 text-white",
+  abandonado: "bg-zinc-600/85 text-white",
+};
+
+type FilterTab = "todos" | "favoritos" | LibraryStatus;
+type SortKey = "recent" | "title" | "author" | "rating";
+
 
 function GuardedBibliotecaPage() {
   const { state, user } = useRequireAuth();

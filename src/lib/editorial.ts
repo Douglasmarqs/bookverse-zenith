@@ -224,4 +224,4 @@ export const READING_TRACKS: ReadingTrack[] = [
  * Canal/chat da comunidade no Telegram. Assim que o link do canal for
  * informado, basta preenchê-lo aqui e o card vira um convite ativo.
  */
-export const TELEGRAM_CHANNEL_URL: string | null = null;
+export const TELEGRAM_CHANNEL_URL: string | null = "https://t.me/livros_em_epub";
