@@ -46,10 +46,22 @@ const STATUS_LABEL: Record<LibraryStatus, string> = {
   "quero-ler": "Quero ler",
   lendo: "Lendo",
   concluido: "Concluído",
+  relendo: "Relendo",
+  abandonado: "Abandonado",
 };
 
-type FilterTab = "todos" | LibraryStatus;
-type SortKey = "recent" | "title" | "author";
+/** Cor de "marcador de página" por estante, como nas capas do Skoob. */
+const STATUS_BADGE: Record<LibraryStatus, string> = {
+  lendo: "bg-gold/90 text-primary-foreground",
+  "quero-ler": "bg-background/85 text-foreground ring-1 ring-border/60",
+  concluido: "bg-emerald-500/85 text-white",
+  relendo: "bg-sky-500/85 text-white",
+  abandonado: "bg-zinc-600/85 text-white",
+};
+
+type FilterTab = "todos" | "favoritos" | LibraryStatus;
+type SortKey = "recent" | "title" | "author" | "rating";
+
 
 function GuardedBibliotecaPage() {
   const { state, user } = useRequireAuth();
