@@ -25,18 +25,32 @@ import { awardXp, recordReadingActivity } from "./user-profile";
 import { withDeadline, withFallback } from "./async-utils";
 import type { BookMeta } from "./google-books";
 
-export type LibraryStatus = "quero-ler" | "lendo" | "concluido";
+export type LibraryStatus = "quero-ler" | "lendo" | "concluido" | "relendo" | "abandonado";
+
+export const LIBRARY_STATUSES: LibraryStatus[] = [
+  "lendo",
+  "quero-ler",
+  "concluido",
+  "relendo",
+  "abandonado",
+];
 
 export interface LibraryEntry extends BookMeta {
   id: string;
   status: LibraryStatus;
   addedAt?: unknown;
+  /** Marked as a favorite — an orthogonal flag, so a favorite book still
+   * lives on whichever shelf (status) it belongs to. */
+  favorite?: boolean;
+  /** 0–5 stars, in whole stars. `undefined`/0 means "not rated yet". */
+  rating?: number;
   /** Present when this title can be opened in the in-app reader (sample
    * book or a public-domain Gutenberg title). Absent for catalog-only
    * entries (Google Books / Open Library), which link out to a details
    * page instead. */
   readerId?: string | null;
 }
+
 
 const READ_TIMEOUT_MS = 5000;
 const WRITE_TIMEOUT_MS = 10000;
