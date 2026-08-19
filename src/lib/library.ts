@@ -249,3 +249,32 @@ export function subscribeLibrary(uid: string, cb: (entries: LibraryEntry[]) => v
     },
   );
 }
+
+/* ------------------------------------------------------------------ *
+ * Favoritos e avaliação
+ *
+ * Ambos são campos independentes do status (uma "estante"): um livro pode
+ * estar em "Lendo" e ser favorito ao mesmo tempo, exatamente como no
+ * Skoob. Falham com Error amigável para o botão poder exibir um toast.
+ * ------------------------------------------------------------------ */
+
+export async function setFavorite(uid: string, id: string, favorite: boolean): Promise<void> {
+  const fb = getFirebase();
+  if (!fb) throw new Error("O login não está disponível neste ambiente agora.");
+  await withDeadline(
+    setDoc(doc(fb.db, "users", uid, "library", id), { favorite }, { merge: true }),
+    WRITE_TIMEOUT_MS,
+    "Não foi possível atualizar os favoritos agora. Tente novamente.",
+  );
+}
+
+export async function setRating(uid: string, id: string, rating: number): Promise<void> {
+  const fb = getFirebase();
+  if (!fb) throw new Error("O login não está disponível neste ambiente agora.");
+  const clamped = Math.max(0, Math.min(5, Math.round(rating)));
+  await withDeadline(
+    setDoc(doc(fb.db, "users", uid, "library", id), { rating: clamped }, { merge: true }),
+    WRITE_TIMEOUT_MS,
+    "Não foi possível salvar sua avaliação agora. Tente novamente.",
+  );
+}
