@@ -4,23 +4,28 @@ import {
   Trash2,
   BookOpen,
   BookOpenCheck,
-  ArrowUpRight,
   Loader2,
   UploadCloud,
   FileUp,
   Search,
   X,
   ChevronDown,
+  Heart,
+  Star,
 } from "lucide-react";
 import { toast } from "sonner";
 import { describeFirestoreError } from "@/lib/async-utils";
 import { useRequireAuth } from "@/hooks/use-require-auth";
+import { TelegramCard } from "@/components/telegram-card";
 import {
   addToLibrary,
   removeFromLibrary,
+  setFavorite,
   setLibraryStatus,
+  setRating,
   slugFor,
   subscribeLibrary,
+  LIBRARY_STATUSES,
   type LibraryEntry,
   type LibraryStatus,
 } from "@/lib/library";
@@ -30,6 +35,7 @@ import {
   saveEpubBook,
   uploadEpubBookToCloud,
 } from "@/lib/epub-store";
+
 
 export const Route = createFileRoute("/biblioteca")({
   head: () => ({
