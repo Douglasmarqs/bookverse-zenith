@@ -420,7 +420,7 @@ function Section({
   eyebrow: string;
   title: string;
   action?: string;
-  actionTo?: "/biblioteca" | "/desafios";
+  actionTo?: "/biblioteca" | "/desafios" | "/metas";
   icon?: React.ReactNode;
   children: React.ReactNode;
 }) {
