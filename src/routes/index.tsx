@@ -5,6 +5,7 @@ import {
   ArrowUpRight,
   BookOpenCheck,
   Clock3,
+  Flame,
   Highlighter,
   Library,
   MoonStar,
@@ -17,7 +18,9 @@ import {
 import heroImg from "@/assets/hero-library.webp";
 import { LumiMascot } from "@/components/lumi-mascot";
 import { LiteraryFactCard } from "@/components/literary-fact-card";
+import { HabitSummary } from "@/components/habit-summary";
 import { EpubImport } from "@/components/epub-import";
+
 import { SAMPLE_BOOKS } from "@/lib/sample-book";
 import { openLumiPanel } from "@/lib/lumi-panel-store";
 import { subscribeRanking, type RankingRow } from "@/lib/ranking";
