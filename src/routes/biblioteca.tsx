@@ -478,6 +478,18 @@ function BookCard({
         </div>
       </Link>
 
+      {/* Favorito — fora do <Link> para o clique não abrir o livro */}
+      <button
+        onClick={onToggleFavorite}
+        aria-label={entry.favorite ? "Remover dos favoritos" : "Marcar como favorito"}
+        aria-pressed={entry.favorite ?? false}
+        className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full bg-background/80 ring-1 ring-border/60 backdrop-blur-sm transition hover:scale-110"
+      >
+        <Heart
+          className={`h-3.5 w-3.5 ${entry.favorite ? "fill-destructive text-destructive" : "text-muted-foreground"}`}
+        />
+      </button>
+
       <div className="mt-3 flex items-start justify-between gap-1">
         <div className="min-w-0">
           <Link
@@ -487,7 +499,26 @@ function BookCard({
             {entry.title}
           </Link>
           <p className="mt-0.5 truncate text-xs text-muted-foreground">{entry.author}</p>
+          <div className="mt-1.5 flex items-center gap-0.5">
+            {[1, 2, 3, 4, 5].map((star) => (
+              <button
+                key={star}
+                onClick={() => onRate(entry.rating === star ? 0 : star)}
+                aria-label={`Avaliar com ${star} estrela${star === 1 ? "" : "s"}`}
+                className="p-0.5 transition hover:scale-125"
+              >
+                <Star
+                  className={`h-3 w-3 ${
+                    (entry.rating ?? 0) >= star
+                      ? "fill-gold text-gold"
+                      : "text-muted-foreground/50"
+                  }`}
+                />
+              </button>
+            ))}
+          </div>
         </div>
+
 
         <div className="relative shrink-0">
           <button
