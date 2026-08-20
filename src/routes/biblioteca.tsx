@@ -172,14 +172,26 @@ function BibliotecaPage({ uid }: { uid: string }) {
   }
 
   const counts = useMemo(() => {
-    const c = { todos: entries?.length ?? 0, "quero-ler": 0, lendo: 0, concluido: 0 };
-    for (const e of entries ?? []) c[e.status] += 1;
+    const c: Record<FilterTab, number> = {
+      todos: entries?.length ?? 0,
+      favoritos: 0,
+      "quero-ler": 0,
+      lendo: 0,
+      concluido: 0,
+      relendo: 0,
+      abandonado: 0,
+    };
+    for (const e of entries ?? []) {
+      if (e.status in c) c[e.status] += 1;
+      if (e.favorite) c.favoritos += 1;
+    }
     return c;
   }, [entries]);
 
   const visible = useMemo(() => {
     let list = entries ?? [];
-    if (filter !== "todos") list = list.filter((e) => e.status === filter);
+    if (filter === "favoritos") list = list.filter((e) => e.favorite);
+    else if (filter !== "todos") list = list.filter((e) => e.status === filter);
     const q = query.trim().toLowerCase();
     if (q) {
       list = list.filter(
@@ -189,6 +201,7 @@ function BibliotecaPage({ uid }: { uid: string }) {
     const sorted = [...list];
     if (sort === "title") sorted.sort((a, b) => a.title.localeCompare(b.title, "pt-BR"));
     else if (sort === "author") sorted.sort((a, b) => a.author.localeCompare(b.author, "pt-BR"));
+    else if (sort === "rating") sorted.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
     // "recent" relies on Firestore's natural order (addedAt-ish) already
     // present in `entries` — no client re-sort needed.
     return sorted;
@@ -198,7 +211,25 @@ function BibliotecaPage({ uid }: { uid: string }) {
     recent: "Adicionados recentemente",
     title: "Título (A–Z)",
     author: "Autor (A–Z)",
+    rating: "Melhor avaliados",
   };
+
+  async function handleFavorite(entry: LibraryEntry) {
+    try {
+      await setFavorite(uid, entry.id, !entry.favorite);
+    } catch (err) {
+      toast.error(describeFirestoreError(err, "Não foi possível atualizar os favoritos."));
+    }
+  }
+
+  async function handleRating(entry: LibraryEntry, rating: number) {
+    try {
+      await setRating(uid, entry.id, rating);
+    } catch (err) {
+      toast.error(describeFirestoreError(err, "Não foi possível salvar sua avaliação."));
+    }
+  }
+
 
   return (
     <div className="mx-auto max-w-7xl px-5 py-12 md:px-8">
