@@ -280,20 +280,23 @@ function BibliotecaPage({ uid }: { uid: string }) {
       {entries && entries.length > 0 && (
         <div className="mt-8 flex flex-wrap items-center gap-3 border-b border-border/60 pb-4">
           <div className="flex flex-wrap gap-1.5">
-            {(["todos", "lendo", "quero-ler", "concluido"] as FilterTab[]).map((f) => (
+            {(["todos", "favoritos", ...LIBRARY_STATUSES] as FilterTab[]).map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition ${
+                className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition ${
                   filter === f
                     ? "bg-gold text-primary-foreground"
                     : "border border-border/60 text-foreground/75 hover:border-gold/40 hover:text-foreground"
                 }`}
               >
-                {f === "todos" ? "Todos" : STATUS_LABEL[f]} · {counts[f]}
+                {f === "favoritos" && <Heart className="h-3 w-3" />}
+                {f === "todos" ? "Todos" : f === "favoritos" ? "Favoritos" : STATUS_LABEL[f]} ·{" "}
+                {counts[f]}
               </button>
             ))}
           </div>
+
 
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:ml-auto">
             <label className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-border/60 px-3 py-1.5 sm:flex-none">
