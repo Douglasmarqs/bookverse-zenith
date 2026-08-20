@@ -397,10 +397,14 @@ function BibliotecaPage({ uid }: { uid: string }) {
               busy={busy.has(entry.id)}
               onStatusChange={(status) => handleStatusChange(entry.id, status)}
               onRemove={() => handleRemove(entry)}
+              onToggleFavorite={() => void handleFavorite(entry)}
+              onRate={(rating) => void handleRating(entry, rating)}
             />
           ))}
         </div>
       )}
+
+      <TelegramCard />
     </div>
   );
 }
@@ -410,12 +414,17 @@ function BookCard({
   busy,
   onStatusChange,
   onRemove,
+  onToggleFavorite,
+  onRate,
 }: {
   entry: LibraryEntry;
   busy: boolean;
   onStatusChange: (status: LibraryStatus) => void;
   onRemove: () => void;
+  onToggleFavorite: () => void;
+  onRate: (rating: number) => void;
 }) {
+
   const [menuOpen, setMenuOpen] = useState(false);
   const primaryHref = entry.readerId
     ? { to: "/reader/$bookId" as const, params: { bookId: entry.readerId } }
