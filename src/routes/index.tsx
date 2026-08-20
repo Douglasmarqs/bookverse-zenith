@@ -5,6 +5,7 @@ import {
   ArrowUpRight,
   BookOpenCheck,
   Clock3,
+  Flame,
   Highlighter,
   Library,
   MoonStar,
@@ -17,7 +18,9 @@ import {
 import heroImg from "@/assets/hero-library.webp";
 import { LumiMascot } from "@/components/lumi-mascot";
 import { LiteraryFactCard } from "@/components/literary-fact-card";
+import { HabitSummary } from "@/components/habit-summary";
 import { EpubImport } from "@/components/epub-import";
+
 import { SAMPLE_BOOKS } from "@/lib/sample-book";
 import { openLumiPanel } from "@/lib/lumi-panel-store";
 import { subscribeRanking, type RankingRow } from "@/lib/ranking";
@@ -193,6 +196,21 @@ function Home() {
           </div>
         )}
       </Section>
+
+      {/* HABIT / GOALS */}
+      {signedIn && (
+        <Section
+          eyebrow="Seu hábito"
+          title="Constância, meta e nível"
+          action="Ver metas"
+          actionTo="/metas"
+          icon={<Flame className="h-4 w-4" />}
+        >
+          <HabitSummary uid={user!.uid} />
+        </Section>
+      )}
+
+
 
       {/* SHELF */}
       {shelf.length > 0 && (
@@ -402,7 +420,7 @@ function Section({
   eyebrow: string;
   title: string;
   action?: string;
-  actionTo?: "/biblioteca" | "/desafios";
+  actionTo?: "/biblioteca" | "/desafios" | "/metas";
   icon?: React.ReactNode;
   children: React.ReactNode;
 }) {
