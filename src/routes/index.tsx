@@ -194,6 +194,21 @@ function Home() {
         )}
       </Section>
 
+      {/* HABIT / GOALS */}
+      {signedIn && (
+        <Section
+          eyebrow="Seu hábito"
+          title="Constância, meta e nível"
+          action="Ver metas"
+          actionTo="/metas"
+          icon={<Flame className="h-4 w-4" />}
+        >
+          <HabitSummary uid={user!.uid} />
+        </Section>
+      )}
+
+
+
       {/* SHELF */}
       {shelf.length > 0 && (
         <Section
