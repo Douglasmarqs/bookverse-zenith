@@ -13,8 +13,10 @@ const NAV = [
   { label: "Início", to: "/" as const },
   { label: "Descobrir", to: "/descobrir" as const },
   { label: "Minha biblioteca", to: "/biblioteca" as const },
+  { label: "Metas", to: "/metas" as const },
   { label: "Desafios", to: "/desafios" as const },
   { label: "Ranking", to: "/ranking" as const },
+
 ];
 
 export function SiteHeader() {

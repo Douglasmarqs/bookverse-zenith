@@ -172,14 +172,26 @@ function BibliotecaPage({ uid }: { uid: string }) {
   }
 
   const counts = useMemo(() => {
-    const c = { todos: entries?.length ?? 0, "quero-ler": 0, lendo: 0, concluido: 0 };
-    for (const e of entries ?? []) c[e.status] += 1;
+    const c: Record<FilterTab, number> = {
+      todos: entries?.length ?? 0,
+      favoritos: 0,
+      "quero-ler": 0,
+      lendo: 0,
+      concluido: 0,
+      relendo: 0,
+      abandonado: 0,
+    };
+    for (const e of entries ?? []) {
+      if (e.status in c) c[e.status] += 1;
+      if (e.favorite) c.favoritos += 1;
+    }
     return c;
   }, [entries]);
 
   const visible = useMemo(() => {
     let list = entries ?? [];
-    if (filter !== "todos") list = list.filter((e) => e.status === filter);
+    if (filter === "favoritos") list = list.filter((e) => e.favorite);
+    else if (filter !== "todos") list = list.filter((e) => e.status === filter);
     const q = query.trim().toLowerCase();
     if (q) {
       list = list.filter(
@@ -189,6 +201,7 @@ function BibliotecaPage({ uid }: { uid: string }) {
     const sorted = [...list];
     if (sort === "title") sorted.sort((a, b) => a.title.localeCompare(b.title, "pt-BR"));
     else if (sort === "author") sorted.sort((a, b) => a.author.localeCompare(b.author, "pt-BR"));
+    else if (sort === "rating") sorted.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
     // "recent" relies on Firestore's natural order (addedAt-ish) already
     // present in `entries` — no client re-sort needed.
     return sorted;
@@ -198,7 +211,25 @@ function BibliotecaPage({ uid }: { uid: string }) {
     recent: "Adicionados recentemente",
     title: "Título (A–Z)",
     author: "Autor (A–Z)",
+    rating: "Melhor avaliados",
   };
+
+  async function handleFavorite(entry: LibraryEntry) {
+    try {
+      await setFavorite(uid, entry.id, !entry.favorite);
+    } catch (err) {
+      toast.error(describeFirestoreError(err, "Não foi possível atualizar os favoritos."));
+    }
+  }
+
+  async function handleRating(entry: LibraryEntry, rating: number) {
+    try {
+      await setRating(uid, entry.id, rating);
+    } catch (err) {
+      toast.error(describeFirestoreError(err, "Não foi possível salvar sua avaliação."));
+    }
+  }
+
 
   return (
     <div className="mx-auto max-w-7xl px-5 py-12 md:px-8">
@@ -249,20 +280,23 @@ function BibliotecaPage({ uid }: { uid: string }) {
       {entries && entries.length > 0 && (
         <div className="mt-8 flex flex-wrap items-center gap-3 border-b border-border/60 pb-4">
           <div className="flex flex-wrap gap-1.5">
-            {(["todos", "lendo", "quero-ler", "concluido"] as FilterTab[]).map((f) => (
+            {(["todos", "favoritos", ...LIBRARY_STATUSES] as FilterTab[]).map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition ${
+                className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition ${
                   filter === f
                     ? "bg-gold text-primary-foreground"
                     : "border border-border/60 text-foreground/75 hover:border-gold/40 hover:text-foreground"
                 }`}
               >
-                {f === "todos" ? "Todos" : STATUS_LABEL[f]} · {counts[f]}
+                {f === "favoritos" && <Heart className="h-3 w-3" />}
+                {f === "todos" ? "Todos" : f === "favoritos" ? "Favoritos" : STATUS_LABEL[f]} ·{" "}
+                {counts[f]}
               </button>
             ))}
           </div>
+
 
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:ml-auto">
             <label className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-border/60 px-3 py-1.5 sm:flex-none">
@@ -363,10 +397,14 @@ function BibliotecaPage({ uid }: { uid: string }) {
               busy={busy.has(entry.id)}
               onStatusChange={(status) => handleStatusChange(entry.id, status)}
               onRemove={() => handleRemove(entry)}
+              onToggleFavorite={() => void handleFavorite(entry)}
+              onRate={(rating) => void handleRating(entry, rating)}
             />
           ))}
         </div>
       )}
+
+      <TelegramCard />
     </div>
   );
 }
@@ -376,12 +414,17 @@ function BookCard({
   busy,
   onStatusChange,
   onRemove,
+  onToggleFavorite,
+  onRate,
 }: {
   entry: LibraryEntry;
   busy: boolean;
   onStatusChange: (status: LibraryStatus) => void;
   onRemove: () => void;
+  onToggleFavorite: () => void;
+  onRate: (rating: number) => void;
 }) {
+
   const [menuOpen, setMenuOpen] = useState(false);
   const primaryHref = entry.readerId
     ? { to: "/reader/$bookId" as const, params: { bookId: entry.readerId } }
@@ -409,22 +452,17 @@ function BookCard({
           )}
 
           <span
-            className={`absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-medium backdrop-blur-sm ${
-              entry.status === "concluido"
-                ? "bg-emerald-500/85 text-white"
-                : entry.status === "lendo"
-                  ? "bg-gold/90 text-primary-foreground"
-                  : "bg-background/85 text-foreground ring-1 ring-border/60"
-            }`}
+            className={`absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-medium backdrop-blur-sm ${STATUS_BADGE[entry.status]}`}
           >
             {STATUS_LABEL[entry.status]}
           </span>
 
           {entry.readerId && isEpubReaderId(entry.readerId) && (
-            <span className="absolute right-2 top-2 rounded-full bg-background/85 px-2 py-0.5 text-[9px] font-medium text-foreground/80 ring-1 ring-border/60 backdrop-blur-sm">
+            <span className="absolute bottom-2 left-2 rounded-full bg-background/85 px-2 py-0.5 text-[9px] font-medium text-foreground/80 ring-1 ring-border/60 backdrop-blur-sm">
               EPUB local
             </span>
           )}
+
 
           {/* Hover overlay with the primary action, like a Kindle/Apple Books tap target */}
           <div className="absolute inset-0 hidden items-end justify-center rounded-lg bg-gradient-to-t from-black/70 via-black/10 to-transparent p-3 opacity-0 transition-opacity group-hover:opacity-100 md:flex">
@@ -440,6 +478,18 @@ function BookCard({
         </div>
       </Link>
 
+      {/* Favorito — fora do <Link> para o clique não abrir o livro */}
+      <button
+        onClick={onToggleFavorite}
+        aria-label={entry.favorite ? "Remover dos favoritos" : "Marcar como favorito"}
+        aria-pressed={entry.favorite ?? false}
+        className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full bg-background/80 ring-1 ring-border/60 backdrop-blur-sm transition hover:scale-110"
+      >
+        <Heart
+          className={`h-3.5 w-3.5 ${entry.favorite ? "fill-destructive text-destructive" : "text-muted-foreground"}`}
+        />
+      </button>
+
       <div className="mt-3 flex items-start justify-between gap-1">
         <div className="min-w-0">
           <Link
@@ -449,7 +499,26 @@ function BookCard({
             {entry.title}
           </Link>
           <p className="mt-0.5 truncate text-xs text-muted-foreground">{entry.author}</p>
+          <div className="mt-1.5 flex items-center gap-0.5">
+            {[1, 2, 3, 4, 5].map((star) => (
+              <button
+                key={star}
+                onClick={() => onRate(entry.rating === star ? 0 : star)}
+                aria-label={`Avaliar com ${star} estrela${star === 1 ? "" : "s"}`}
+                className="p-0.5 transition hover:scale-125"
+              >
+                <Star
+                  className={`h-3 w-3 ${
+                    (entry.rating ?? 0) >= star
+                      ? "fill-gold text-gold"
+                      : "text-muted-foreground/50"
+                  }`}
+                />
+              </button>
+            ))}
+          </div>
         </div>
+
 
         <div className="relative shrink-0">
           <button
