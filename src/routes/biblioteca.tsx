@@ -452,22 +452,17 @@ function BookCard({
           )}
 
           <span
-            className={`absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-medium backdrop-blur-sm ${
-              entry.status === "concluido"
-                ? "bg-emerald-500/85 text-white"
-                : entry.status === "lendo"
-                  ? "bg-gold/90 text-primary-foreground"
-                  : "bg-background/85 text-foreground ring-1 ring-border/60"
-            }`}
+            className={`absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-medium backdrop-blur-sm ${STATUS_BADGE[entry.status]}`}
           >
             {STATUS_LABEL[entry.status]}
           </span>
 
           {entry.readerId && isEpubReaderId(entry.readerId) && (
-            <span className="absolute right-2 top-2 rounded-full bg-background/85 px-2 py-0.5 text-[9px] font-medium text-foreground/80 ring-1 ring-border/60 backdrop-blur-sm">
+            <span className="absolute bottom-2 left-2 rounded-full bg-background/85 px-2 py-0.5 text-[9px] font-medium text-foreground/80 ring-1 ring-border/60 backdrop-blur-sm">
               EPUB local
             </span>
           )}
+
 
           {/* Hover overlay with the primary action, like a Kindle/Apple Books tap target */}
           <div className="absolute inset-0 hidden items-end justify-center rounded-lg bg-gradient-to-t from-black/70 via-black/10 to-transparent p-3 opacity-0 transition-opacity group-hover:opacity-100 md:flex">
