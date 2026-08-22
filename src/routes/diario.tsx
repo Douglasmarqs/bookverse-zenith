@@ -98,7 +98,7 @@ function DiaryPage({ uid }: { uid: string }) {
       toast.success("Momento registrado no diário · +10 XP");
       setNote("");
     } catch (err) {
-      toast.error(describeFirestoreError(err));
+      toast.error(describeFirestoreError(err, "Não foi possível concluir agora. Tente novamente."));
     } finally {
       setSaving(false);
     }
@@ -110,7 +110,7 @@ function DiaryPage({ uid }: { uid: string }) {
       await deleteDiaryEntry(uid, id);
       toast.success("Entrada removida.");
     } catch (err) {
-      toast.error(describeFirestoreError(err));
+      toast.error(describeFirestoreError(err, "Não foi possível concluir agora. Tente novamente."));
     } finally {
       setRemovingId(null);
     }
