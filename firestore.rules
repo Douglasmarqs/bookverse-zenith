@@ -37,6 +37,12 @@ service cloud.firestore {
       match /lumi/{contextKey} {
         allow read, write: if request.auth != null && request.auth.uid == uid;
       }
+      match /goals/{year} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+      match /diary/{entryId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
       match /epubFiles/{bookId} {
         allow read, write: if request.auth != null && request.auth.uid == uid;
 
