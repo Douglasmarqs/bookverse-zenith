@@ -15,6 +15,7 @@ import { Route as RankingRouteImport } from './routes/ranking'
 import { Route as PrivacidadeRouteImport } from './routes/privacidade'
 import { Route as PerfilRouteImport } from './routes/perfil'
 import { Route as MetasRouteImport } from './routes/metas'
+import { Route as DiarioRouteImport } from './routes/diario'
 import { Route as DescobrirRouteImport } from './routes/descobrir'
 import { Route as DesafiosRouteImport } from './routes/desafios'
 import { Route as ContatoRouteImport } from './routes/contato'
@@ -53,6 +54,11 @@ const PerfilRoute = PerfilRouteImport.update({
 const MetasRoute = MetasRouteImport.update({
   id: '/metas',
   path: '/metas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DiarioRoute = DiarioRouteImport.update({
+  id: '/diario',
+  path: '/diario',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DescobrirRoute = DescobrirRouteImport.update({
@@ -109,6 +115,7 @@ export interface FileRoutesByFullPath {
   '/contato': typeof ContatoRoute
   '/desafios': typeof DesafiosRoute
   '/descobrir': typeof DescobrirRoute
+  '/diario': typeof DiarioRoute
   '/metas': typeof MetasRoute
   '/perfil': typeof PerfilRoute
   '/privacidade': typeof PrivacidadeRoute
@@ -126,6 +133,7 @@ export interface FileRoutesByTo {
   '/contato': typeof ContatoRoute
   '/desafios': typeof DesafiosRoute
   '/descobrir': typeof DescobrirRoute
+  '/diario': typeof DiarioRoute
   '/metas': typeof MetasRoute
   '/perfil': typeof PerfilRoute
   '/privacidade': typeof PrivacidadeRoute
@@ -144,6 +152,7 @@ export interface FileRoutesById {
   '/contato': typeof ContatoRoute
   '/desafios': typeof DesafiosRoute
   '/descobrir': typeof DescobrirRoute
+  '/diario': typeof DiarioRoute
   '/metas': typeof MetasRoute
   '/perfil': typeof PerfilRoute
   '/privacidade': typeof PrivacidadeRoute
@@ -163,6 +172,7 @@ export interface FileRouteTypes {
     | '/contato'
     | '/desafios'
     | '/descobrir'
+    | '/diario'
     | '/metas'
     | '/perfil'
     | '/privacidade'
@@ -180,6 +190,7 @@ export interface FileRouteTypes {
     | '/contato'
     | '/desafios'
     | '/descobrir'
+    | '/diario'
     | '/metas'
     | '/perfil'
     | '/privacidade'
@@ -197,6 +208,7 @@ export interface FileRouteTypes {
     | '/contato'
     | '/desafios'
     | '/descobrir'
+    | '/diario'
     | '/metas'
     | '/perfil'
     | '/privacidade'
@@ -215,6 +227,7 @@ export interface RootRouteChildren {
   ContatoRoute: typeof ContatoRoute
   DesafiosRoute: typeof DesafiosRoute
   DescobrirRoute: typeof DescobrirRoute
+  DiarioRoute: typeof DiarioRoute
   MetasRoute: typeof MetasRoute
   PerfilRoute: typeof PerfilRoute
   PrivacidadeRoute: typeof PrivacidadeRoute
@@ -267,6 +280,13 @@ declare module '@tanstack/react-router' {
       path: '/metas'
       fullPath: '/metas'
       preLoaderRoute: typeof MetasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/diario': {
+      id: '/diario'
+      path: '/diario'
+      fullPath: '/diario'
+      preLoaderRoute: typeof DiarioRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/descobrir': {
@@ -343,6 +363,7 @@ const rootRouteChildren: RootRouteChildren = {
   ContatoRoute: ContatoRoute,
   DesafiosRoute: DesafiosRoute,
   DescobrirRoute: DescobrirRoute,
+  DiarioRoute: DiarioRoute,
   MetasRoute: MetasRoute,
   PerfilRoute: PerfilRoute,
   PrivacidadeRoute: PrivacidadeRoute,
