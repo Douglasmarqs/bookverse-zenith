@@ -278,6 +278,8 @@ export async function deleteUserData(uid: string): Promise<void> {
   await deleteCollection(`users/${uid}/progress`);
   await deleteCollection(`users/${uid}/annotations`);
   await deleteCollection(`users/${uid}/lumi`);
+  await deleteCollection(`users/${uid}/goals`);
+  await deleteCollection(`users/${uid}/diary`);
   try {
     await deleteDoc(doc(fb.db, "users", uid));
   } catch (err) {
