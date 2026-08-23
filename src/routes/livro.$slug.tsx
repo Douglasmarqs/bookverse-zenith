@@ -5,9 +5,10 @@ import { toast } from "sonner";
 import { describeFirestoreError } from "@/lib/async-utils";
 import { z } from "zod";
 import { fetchBookMeta, type BookMeta } from "@/lib/google-books";
-import { addToLibrary } from "@/lib/library";
+import { addToLibrary, slugFor } from "@/lib/library";
 import { subscribeAuth } from "@/lib/firebase";
 import { BookCover } from "@/components/book-cover";
+import { BookReviews } from "@/components/book-reviews";
 import type { User } from "firebase/auth";
 
 const searchSchema = z.object({
@@ -61,6 +62,9 @@ function LivroDetalhesPage() {
   const resolvedAuthor = meta?.author || author || "Autor desconhecido";
   const description = meta?.description;
   const categories = meta?.categories ?? [];
+  // Id estável das resenhas: derivado dos parâmetros da URL (não do meta
+  // carregado depois), para não trocar de coleção quando a busca resolver.
+  const bookId = slugFor(title, author || undefined);
 
   async function handleAdd() {
     if (!user || user.isAnonymous) {
@@ -188,6 +192,10 @@ function LivroDetalhesPage() {
           </section>
         </div>
       </div>
+
+      <section className="mt-16 border-t border-border/50 pt-10">
+        <BookReviews bookId={bookId} user={user} />
+      </section>
     </div>
   );
 }
