@@ -100,7 +100,11 @@ export function BookReviews({ bookId, user }: { bookId: string; user: User | nul
           <ReviewEditor bookId={bookId} user={user} profile={profile} own={own} />
         ) : (
           <div className="rounded-xl border border-dashed border-border/70 bg-card/30 p-5 text-sm text-muted-foreground">
-            <Link to="/auth" className="font-medium text-gold hover:underline">
+            <Link
+              to="/auth"
+              search={{ redirect: undefined }}
+              className="font-medium text-gold hover:underline"
+            >
               Entre com sua conta
             </Link>{" "}
             para escrever uma resenha e curtir as de outros leitores.
