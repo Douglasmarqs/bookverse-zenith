@@ -15,6 +15,12 @@ rules_version = '2';
 //                                  under a `chunks` subcollection so the
 //                                  same book opens on another device —
 //                                  owner-only
+//   users/{uid}/reviewIndex/{id}   mirror of the user's published reviews,
+//                                  used by account deletion — owner-only
+//   books/{id}/reviews/{uid}       community reviews — readable by anyone
+//                                  signed in; each reader writes only their
+//                                  own (doc id = uid), no anonymous writes;
+//                                  likes live under a `likes` subcollection
 //   publicDomainBooks/{id}         Gutenberg text cache — Admin SDK only
 //                                  (Cloud Functions bypass these rules), so
 //                                  it's intentionally left with no client
