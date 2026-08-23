@@ -5,9 +5,10 @@ import { toast } from "sonner";
 import { describeFirestoreError } from "@/lib/async-utils";
 import { z } from "zod";
 import { fetchBookMeta, type BookMeta } from "@/lib/google-books";
-import { addToLibrary } from "@/lib/library";
+import { addToLibrary, slugFor } from "@/lib/library";
 import { subscribeAuth } from "@/lib/firebase";
 import { BookCover } from "@/components/book-cover";
+import { BookReviews } from "@/components/book-reviews";
 import type { User } from "firebase/auth";
 
 const searchSchema = z.object({

@@ -280,6 +280,23 @@ export async function deleteUserData(uid: string): Promise<void> {
   await deleteCollection(`users/${uid}/lumi`);
   await deleteCollection(`users/${uid}/goals`);
   await deleteCollection(`users/${uid}/diary`);
+
+  // Resenhas publicadas vivem fora do espaço do usuário
+  // (books/{livro}/reviews/{uid}); o espelho em reviewIndex permite
+  // localizá-las sem collection group query.
+  try {
+    const snap = await withDeadline(
+      getDocs(collection(fb.db, "users", uid, "reviewIndex")),
+      WRITE_TIMEOUT_MS,
+      "timeout",
+    );
+    await Promise.all(
+      snap.docs.map((d) => deleteDoc(doc(fb.db, "books", d.id, "reviews", uid)).catch(() => {})),
+    );
+  } catch (err) {
+    console.warn("[user-profile] failed to delete reviews", err);
+  }
+  await deleteCollection(`users/${uid}/reviewIndex`);
   try {
     await deleteDoc(doc(fb.db, "users", uid));
   } catch (err) {
