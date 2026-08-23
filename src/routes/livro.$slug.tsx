@@ -62,6 +62,9 @@ function LivroDetalhesPage() {
   const resolvedAuthor = meta?.author || author || "Autor desconhecido";
   const description = meta?.description;
   const categories = meta?.categories ?? [];
+  // Id estável das resenhas: derivado dos parâmetros da URL (não do meta
+  // carregado depois), para não trocar de coleção quando a busca resolver.
+  const bookId = slugFor(title, author || undefined);
 
   async function handleAdd() {
     if (!user || user.isAnonymous) {
@@ -189,6 +192,10 @@ function LivroDetalhesPage() {
           </section>
         </div>
       </div>
+
+      <section className="mt-16 border-t border-border/50 pt-10">
+        <BookReviews bookId={bookId} user={user} />
+      </section>
     </div>
   );
 }
