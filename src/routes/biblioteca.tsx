@@ -232,15 +232,15 @@ function BibliotecaPage({ uid }: { uid: string }) {
 
 
   return (
-    <div className="mx-auto max-w-7xl px-5 py-12 md:px-8">
+    <div className="mx-auto max-w-7xl px-5 py-10 md:px-8 md:py-12">
       {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      <div className="social-card flex flex-wrap items-end justify-between gap-4 p-5 sm:p-7">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.28em] text-gold">Minha biblioteca</p>
-          <h1 className="mt-2 font-display text-4xl font-medium md:text-5xl">Seus livros</h1>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gold">Minha biblioteca</p>
+          <h1 className="mt-2 font-display text-4xl font-semibold md:text-5xl">Sua estante</h1>
           {entries && entries.length > 0 && (
             <p className="mt-2 text-sm text-muted-foreground">
-              {counts.todos} {counts.todos === 1 ? "livro" : "livros"} · {counts.lendo} lendo ·{" "}
+              {counts.todos} {counts.todos === 1 ? "livro" : "livros"} organizados · {counts.lendo} lendo ·{" "}
               {counts.concluido} concluído{counts.concluido === 1 ? "" : "s"}
             </p>
           )}
@@ -260,7 +260,7 @@ function BibliotecaPage({ uid }: { uid: string }) {
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            className="inline-flex items-center gap-2 rounded-full border border-gold/30 bg-gold/5 px-4 py-2.5 text-sm font-medium text-gold hover:bg-gold/10 disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-xl bg-gold px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-md shadow-gold/20 transition hover:-translate-y-0.5 disabled:opacity-60"
           >
             {uploading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -271,14 +271,14 @@ function BibliotecaPage({ uid }: { uid: string }) {
           </button>
         </div>
       </div>
-      <p className="mt-3 max-w-2xl text-sm text-muted-foreground">
+      <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground">
         Importe um arquivo <code className="font-mono">.epub</code> do seu computador para ler aqui
         mesmo, com a mesma experiência de leitura dos outros livros. O arquivo fica salvo neste
         navegador — se quiser lê-lo em outro dispositivo, importe-o novamente lá.
       </p>
 
       {entries && entries.length > 0 && (
-        <div className="mt-8 flex flex-wrap items-center gap-3 border-b border-border/60 pb-4">
+        <div className="mt-8 flex flex-wrap items-center gap-3 border-b border-border/70 pb-4">
           <div className="flex flex-wrap gap-1.5">
             {(["todos", "favoritos", ...LIBRARY_STATUSES] as FilterTab[]).map((f) => (
               <button
@@ -286,8 +286,8 @@ function BibliotecaPage({ uid }: { uid: string }) {
                 onClick={() => setFilter(f)}
                 className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition ${
                   filter === f
-                    ? "bg-gold text-primary-foreground"
-                    : "border border-border/60 text-foreground/75 hover:border-gold/40 hover:text-foreground"
+                    ? "bg-gold text-primary-foreground shadow-sm shadow-gold/20"
+                    : "border border-border/70 bg-card/60 text-foreground/75 hover:border-gold/40 hover:text-gold"
                 }`}
               >
                 {f === "favoritos" && <Heart className="h-3 w-3" />}
@@ -299,7 +299,7 @@ function BibliotecaPage({ uid }: { uid: string }) {
 
 
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:ml-auto">
-            <label className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-border/60 px-3 py-1.5 sm:flex-none">
+            <label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-border/70 bg-card/70 px-3 py-2 sm:flex-none">
               <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               <input
                 value={query}
@@ -317,7 +317,7 @@ function BibliotecaPage({ uid }: { uid: string }) {
             <div className="relative shrink-0">
               <button
                 onClick={() => setSortMenuOpen((v) => !v)}
-                className="flex items-center gap-1.5 rounded-full border border-border/60 px-3 py-1.5 text-xs text-foreground/75 hover:text-foreground"
+                className="flex items-center gap-1.5 rounded-xl border border-border/70 bg-card/70 px-3 py-2 text-xs font-medium text-foreground/75 hover:border-gold/40 hover:text-gold"
               >
                 <span className="sm:hidden">Ordenar</span>
                 <span className="hidden sm:inline">{SORT_LABEL[sort]}</span>
@@ -360,27 +360,27 @@ function BibliotecaPage({ uid }: { uid: string }) {
           ))}
         </div>
       ) : entries.length === 0 ? (
-        <div className="mt-10 rounded-2xl border border-dashed border-border/60 p-12 text-center">
+        <div className="social-card mt-10 border-dashed p-12 text-center">
           <FileUp className="mx-auto h-6 w-6 text-muted-foreground" />
           <p className="mt-3 text-muted-foreground">Sua biblioteca está vazia por enquanto.</p>
           <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
             <Link
               to="/descobrir"
               search={{ q: undefined, categoria: undefined }}
-              className="inline-flex items-center gap-2 rounded-full bg-gold px-5 py-2.5 text-sm font-medium text-primary-foreground"
+              className="inline-flex items-center gap-2 rounded-xl bg-gold px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-md shadow-gold/20"
             >
               Descobrir livros
             </Link>
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="inline-flex items-center gap-2 rounded-full border border-border/60 px-5 py-2.5 text-sm hover:border-gold/40 hover:text-gold"
+              className="inline-flex items-center gap-2 rounded-xl border border-border/70 bg-card px-5 py-2.5 text-sm font-semibold hover:border-gold/40 hover:text-gold"
             >
               Ou importe um EPUB
             </button>
           </div>
         </div>
       ) : visible.length === 0 ? (
-        <div className="mt-10 rounded-2xl border border-dashed border-border/60 p-12 text-center">
+        <div className="social-card mt-10 border-dashed p-12 text-center">
           <Search className="mx-auto h-6 w-6 text-muted-foreground" />
           <p className="mt-3 text-muted-foreground">
             {query
@@ -435,7 +435,7 @@ function BookCard({
       };
 
   return (
-    <div className="group relative">
+    <div className="group relative rounded-xl p-1.5 transition-colors hover:bg-card/65">
       <Link {...primaryHref} className="block">
         <div className="relative">
           {entry.cover ? (
@@ -443,7 +443,7 @@ function BookCard({
               src={entry.cover}
               alt={entry.title}
               loading="lazy"
-              className="book-shadow aspect-[2/3] w-full rounded-lg object-cover transition-transform duration-300 group-hover:-translate-y-1"
+              className="book-shadow aspect-[2/3] w-full rounded-lg object-cover transition-transform duration-300 group-hover:-translate-y-1 group-hover:shadow-xl"
             />
           ) : (
             <div className="book-shadow grid aspect-[2/3] w-full place-items-center rounded-lg bg-secondary p-3 text-center transition-transform duration-300 group-hover:-translate-y-1">
@@ -483,7 +483,7 @@ function BookCard({
         onClick={onToggleFavorite}
         aria-label={entry.favorite ? "Remover dos favoritos" : "Marcar como favorito"}
         aria-pressed={entry.favorite ?? false}
-        className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full bg-background/80 ring-1 ring-border/60 backdrop-blur-sm transition hover:scale-110"
+        className="absolute right-3 top-3 grid h-7 w-7 place-items-center rounded-full bg-background/90 ring-1 ring-border/60 backdrop-blur-sm transition hover:scale-110"
       >
         <Heart
           className={`h-3.5 w-3.5 ${entry.favorite ? "fill-destructive text-destructive" : "text-muted-foreground"}`}
@@ -494,7 +494,7 @@ function BookCard({
         <div className="min-w-0">
           <Link
             {...primaryHref}
-            className="block truncate font-display text-sm font-medium hover:text-gold"
+            className="block truncate font-display text-sm font-semibold hover:text-gold"
           >
             {entry.title}
           </Link>
@@ -578,3 +578,4 @@ function MoreDots() {
     </svg>
   );
 }
+
