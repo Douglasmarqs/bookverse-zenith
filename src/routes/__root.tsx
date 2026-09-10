@@ -102,7 +102,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           "Descubra, leia e organize livros em uma experiência editorial premium. Leitor imersivo, progresso sincronizado, recomendações inteligentes.",
       },
       { name: "author", content: "BookVerse" },
-      { name: "theme-color", content: "#0E0B08" },
+      { name: "theme-color", content: "#4B83D8" },
       // iOS doesn't read the web manifest for "Add to Home Screen" — these
       // three meta tags are what make it install as a standalone app with
       // the right icon/status bar there instead of just a bookmark.
@@ -141,7 +141,7 @@ function RootShell({ children }: { children: ReactNode }) {
         <script
           dangerouslySetInnerHTML={{
             __html:
-              "(function(){try{var t=localStorage.getItem('bookverse:theme');if(t&&t!=='dark'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();",
+              "(function(){try{var t=localStorage.getItem('bookverse:theme')||'light';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();",
           }}
         />
         <HeadContent />
@@ -191,8 +191,9 @@ function RootComponent() {
         {!isReaderRoute && <SiteFooter />}
         {!isReaderRoute && <LumiPanel />}
         {!isReaderRoute && <InstallPwaBanner />}
-        <Toaster position="bottom-center" theme="dark" richColors />
+        <Toaster position="bottom-center" theme="light" richColors />
       </div>
     </QueryClientProvider>
   );
 }
+
