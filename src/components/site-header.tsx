@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Search, Menu, X, BookOpen, LogOut, User as UserIcon, Settings } from "lucide-react";
+import { Search, Menu, X, BookOpen, LogOut, Settings, Sparkles } from "lucide-react";
 import type { User } from "firebase/auth";
 import { signOut, subscribeAuth } from "../lib/firebase";
 import { ensureUserProfile, subscribeUserProfile, type UserProfile } from "../lib/user-profile";
@@ -13,11 +13,9 @@ const NAV = [
   { label: "Início", to: "/" as const },
   { label: "Descobrir", to: "/descobrir" as const },
   { label: "Minha biblioteca", to: "/biblioteca" as const },
-  { label: "Metas", to: "/metas" as const },
   { label: "Diário", to: "/diario" as const },
   { label: "Desafios", to: "/desafios" as const },
   { label: "Ranking", to: "/ranking" as const },
-
 ];
 
 export function SiteHeader() {
@@ -75,25 +73,26 @@ export function SiteHeader() {
   return (
     <header
       className={`sticky top-0 z-50 transition-all duration-500 ${
-        scrolled ? "border-b border-border/60 backdrop-blur-xl bg-background/70" : "bg-transparent"
+        scrolled ? "border-b border-border/80 bg-background/92 shadow-sm backdrop-blur-xl" : "bg-background/78 backdrop-blur-md"
       }`}
     >
-      <div className="mx-auto grid max-w-7xl grid-cols-[auto_1fr_auto] items-center gap-4 px-5 py-4 md:px-8">
+      <div className="mx-auto grid max-w-7xl grid-cols-[auto_1fr_auto] items-center gap-4 px-5 py-3 md:px-8">
         <Link to="/" className="flex items-center gap-2.5 group">
-          <span className="grid h-9 w-9 place-items-center rounded-full bg-gold/10 ring-1 ring-gold/40 transition-transform group-hover:scale-105">
-            <BookOpen className="h-4 w-4 text-gold" />
+          <span className="grid h-9 w-9 place-items-center rounded-xl bg-gold text-primary-foreground shadow-lg shadow-gold/20 transition-transform duration-200 group-hover:-rotate-3 group-hover:scale-105">
+            <BookOpen className="h-[18px] w-[18px]" />
           </span>
-          <span className="font-display text-xl font-semibold tracking-tight">
-            Book<span className="text-gold">verse</span>
+          <span className="font-display text-[1.35rem] font-semibold tracking-tight text-foreground">
+            Book<span className="text-gold">Verse</span>
           </span>
         </Link>
 
-        <nav className="hidden lg:flex items-center justify-center gap-1">
+        <nav className="hidden lg:flex items-center justify-center gap-0.5" aria-label="Navegação principal">
           {NAV.map((item) => (
             <Link
               key={item.label}
               to={item.to}
-              className="relative rounded-full px-4 py-2 text-sm text-foreground/75 transition-colors hover:text-foreground"
+              className="relative rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary/80 hover:text-foreground"
+              activeProps={{ className: "relative rounded-lg bg-gold/10 px-3 py-2 text-sm font-semibold text-gold" }}
             >
               {item.label}
             </Link>
@@ -110,14 +109,14 @@ export function SiteHeader() {
                   onChange={(e) => setSearchValue(e.target.value)}
                   onBlur={() => !searchValue && setSearchOpen(false)}
                   placeholder="Buscar livros, autores…"
-                  className="h-10 w-56 rounded-full border border-gold/40 bg-secondary/40 px-4 text-sm outline-none"
+                  className="h-10 w-56 rounded-xl border border-gold/35 bg-card px-4 text-sm shadow-sm outline-none"
                 />
               </form>
             ) : (
               <button
                 aria-label="Buscar"
                 onClick={() => setSearchOpen(true)}
-                className="grid h-10 w-10 place-items-center rounded-full border border-border/60 text-foreground/80 hover:text-gold hover:border-gold/40 transition"
+                className="grid h-10 w-10 place-items-center rounded-xl text-muted-foreground transition hover:bg-secondary hover:text-gold"
               >
                 <Search className="h-4 w-4" />
               </button>
@@ -126,9 +125,9 @@ export function SiteHeader() {
 
           <button
             onClick={() => openLumiPanel()}
-            className="hidden lg:inline-flex items-center rounded-full px-4 py-2 text-sm text-foreground/75 transition-colors hover:text-foreground"
+            className="hidden lg:inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-gold"
           >
-            IA
+            <Sparkles className="h-3.5 w-3.5" /> Lumi
           </button>
 
           <ThemeSwitcher />
@@ -138,7 +137,7 @@ export function SiteHeader() {
               <button
                 onClick={() => setMenuOpen((v) => !v)}
                 aria-label="Conta"
-                className="rounded-full transition hover:opacity-90"
+                className="rounded-full ring-2 ring-transparent transition hover:opacity-90 hover:ring-gold/30"
               >
                 <UserAvatar profile={profile} user={user} size="md" />
               </button>
@@ -174,7 +173,7 @@ export function SiteHeader() {
             <Link
               to="/auth"
               search={{ redirect: undefined }}
-              className="hidden md:inline-flex items-center rounded-full bg-gold px-5 py-2.5 text-sm font-medium text-primary-foreground transition-transform hover:scale-[1.02] active:scale-[0.98]"
+              className="hidden md:inline-flex items-center rounded-xl bg-gold px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-md shadow-gold/20 transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-gold/25 active:translate-y-0"
             >
               Entrar
             </Link>
@@ -183,7 +182,7 @@ export function SiteHeader() {
           <button
             aria-label="Menu"
             onClick={() => setOpen((v) => !v)}
-            className="lg:hidden grid h-10 w-10 place-items-center rounded-full border border-border/60"
+            className="lg:hidden grid h-10 w-10 place-items-center rounded-xl text-muted-foreground hover:bg-secondary"
           >
             {open ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </button>
@@ -261,3 +260,4 @@ export function SiteHeader() {
     </header>
   );
 }
+
