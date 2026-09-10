@@ -21,25 +21,21 @@ export const THEME_LABEL: Record<SiteTheme, string> = {
 
 /** Small representative colors for each theme, used by swatch pickers. */
 export const THEME_PREVIEW: Record<SiteTheme, { bg: string; fg: string }> = {
-  dark: { bg: "#141210", fg: "#E8DFD3" },
-  light: { bg: "#FCFCFB", fg: "#231F1A" },
+  dark: { bg: "#172238", fg: "#EEF5FF" },
+  light: { bg: "#F8FAFE", fg: "#27364D" },
   sepia: { bg: "#DDCBA9", fg: "#3A2A1D" },
   paper: { bg: "#EEEAE1", fg: "#28241F" },
 };
 
 export function getStoredTheme(): SiteTheme {
-  if (typeof window === "undefined") return "dark";
+  if (typeof window === "undefined") return "light";
   const stored = localStorage.getItem(STORAGE_KEY);
-  return stored && THEMES.includes(stored as SiteTheme) ? (stored as SiteTheme) : "dark";
+  return stored && THEMES.includes(stored as SiteTheme) ? (stored as SiteTheme) : "light";
 }
 
 export function applyTheme(theme: SiteTheme): void {
   if (typeof document === "undefined") return;
-  if (theme === "dark") {
-    document.documentElement.removeAttribute("data-theme");
-  } else {
-    document.documentElement.setAttribute("data-theme", theme);
-  }
+  document.documentElement.setAttribute("data-theme", theme);
   try {
     localStorage.setItem(STORAGE_KEY, theme);
   } catch {
@@ -50,3 +46,4 @@ export function applyTheme(theme: SiteTheme): void {
 export function allThemes(): SiteTheme[] {
   return THEMES;
 }
+
