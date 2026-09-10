@@ -92,7 +92,7 @@ function Home() {
   return (
     <div className="relative">
       {/* HERO */}
-      <section className="relative overflow-hidden">
+      <section className="relative overflow-hidden border-b border-border/70">
         <div className="pointer-events-none absolute inset-0">
           <img
             src={heroImg}
@@ -100,33 +100,32 @@ function Home() {
             width={1920}
             height={1280}
             fetchPriority="high"
-            className="h-full w-full object-cover opacity-30"
+            className="h-full w-full object-cover opacity-[0.13]"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-background/50 via-background/80 to-background" />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/20 via-background/88 to-background" />
         </div>
 
-        <div className="relative mx-auto grid max-w-7xl grid-cols-1 gap-12 px-5 pt-16 pb-20 md:px-8 lg:grid-cols-[1.1fr_1fr] lg:pt-24 lg:pb-28">
+        <div className="relative mx-auto grid max-w-7xl grid-cols-1 gap-10 px-5 pb-16 pt-12 md:px-8 lg:grid-cols-[1.1fr_0.9fr] lg:pb-20 lg:pt-20">
           <div className="flex flex-col justify-center">
-            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-gold/30 bg-gold/5 px-3 py-1.5 text-xs font-medium text-gold-soft">
+            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-gold/20 bg-gold/10 px-3 py-1.5 text-xs font-semibold text-gold">
               <Sparkles className="h-3.5 w-3.5" />
-              Leitor de EPUB completo, sem instalar nada
+              Sua próxima grande leitura começa aqui
             </div>
 
-            <h1 className="mt-6 font-display text-5xl font-medium leading-[1.02] tracking-tight md:text-6xl lg:text-7xl">
-              Seus livros, <br />
-              lidos com <span className="text-gradient-gold italic">calma</span>.
+            <h1 className="mt-5 max-w-2xl font-display text-5xl font-semibold leading-[1.04] tracking-tight md:text-6xl lg:text-[4.25rem]">
+              Sua estante. <br />
+              Suas <span className="text-gradient-gold">histórias</span>.
             </h1>
 
-            <p className="mt-6 max-w-lg text-base leading-relaxed text-muted-foreground md:text-lg">
-              Importe seus arquivos <code className="font-mono text-foreground/80">.epub</code> e
-              leia em páginas de verdade: tipografia ajustável, temas de papel, marcações, notas e
-              progresso que continua exatamente onde você parou — em qualquer aparelho.
+            <p className="mt-5 max-w-xl text-base leading-relaxed text-muted-foreground md:text-lg">
+              Organize leituras, acompanhe seus hábitos e mergulhe nos seus EPUBs em um leitor
+              confortável — com marcações, anotações e progresso salvo.
             </p>
 
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <Link
                 to="/biblioteca"
-                className="group inline-flex items-center gap-2 rounded-full bg-gold px-6 py-3.5 text-sm font-medium text-primary-foreground transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                className="group inline-flex items-center gap-2 rounded-xl bg-gold px-5 py-3 text-sm font-semibold text-primary-foreground shadow-lg shadow-gold/20 transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-gold/25 active:translate-y-0"
               >
                 {signedIn ? "Abrir minha estante" : "Criar minha estante"}
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
@@ -134,22 +133,22 @@ function Home() {
               <Link
                 to="/reader/$bookId"
                 params={{ bookId: SAMPLE_BOOKS[0]!.id }}
-                className="inline-flex items-center gap-2 rounded-full border border-border px-6 py-3.5 text-sm font-medium text-foreground/85 hover:border-gold/50 hover:text-foreground"
+                className="inline-flex items-center gap-2 rounded-xl border border-border bg-card/70 px-5 py-3 text-sm font-semibold text-foreground/85 shadow-sm transition hover:border-gold/45 hover:text-gold"
               >
                 <BookOpenCheck className="h-4 w-4 text-gold" />
                 Experimentar o leitor
               </Link>
             </div>
 
-            <dl className="mt-12 grid max-w-lg grid-cols-3 gap-6">
+            <dl className="mt-10 grid max-w-xl grid-cols-3 gap-3">
               {[
                 { k: "4 temas", v: "de papel" },
                 { k: "Offline", v: "leitura local" },
                 { k: "Sync", v: "entre aparelhos" },
               ].map((s) => (
-                <div key={s.v}>
+                <div key={s.v} className="social-card px-3 py-3 md:px-4">
                   <dt className="font-display text-xl font-semibold text-foreground">{s.k}</dt>
-                  <dd className="mt-1 text-xs uppercase tracking-widest text-muted-foreground">
+                  <dd className="mt-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                     {s.v}
                   </dd>
                 </div>
@@ -157,7 +156,7 @@ function Home() {
             </dl>
           </div>
 
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4 lg:pt-3">
             <EpubImport />
             <LiteraryFactCard />
           </div>
@@ -180,7 +179,7 @@ function Home() {
             ))}
           </div>
         ) : (
-          <div className="rounded-2xl border border-dashed border-border/60 p-10 text-center">
+          <div className="social-card border-dashed p-10 text-center">
             <p className="text-muted-foreground">
               {signedIn
                 ? "Nenhuma leitura em andamento. Importe um EPUB acima ou comece por uma das histórias de demonstração."
@@ -189,7 +188,7 @@ function Home() {
             <Link
               to={signedIn ? "/biblioteca" : "/auth"}
               search={signedIn ? undefined : { redirect: "/biblioteca" }}
-              className="mt-4 inline-flex items-center gap-2 rounded-full bg-gold px-5 py-2.5 text-sm font-medium text-primary-foreground"
+              className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gold px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-md shadow-gold/20"
             >
               {signedIn ? "Ir para a estante" : "Entrar"}
             </Link>
@@ -428,7 +427,7 @@ function Section({
     <section className="content-auto mx-auto max-w-7xl px-5 py-10 md:px-8 md:py-14">
       <header className="mb-7 flex items-end justify-between gap-4">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-gold">
+          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-gold">
             {icon}
             {eyebrow}
           </div>
@@ -439,7 +438,7 @@ function Section({
         {action && actionTo && (
           <Link
             to={actionTo}
-            className="shrink-0 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition hover:text-gold"
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-semibold text-gold transition hover:bg-gold/10"
           >
             {action} <ArrowRight className="h-3.5 w-3.5" />
           </Link>
@@ -460,8 +459,8 @@ function FeatureCard({
   text: string;
 }) {
   return (
-    <div className="rounded-2xl border border-border/60 bg-card/50 p-6">
-      <div className="grid h-10 w-10 place-items-center rounded-full bg-gold/12 text-gold">
+    <div className="social-card social-card-hover p-6">
+      <div className="grid h-10 w-10 place-items-center rounded-xl bg-gold/12 text-gold">
         {icon}
       </div>
       <h3 className="mt-4 font-display text-lg font-medium">{title}</h3>
@@ -497,7 +496,7 @@ function ContinueCard({ entry }: { entry: LibraryEntry }) {
   );
 
   const className =
-    "group grid grid-cols-[auto_1fr] items-center gap-5 rounded-2xl border border-border/60 bg-card/60 p-4 text-left transition hover:border-gold/40 hover:bg-card";
+    "social-card social-card-hover group grid grid-cols-[auto_1fr] items-center gap-5 p-4 text-left";
 
   if (entry.readerId) {
     return (
@@ -524,10 +523,10 @@ function RankingCard({ uid }: { uid: string | null }) {
   useEffect(() => subscribeRanking(4, setRows), []);
 
   return (
-    <div className="glass-plate rounded-3xl p-7">
+    <div className="social-card p-7">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.28em] text-gold">Ranking</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gold">Ranking</p>
           <h3 className="mt-2 font-display text-2xl font-medium">Entre os leitores</h3>
         </div>
         <Trophy className="h-6 w-6 text-gold" />
@@ -605,3 +604,4 @@ function ChallengeCard({
     </div>
   );
 }
+
