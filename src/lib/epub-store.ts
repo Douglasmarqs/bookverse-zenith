@@ -1,13 +1,9 @@
 /**
  * Local storage for user-uploaded EPUB books.
  *
- * These are the user's own files — there's no server-side component and no
- * Firebase Storage/Cloud Function involved, so this works with zero extra
- * deployment. The trade-off is that an uploaded EPUB is only available on
- * the browser/device it was uploaded from (not synced across devices) —
- * "Minha biblioteca" still tracks the *entry* (title/author/cover) across
- * devices via Firestore as usual, but opening it to read only works where
- * the file was actually parsed and stored.
+ * IndexedDB is an offline cache, never the source of truth. A durable copy
+ * belongs in the authenticated person's private Firebase Storage folder so
+ * it can be opened on another device.
  */
 import type { Book } from "./sample-book";
 
@@ -80,47 +76,95 @@ export async function deleteEpubBook(id: string): Promise<void> {
 }
 
 /* ------------------------------------------------------------------ *
- * Cloud copy (Firestore, chunked)
+ * Cloud copy (Firebase Storage)
  *
- * An imported EPUB lives in IndexedDB on the device it was imported
- * from. To let the same book open on another device, we also store the
- * parsed book as JSON split into chunks under
- * `users/{uid}/epubFiles/{bookId}` + `.../chunks/{n}` — Firestore caps a
- * single document at ~1MB, so a book must be split. Books above the
- * ceiling below stay local-only (still perfectly readable there).
+ * IndexedDB is deliberately only an offline cache. The parsed content and
+ * the original EPUB are stored under the authenticated owner's Storage
+ * prefix, allowing a reader to open their book on another device without
+ * trusting Firestore documents to carry large file payloads. The legacy
+ * Firestore reader remains as a one-way compatibility fallback for books
+ * imported before this migration.
  * ------------------------------------------------------------------ */
 
-const CHUNK_SIZE = 400_000; // characters, comfortably under the 1MB doc cap
-const MAX_CLOUD_CHARS = 6_000_000; // ~6MB of JSON — bigger books stay local
+const CLOUD_ROOT = "epubs";
 
-export async function uploadEpubBookToCloud(uid: string, book: Book): Promise<boolean> {
+function storagePath(uid: string, id: string, filename: "book.json" | "source.epub") {
+  return `users/${uid}/${CLOUD_ROOT}/${id}/${filename}`;
+}
+
+function metadataPath(uid: string, id: string) {
+  return ["users", uid, "epubFiles", id] as const;
+}
+
+function safeEpubName(name: string) {
+  return name.replace(/[\\/:*?"<>|]/g, "-").slice(0, 160) || "livro.epub";
+}
+
+/**
+ * Persists both a device-ready parsed representation and the original EPUB.
+ * Callers should await this function: claiming an EPUB is synced before
+ * Storage accepts it would create a broken cross-device library entry.
+ */
+export async function uploadEpubBookToCloud(uid: string, book: Book, source: File): Promise<void> {
   const { getFirebase } = await import("./firebase");
   const fb = getFirebase();
-  if (!fb) return false;
-  const json = JSON.stringify(book);
-  if (json.length > MAX_CLOUD_CHARS) return false;
+  if (!fb) throw new Error("Firebase não está configurado neste ambiente.");
 
+  const { ref, uploadBytes } = await import("firebase/storage");
   const { doc, setDoc } = await import("firebase/firestore");
-  const chunks: string[] = [];
-  for (let i = 0; i < json.length; i += CHUNK_SIZE) chunks.push(json.slice(i, i + CHUNK_SIZE));
+  const json = JSON.stringify(book);
+  const parsed = new Blob([json], { type: "application/json" });
 
-  try {
-    await Promise.all(
-      chunks.map((data, i) =>
-        setDoc(doc(fb.db, "users", uid, "epubFiles", book.id, "chunks", String(i)), { data }),
-      ),
-    );
-    await setDoc(doc(fb.db, "users", uid, "epubFiles", book.id), {
-      chunks: chunks.length,
-      title: book.title,
-      author: book.author,
-      updatedAt: Date.now(),
-    });
-    return true;
-  } catch (err) {
-    console.warn("[epub] cloud upload failed (book stays local)", err);
-    return false;
-  }
+  // Upload the original first. A parsed representation without its source
+  // makes recovery impossible if the parser evolves; metadata is only
+  // published after both private Storage objects have landed successfully.
+  await uploadBytes(ref(fb.storage, storagePath(uid, book.id, "source.epub")), source, {
+    // Browsers commonly report EPUBs as application/octet-stream (or an
+    // empty type). The object is still known to be an EPUB because parsing
+    // above succeeded; use the canonical type so Storage rules can enforce
+    // the allowed object shape consistently.
+    contentType: "application/epub+zip",
+    customMetadata: {
+      originalName: safeEpubName(source.name),
+      bookId: book.id,
+      kind: "source-epub",
+    },
+  });
+  await uploadBytes(ref(fb.storage, storagePath(uid, book.id, "book.json")), parsed, {
+    contentType: "application/json",
+    customMetadata: { bookId: book.id, kind: "parsed-book" },
+  });
+
+  await setDoc(doc(fb.db, ...metadataPath(uid, book.id)), {
+    storageVersion: 1,
+    title: book.title,
+    author: book.author,
+    chapterCount: book.chapters.length,
+    sourceName: safeEpubName(source.name),
+    sourceSize: source.size,
+    updatedAt: Date.now(),
+  });
+}
+
+async function downloadLegacyEpubBook(uid: string, id: string): Promise<Book | null> {
+  const { getFirebase } = await import("./firebase");
+  const fb = getFirebase();
+  if (!fb) return null;
+  const { doc, getDoc } = await import("firebase/firestore");
+  const metaSnap = await getDoc(doc(fb.db, ...metadataPath(uid, id)));
+  if (!metaSnap.exists()) return null;
+  const total = Number((metaSnap.data() as { chunks?: number }).chunks ?? 0);
+  if (!total) return null;
+  const parts = await Promise.all(
+    Array.from({ length: total }, (_, i) =>
+      getDoc(doc(fb.db, "users", uid, "epubFiles", id, "chunks", String(i))),
+    ),
+  );
+  const json = parts.reduce((text, part) => {
+    if (!part.exists()) throw new Error("Uma parte do EPUB legado não está disponível.");
+    return text + ((part.data() as { data?: string }).data ?? "");
+  }, "");
+  return JSON.parse(json) as Book;
 }
 
 export async function downloadEpubBookFromCloud(uid: string, id: string): Promise<Book | null> {
@@ -128,24 +172,47 @@ export async function downloadEpubBookFromCloud(uid: string, id: string): Promis
   const fb = getFirebase();
   if (!fb) return null;
   try {
-    const { doc, getDoc } = await import("firebase/firestore");
-    const metaSnap = await getDoc(doc(fb.db, "users", uid, "epubFiles", id));
-    if (!metaSnap.exists()) return null;
-    const total = Number((metaSnap.data() as { chunks?: number }).chunks ?? 0);
-    if (!total) return null;
-    const parts = await Promise.all(
-      Array.from({ length: total }, (_, i) =>
-        getDoc(doc(fb.db, "users", uid, "epubFiles", id, "chunks", String(i))),
-      ),
+    const { getBytes, ref } = await import("firebase/storage");
+    // Firebase's default download ceiling is only 10 MB. Illustrated EPUBs
+    // legitimately exceed that once parsed, while import intentionally caps
+    // source files at 60 MB.
+    const bytes = await getBytes(
+      ref(fb.storage, storagePath(uid, id, "book.json")),
+      80 * 1024 * 1024,
     );
-    let json = "";
-    for (const part of parts) {
-      if (!part.exists()) return null;
-      json += (part.data() as { data?: string }).data ?? "";
+    return JSON.parse(new TextDecoder().decode(bytes)) as Book;
+  } catch (storageError) {
+    try {
+      const legacy = await downloadLegacyEpubBook(uid, id);
+      if (legacy) return legacy;
+    } catch (legacyError) {
+      console.warn("[epub] legacy cloud download failed", legacyError);
     }
-    return JSON.parse(json) as Book;
-  } catch (err) {
-    console.warn("[epub] cloud download failed", err);
+    console.warn("[epub] storage download failed", storageError);
     return null;
   }
+}
+
+/** Removes the durable cloud copy. Local cache removal remains explicit. */
+export async function deleteEpubBookFromCloud(uid: string, id: string): Promise<void> {
+  const { getFirebase } = await import("./firebase");
+  const fb = getFirebase();
+  if (!fb) throw new Error("Firebase não está configurado neste ambiente.");
+  const { deleteObject, ref } = await import("firebase/storage");
+  const { collection, deleteDoc, doc, getDocs } = await import("firebase/firestore");
+
+  const results = await Promise.allSettled([
+    deleteObject(ref(fb.storage, storagePath(uid, id, "book.json"))),
+    deleteObject(ref(fb.storage, storagePath(uid, id, "source.epub"))),
+  ]);
+  const meaningfulFailure = results.find(
+    (result) =>
+      result.status === "rejected" &&
+      (result.reason as { code?: string })?.code !== "storage/object-not-found",
+  );
+  if (meaningfulFailure?.status === "rejected") throw meaningfulFailure.reason;
+
+  const chunks = await getDocs(collection(fb.db, "users", uid, "epubFiles", id, "chunks"));
+  await Promise.all(chunks.docs.map((chunk) => deleteDoc(chunk.ref)));
+  await deleteDoc(doc(fb.db, ...metadataPath(uid, id)));
 }

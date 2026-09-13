@@ -1,7 +1,6 @@
 import type { User } from "firebase/auth";
 
 type MinimalProfile = {
-  avatarEmoji?: string | null;
   customPhotoDataUrl?: string | null;
   photoURL?: string | null;
   displayName?: string | null;
@@ -14,10 +13,9 @@ const SIZES = {
 } as const;
 
 /**
- * Renders, in priority order: the chosen emoji avatar, a photo the person
- * uploaded themselves, the account's provider photo (e.g. Google), or a
- * colored initial. Used anywhere a user's avatar shows up so all four stay
- * visually consistent. Accepts any object with the display fields — the
+ * Renders, in priority order: a photo the person uploaded themselves, the
+ * account's provider photo (e.g. Google), or a colored initial. Used anywhere
+ * a user's avatar shows up so identity stays visually consistent. Accepts any object with the display fields — the
  * full `UserProfile`, a `RankingRow`, or anything else shaped the same way.
  */
 export function UserAvatar({
@@ -31,18 +29,10 @@ export function UserAvatar({
   size?: keyof typeof SIZES;
   className?: string;
 }) {
-  const emoji = profile?.avatarEmoji;
   const photo = profile?.customPhotoDataUrl || profile?.photoURL || user?.photoURL;
   const name = (profile?.displayName || user?.displayName || user?.email || "Leitor").trim();
   const base = `relative grid shrink-0 place-items-center overflow-hidden rounded-full bg-gold/10 ring-1 ring-gold/40 ${SIZES[size]} ${className}`;
 
-  if (emoji) {
-    return (
-      <span className={base} aria-hidden>
-        {emoji}
-      </span>
-    );
-  }
   if (photo) {
     return (
       <span className={base}>
@@ -52,7 +42,11 @@ export function UserAvatar({
             sizes itself off the content's own intrinsic dimensions unless
             the content is taken out of grid flow entirely. That grid
             blowout was the cause of the oval, overflowing avatar. */}
-        <img src={photo} alt="" className="absolute inset-0 h-full w-full rounded-full object-cover" />
+        <img
+          src={photo}
+          alt=""
+          className="absolute inset-0 h-full w-full rounded-full object-cover"
+        />
       </span>
     );
   }

@@ -24,6 +24,7 @@ import {
   type User,
 } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
+import { getStorage, type FirebaseStorage } from "firebase/storage";
 
 declare const __FIREBASE_API_KEY__: string;
 
@@ -40,6 +41,7 @@ const firebaseConfig = {
 let _app: FirebaseApp | null = null;
 let _auth: Auth | null = null;
 let _db: Firestore | null = null;
+let _storage: FirebaseStorage | null = null;
 
 function isBrowser() {
   return typeof window !== "undefined";
@@ -77,7 +79,12 @@ export function getFirebaseKeyDebugInfo(): {
   };
 }
 
-export function getFirebase(): { app: FirebaseApp; auth: Auth; db: Firestore } | null {
+export function getFirebase(): {
+  app: FirebaseApp;
+  auth: Auth;
+  db: Firestore;
+  storage: FirebaseStorage;
+} | null {
   if (!isBrowser()) return null;
   if (!firebaseConfig.apiKey) {
     console.warn("[firebase] apiKey missing — set GOOGLE_API_KEY secret.");
@@ -87,8 +94,9 @@ export function getFirebase(): { app: FirebaseApp; auth: Auth; db: Firestore } |
     _app = getApps()[0] ?? initializeApp(firebaseConfig);
     _auth = getAuth(_app);
     _db = getFirestore(_app);
+    _storage = getStorage(_app);
   }
-  return { app: _app!, auth: _auth!, db: _db! };
+  return { app: _app!, auth: _auth!, db: _db!, storage: _storage! };
 }
 
 /** Ensures a signed-in user (anonymous by default) and resolves with the user. */

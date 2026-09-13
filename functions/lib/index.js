@@ -60,6 +60,12 @@ function buildSystemPrompt(context) {
     if (context?.chapterExcerpt) {
         prompt += ` Trecho de referência do capítulo (contexto interno, não repita literalmente): ${context.chapterExcerpt.slice(0, 1500)}`;
     }
+    if (context?.selectedText) {
+        prompt += ` Trecho que a pessoa selecionou agora: ${context.selectedText.slice(0, 900)}.`;
+    }
+    if (context?.positionLabel) {
+        prompt += ` Posição aproximada de leitura: ${context.positionLabel.slice(0, 120)}.`;
+    }
     return prompt;
 }
 exports.askLumi = (0, https_1.onCall)({ secrets: [GROQ_API_KEY], cors: true, maxInstances: 10 }, async (request) => {

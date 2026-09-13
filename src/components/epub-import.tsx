@@ -4,7 +4,12 @@ import { Loader2, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuthUser } from "@/hooks/use-auth-user";
-import { saveEpubBook, uploadEpubBookToCloud } from "@/lib/epub-store";
+import {
+  deleteEpubBook,
+  deleteEpubBookFromCloud,
+  saveEpubBook,
+  uploadEpubBookToCloud,
+} from "@/lib/epub-store";
 import { addToLibrary } from "@/lib/library";
 import { describeFirestoreError } from "@/lib/async-utils";
 
@@ -33,12 +38,20 @@ export function EpubImport({ className = "" }: { className?: string }) {
       const { parseEpubFile } = await import("@/lib/epub-parser");
       const book = await parseEpubFile(file);
       await saveEpubBook(book);
-      await addToLibrary(
-        user.uid,
-        { title: book.title, author: book.author, cover: book.cover, readerId: book.id },
-        "lendo",
-      );
-      void uploadEpubBookToCloud(user.uid, book);
+      try {
+        // Do not surface a library entry until its private cloud copy exists.
+        // That keeps a successful import truthful across every device.
+        await uploadEpubBookToCloud(user.uid, book, file);
+        await addToLibrary(
+          user.uid,
+          { title: book.title, author: book.author, cover: book.cover, readerId: book.id },
+          "lendo",
+        );
+      } catch (err) {
+        void deleteEpubBook(book.id).catch(() => {});
+        void deleteEpubBookFromCloud(user.uid, book.id).catch(() => {});
+        throw err;
+      }
       toast.success(`"${book.title}" pronto para leitura.`);
       void navigate({ to: "/reader/$bookId", params: { bookId: book.id } });
     } catch (err) {
@@ -73,18 +86,14 @@ export function EpubImport({ className = "" }: { className?: string }) {
         onChange={(e) => void handleFile(e.target.files?.[0])}
       />
       <div className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-gold/12 text-gold">
-        {busy ? (
-          <Loader2 className="h-5 w-5 animate-spin" />
-        ) : (
-          <UploadCloud className="h-5 w-5" />
-        )}
+        {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <UploadCloud className="h-5 w-5" />}
       </div>
       <p className="mt-4 font-display text-lg font-medium">
         {busy ? "Processando seu livro…" : "Arraste um .epub aqui"}
       </p>
       <p className="mt-1.5 text-sm text-muted-foreground">
-        Capítulos, ilustrações e capa são lidos no seu próprio navegador — e o progresso sincroniza
-        entre aparelhos.
+        O EPUB fica privado na sua conta, com capa, capítulos, anotações e progresso disponíveis
+        também nos seus outros aparelhos.
       </p>
       <button
         type="button"

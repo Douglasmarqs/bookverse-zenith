@@ -1,8 +1,13 @@
-import { X, Type, AlignJustify, Rows3, Columns2 } from "lucide-react";
-import type { ReaderSettings, ReaderFont, ReaderMode } from "@/lib/reader-store";
-import type { SiteTheme } from "@/lib/theme";
+import { X, Type, AlignJustify, AlignLeft, Rows3, Columns2 } from "lucide-react";
+import type {
+  ReaderSettings,
+  ReaderAlignment,
+  ReaderFont,
+  ReaderMode,
+  ReaderTheme,
+} from "@/lib/reader-store";
 
-/** Matches the shape of THEME_STYLES[siteTheme] in reader.$bookId.tsx —
+/** Matches the shape of THEME_STYLES[settings.theme] in reader.$bookId.tsx —
  * kept as a separate type here to avoid a route -> component import cycle. */
 export interface ReaderThemeColors {
   bg: string;
@@ -18,35 +23,24 @@ interface Props {
   settings: ReaderSettings;
   onChange: (patch: Partial<ReaderSettings>) => void;
   theme: ReaderThemeColors;
-  siteTheme: SiteTheme;
-  onSiteThemeChange: (t: SiteTheme) => void;
 }
 
-const THEME_SWATCHES: { value: SiteTheme; label: string; bg: string; fg: string }[] = [
+const THEME_SWATCHES: { value: ReaderTheme; label: string; bg: string; fg: string }[] = [
   { value: "light", label: "Claro", bg: "#FFFFFF", fg: "#1A1A1A" },
   { value: "paper", label: "Papel", bg: "#F2ECE1", fg: "#2A2420" },
   { value: "sepia", label: "Sépia", bg: "#EFE0C0", fg: "#3A2818" },
   { value: "dark", label: "Escuro", bg: "#0E0B08", fg: "#E8DFD3" },
+  { value: "amoled", label: "AMOLED", bg: "#000000", fg: "#F2F0EA" },
 ];
 
 /**
  * This panel deliberately does NOT use the sitewide `bg-background` /
  * `text-foreground` / etc. Tailwind classes — it's styled entirely from
  * the `theme` prop instead, so it always matches the page behind it even
- * mid-transition. As of the theme unification, `theme` IS derived from
- * the site-wide setting (see reader.$bookId.tsx), so the "Tema" swatches
- * below write directly to that shared setting rather than a separate
- * reader-only one — one theme, everywhere in the app.
+ * mid-transition. Reading preferences are deliberately independent from
+ * the app shell and follow the reader across the person's devices.
  */
-export function ReaderSettingsPanel({
-  open,
-  onClose,
-  settings,
-  onChange,
-  theme,
-  siteTheme,
-  onSiteThemeChange,
-}: Props) {
+export function ReaderSettingsPanel({ open, onClose, settings, onChange, theme }: Props) {
   return (
     <>
       <div
@@ -87,11 +81,11 @@ export function ReaderSettingsPanel({
               {THEME_SWATCHES.map((t) => (
                 <button
                   key={t.value}
-                  onClick={() => onSiteThemeChange(t.value)}
+                  onClick={() => onChange({ theme: t.value })}
                   className="flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition"
                   style={{
-                    borderColor: siteTheme === t.value ? theme.accent : theme.rule,
-                    boxShadow: siteTheme === t.value ? `0 0 0 1px ${theme.accent}` : "none",
+                    borderColor: settings.theme === t.value ? theme.accent : theme.rule,
+                    boxShadow: settings.theme === t.value ? `0 0 0 1px ${theme.accent}` : "none",
                   }}
                 >
                   <span
@@ -161,6 +155,34 @@ export function ReaderSettingsPanel({
 
           <Slider
             theme={theme}
+            label="Espaço entre parágrafos"
+            value={settings.paragraphSpacing}
+            min={0.25}
+            max={1.5}
+            step={0.05}
+            unit="em"
+            onChange={(v) => onChange({ paragraphSpacing: Math.round(v * 100) / 100 })}
+            format={(v) => v.toFixed(2)}
+          />
+
+          <Group label="Alinhamento" theme={theme}>
+            <SegGroup
+              theme={theme}
+              value={settings.alignment}
+              onChange={(v) => onChange({ alignment: v as ReaderAlignment })}
+              options={[
+                {
+                  value: "justify",
+                  label: "Justificado",
+                  icon: <AlignJustify className="h-3.5 w-3.5" />,
+                },
+                { value: "left", label: "À esquerda", icon: <AlignLeft className="h-3.5 w-3.5" /> },
+              ]}
+            />
+          </Group>
+
+          <Slider
+            theme={theme}
             label="Margens laterais"
             value={settings.margin}
             min={16}
@@ -186,8 +208,7 @@ export function ReaderSettingsPanel({
           className="px-5 py-4 text-xs"
           style={{ borderTop: `1px solid ${theme.rule}`, color: theme.muted }}
         >
-          Suas preferências são salvas automaticamente. O tema é o mesmo do resto do app — mude
-          aqui ou em qualquer outra tela.
+          Suas preferências são salvas automaticamente e acompanham sua conta.
         </footer>
       </aside>
     </>

@@ -5,41 +5,55 @@
  * Progress is stored at `users/{uid}/progress/{bookId}`.
  */
 
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { collection, doc, getDoc, onSnapshot, setDoc, type Unsubscribe } from "firebase/firestore";
 import { ensureUser, getFirebase } from "./firebase";
 import { withDeadline, withFallback } from "./async-utils";
 
-export type ReaderTheme = "light" | "paper" | "sepia" | "dark";
+export type ReaderTheme = "light" | "paper" | "sepia" | "dark" | "amoled";
 export type ReaderFont = "serif" | "sans";
 export type ReaderMode = "scroll" | "paginated";
+export type ReaderAlignment = "justify" | "left";
 
 export interface ReaderSettings {
-  /** @deprecated Reading theme is now unified with the site-wide theme
-   * (see useSiteTheme / lib/theme.ts) — this field is kept only so
-   * settings already saved to localStorage/Firestore before that change
-   * don't break on load. Nothing reads it anymore. */
   theme: ReaderTheme;
   font: ReaderFont;
   fontSize: number;
   lineHeight: number;
+  paragraphSpacing: number;
   margin: number;
   maxWidth: number;
+  alignment: ReaderAlignment;
   mode: ReaderMode;
+  /** Millisecond client timestamp used only to reconcile preferences across
+   * devices. Reading settings are personal presentation data, not stats. */
+  updatedAt?: number;
 }
 
 export interface ReadingProgress {
   chapterIndex: number;
   scrollRatio: number;
+  /** Overall location in the book. Kept alongside the chapter position so
+   * dashboards can render honest progress without loading the book source. */
+  overallRatio?: number;
+  chapterCount?: number;
+  pageIndex?: number;
+  pageCount?: number;
   updatedAt: number;
 }
 
+export interface StoredReadingProgress extends ReadingProgress {
+  bookId: string;
+}
+
 export const DEFAULT_SETTINGS: ReaderSettings = {
-  theme: "dark",
+  theme: "paper",
   font: "serif",
   fontSize: 18,
   lineHeight: 1.7,
+  paragraphSpacing: 0.85,
   margin: 32,
   maxWidth: 66,
+  alignment: "justify",
   mode: "paginated",
 };
 
@@ -81,6 +95,53 @@ export function saveSettings(s: ReaderSettings): void {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
 }
 
+/** Loads the newest known preference set for the signed-in reader. Local
+ * settings keep the reader usable offline; Firestore simply reconciles them
+ * when the account is available again. */
+export async function loadSettingsRemote(
+  uid: string,
+  local: ReaderSettings,
+): Promise<ReaderSettings> {
+  const fb = getFirebase();
+  if (!fb) return local;
+  try {
+    const snap = await withFallback(
+      getDoc(doc(fb.db, "users", uid, "preferences", "reader")),
+      5000,
+      null,
+    );
+    const remote = snap?.exists()
+      ? ({ ...DEFAULT_SETTINGS, ...(snap.data() as Partial<ReaderSettings>) } as ReaderSettings)
+      : null;
+    if (!remote || (local.updatedAt ?? 0) >= (remote.updatedAt ?? 0)) return local;
+    saveSettings(remote);
+    return remote;
+  } catch (err) {
+    console.warn("[reader] loadSettingsRemote failed", err);
+    return local;
+  }
+}
+
+/** Best-effort account sync. A local save has already succeeded before this
+ * runs, so a transient network failure must never interrupt reading. */
+export async function saveSettingsRemote(uid: string, settings: ReaderSettings): Promise<void> {
+  const fb = getFirebase();
+  if (!fb) return;
+  try {
+    await withDeadline(
+      setDoc(
+        doc(fb.db, "users", uid, "preferences", "reader"),
+        { ...settings, updatedAt: settings.updatedAt ?? Date.now() },
+        { merge: true },
+      ),
+      8000,
+      "timeout",
+    );
+  } catch (err) {
+    console.warn("[reader] saveSettingsRemote failed", err);
+  }
+}
+
 export function loadProgressLocal(bookId: string): ReadingProgress | null {
   if (typeof window === "undefined") return null;
   const raw = localStorage.getItem(progressKey(bookId));
@@ -94,6 +155,27 @@ export function loadProgressLocal(bookId: string): ReadingProgress | null {
 
 /** Back-compat alias — returns local progress immediately (sync). */
 export const loadProgress = loadProgressLocal;
+
+/** Live account progress for the library and Home dashboard. The reader still
+ * works entirely offline; this listener is only attached for signed-in views. */
+export function subscribeReadingProgress(
+  uid: string,
+  callback: (items: StoredReadingProgress[]) => void,
+): Unsubscribe {
+  const fb = getFirebase();
+  if (!fb) return () => undefined;
+  return onSnapshot(
+    collection(fb.db, "users", uid, "progress"),
+    (snapshot) => {
+      callback(
+        snapshot.docs
+          .map((item) => ({ bookId: item.id, ...(item.data() as ReadingProgress) }))
+          .sort((a, b) => b.updatedAt - a.updatedAt),
+      );
+    },
+    (error) => console.warn("[reader] subscribeReadingProgress failed", error),
+  );
+}
 
 /**
  * Loads progress with a Firestore fallback. Returns the newest of remote/local

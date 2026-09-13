@@ -189,11 +189,12 @@ function RootComponent() {
           <Outlet />
         </main>
         {!isReaderRoute && <SiteFooter />}
-        {!isReaderRoute && <LumiPanel />}
+        {/* The reader opens Lumi with a book/selection context. It must stay
+            mounted there too; only the site chrome itself is suppressed. */}
+        <LumiPanel />
         {!isReaderRoute && <InstallPwaBanner />}
         <Toaster position="bottom-center" theme="light" richColors />
       </div>
     </QueryClientProvider>
   );
 }
-

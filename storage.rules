@@ -1,0 +1,22 @@
+rules_version = '2';
+
+// Private files only. An EPUB, its parsed reading representation and its
+// original source always live below the account that owns them; no URL or
+// guessed object path can grant another signed-in person access.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /users/{uid}/epubs/{bookId}/{fileName} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+
+      allow create, update: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.size < 80 * 1024 * 1024
+        && (
+          (fileName == 'book.json' && request.resource.contentType == 'application/json')
+          || (fileName == 'source.epub' && request.resource.contentType == 'application/epub+zip')
+        );
+
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}
