@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="BookVerse">
+  <defs>
+    <linearGradient id="blue" x1="64" y1="48" x2="448" y2="468" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5AA7FF"/>
+      <stop offset=".52" stop-color="#1769D8"/>
+      <stop offset="1" stop-color="#0A3F9E"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="18" stdDeviation="16" flood-color="#072A68" flood-opacity=".28"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="118" fill="url(#blue)"/>
+  <path d="M93 171c54-25 112-14 163 29v184c-51-43-109-54-163-29V171Z" fill="#fff" filter="url(#shadow)"/>
+  <path d="M419 171c-54-25-112-14-163 29v184c51-43 109-54 163-29V171Z" fill="#EAF4FF" filter="url(#shadow)"/>
+  <path d="M256 200v184" stroke="#B8D9FF" stroke-width="10"/>
+  <path d="M122 205c36-12 77-3 108 23M122 249c36-12 77-3 108 23M122 293c36-12 77-3 108 23M390 205c-36-12-77-3-108 23M390 249c-36-12-77-3-108 23M390 293c-36-12-77-3-108 23" fill="none" stroke="#64A8F8" stroke-linecap="round" stroke-width="11"/>
+  <circle cx="256" cy="115" r="20" fill="#fff" opacity=".9"/>
+  <path d="m256 76 7 22 22 7-22 7-7 22-7-22-22-7 22-7 7-22Z" fill="#fff"/>
+</svg>
