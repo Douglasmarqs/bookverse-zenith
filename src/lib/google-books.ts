@@ -291,10 +291,15 @@ export async function searchBooks(
         category: opts.category,
         maxResults: opts.maxResults,
       });
-      return {
-        results: res.data.results,
-        networkError: !!res.data.error && res.data.results.length === 0,
-      };
+      const results = res.data.results ?? [];
+      if (!res.data.error || results.length > 0) {
+        return { results, networkError: false };
+      }
+
+      // The server could reach neither Google Books nor a cached response.
+      // Continue into the browser/Open Library fallbacks below instead of
+      // turning a transient provider error into an empty catalog.
+      console.warn("[google-books] cloud function returned no catalog results; trying fallbacks");
     } catch (err) {
       fnBreaker.trip();
       console.warn(
