@@ -7,6 +7,10 @@
  * público e abrem direto no leitor via id do Project Gutenberg.
  */
 
+export const TELEGRAM_CHANNEL_URL = "https://t.me/livros_em_epub";
+
+
+
 export interface LumiPick {
   /** Project Gutenberg id — abre no leitor via gutenbergReaderId(). */
   gutenbergId: number;
