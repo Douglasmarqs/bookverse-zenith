@@ -36,6 +36,14 @@ import {
   saveEpubBook,
   uploadEpubBookToCloud,
 } from "@/lib/epub-store";
+import {
+  createPdfBook,
+  deletePdfBook,
+  deletePdfBookFromCloud,
+  isPdfReaderId,
+  savePdfBook,
+  uploadPdfBookToCloud,
+} from "@/lib/pdf-store";
 
 export const Route = createFileRoute("/biblioteca")({
   head: () => ({
@@ -133,6 +141,9 @@ function BibliotecaPage({ uid }: { uid: string }) {
         // remains orphaned.
         await deleteEpubBookFromCloud(uid, entry.readerId);
         await deleteEpubBook(entry.readerId).catch(() => {});
+      } else if (entry.readerId && isPdfReaderId(entry.readerId)) {
+        await deletePdfBookFromCloud(uid, entry.readerId);
+        await deletePdfBook(entry.readerId).catch(() => {});
       }
       await removeFromLibrary(uid, entry.id);
       toast.success("Livro removido da biblioteca.");
@@ -149,6 +160,30 @@ function BibliotecaPage({ uid }: { uid: string }) {
   async function handleUpload(file: File) {
     setUploading(true);
     try {
+      const isPdf = file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf";
+      if (isPdf) {
+        const book = createPdfBook(file);
+        await savePdfBook(book);
+        try {
+          await uploadPdfBookToCloud(uid, book);
+          await addToLibrary(
+            uid,
+            { title: book.title, author: book.author, cover: null, readerId: book.id },
+            "quero-ler",
+          );
+        } catch (err) {
+          void deletePdfBook(book.id).catch(() => {});
+          void deletePdfBookFromCloud(uid, book.id).catch(() => {});
+          throw err;
+        }
+        toast.success('"' + book.title + '" adicionado à sua biblioteca.', {
+          action: {
+            label: "Ler agora",
+            onClick: () => navigate({ to: "/reader/$bookId", params: { bookId: book.id } }),
+          },
+        });
+        return;
+      }
       // Lazy-loaded: jszip is a sizeable dependency that only readers who
       // actually use "Adicionar EPUB" should pay the download cost for.
       const { parseEpubFile } = await import("@/lib/epub-parser");
@@ -173,7 +208,7 @@ function BibliotecaPage({ uid }: { uid: string }) {
         },
       });
     } catch (err) {
-      toast.error(describeFirestoreError(err, "Não foi possível importar este EPUB."));
+      toast.error(describeFirestoreError(err, "Não foi possível importar este arquivo."));
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -260,7 +295,7 @@ function BibliotecaPage({ uid }: { uid: string }) {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".epub"
+            accept=".epub,.pdf,application/epub+zip,application/pdf"
             hidden
             onChange={(e) => {
               const file = e.target.files?.[0];
@@ -277,14 +312,14 @@ function BibliotecaPage({ uid }: { uid: string }) {
             ) : (
               <UploadCloud className="h-4 w-4" />
             )}
-            {uploading ? "Importando…" : "Adicionar EPUB"}
+            {uploading ? "Importando…" : "Adicionar livro"}
           </button>
         </div>
       </div>
       <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-        Importe um arquivo <code className="font-mono">.epub</code> seu para lê-lo aqui com a mesma
-        experiência dos outros livros. O arquivo é guardado de forma privada na sua conta e pode ser
-        aberto nos seus outros dispositivos.
+        Importe um <code className="font-mono">.epub</code> ou{" "}
+        <code className="font-mono">.pdf</code> seu para lê-lo aqui. O arquivo é guardado de forma
+        privada na sua conta e pode ser aberto nos seus outros dispositivos.
       </p>
 
       {entries && entries.length > 0 && (
@@ -384,7 +419,7 @@ function BibliotecaPage({ uid }: { uid: string }) {
               onClick={() => fileInputRef.current?.click()}
               className="inline-flex items-center gap-2 rounded-xl border border-border/70 bg-card px-5 py-2.5 text-sm font-semibold hover:border-gold/40 hover:text-gold"
             >
-              Ou importe um EPUB
+              Ou importe EPUB ou PDF
             </button>
           </div>
         </div>
@@ -465,9 +500,9 @@ function BookCard({
             {STATUS_LABEL[entry.status]}
           </span>
 
-          {entry.readerId && isEpubReaderId(entry.readerId) && (
+          {entry.readerId && (isEpubReaderId(entry.readerId) || isPdfReaderId(entry.readerId)) && (
             <span className="absolute bottom-2 left-2 rounded-full bg-background/85 px-2 py-0.5 text-[9px] font-medium text-foreground/80 ring-1 ring-border/60 backdrop-blur-sm">
-              EPUB privado
+              {isPdfReaderId(entry.readerId) ? "PDF privado" : "EPUB privado"}
             </span>
           )}
 

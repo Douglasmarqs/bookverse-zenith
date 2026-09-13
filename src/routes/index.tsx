@@ -23,7 +23,8 @@ export const Route = createFileRoute("/")({
       { title: "BookVerse — Sua leitura" },
       {
         name: "description",
-        content: "Sua biblioteca, seu progresso e seus EPUBs privados em um leitor confortável.",
+        content:
+          "Sua biblioteca, seu progresso e seus EPUBs e PDFs privados em um leitor confortável.",
       },
     ],
   }),
@@ -91,8 +92,8 @@ function Home() {
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
               {signedIn
-                ? "Seu progresso e as preferências do leitor acompanham a conta. Seus EPUBs permanecem privados."
-                : "Entre para guardar livros, importar EPUBs próprios e retomar a leitura em qualquer dispositivo."}
+                ? "Seu progresso e as preferências do leitor acompanham a conta. Seus EPUBs e PDFs permanecem privados."
+                : "Entre para guardar livros, importar EPUBs ou PDFs próprios e retomar a leitura em qualquer dispositivo."}
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               {current?.entry.readerId ? (
@@ -135,7 +136,7 @@ function Home() {
             <p className="mt-3 font-medium">Ainda não há uma leitura em andamento.</p>
             <p className="mt-1 text-sm text-muted-foreground">
               {signedIn
-                ? "Escolha um título de domínio público ou importe um EPUB que você possui."
+                ? "Escolha um título de domínio público ou importe um EPUB ou PDF que você possui."
                 : "Entre para começar uma biblioteca e manter seu lugar de leitura."}
             </p>
             <Link
@@ -219,7 +220,8 @@ function Home() {
               Traga sua biblioteca para o BookVerse.
             </p>
             <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-              Crie uma conta para sincronizar progresso, preferências e os EPUBs que você adiciona.
+              Crie uma conta para sincronizar progresso, preferências e os EPUBs e PDFs que você
+              adiciona.
             </p>
           </div>
           <Link

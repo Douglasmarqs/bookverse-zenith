@@ -13,7 +13,7 @@ import {
 import { toast } from "sonner";
 
 import { describeFirestoreError } from "@/lib/async-utils";
-import { rotate, LUMI_PICKS, TELEGRAM_CHANNEL_URL } from "@/lib/editorial";
+import { BAIXE_LIVROS_URL, rotate, LUMI_PICKS, TELEGRAM_CHANNEL_URL } from "@/lib/editorial";
 import { searchBooks, type BookMeta } from "@/lib/google-books";
 import { addToLibrary, slugFor } from "@/lib/library";
 import { searchOpenLibrary } from "@/lib/open-library";
@@ -56,6 +56,7 @@ function DescobrirPage() {
   const [added, setAdded] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState<Set<string>>(new Set());
   const [retryKey, setRetryKey] = useState(0);
+  const [curatedOffset, setCuratedOffset] = useState(0);
 
   const hasSearch = Boolean(search.q?.trim() || search.categoria);
   const effectiveQuery = `${search.q?.trim() ?? ""} ${search.categoria ?? ""}`.trim();
@@ -127,8 +128,17 @@ function DescobrirPage() {
     };
   }, [effectiveQuery, hasSearch, retryKey, search.categoria, search.q]);
 
+  useEffect(() => {
+    if (hasSearch || LUMI_PICKS.length <= 4) return;
+    const timer = window.setInterval(
+      () => setCuratedOffset((offset) => (offset + 4) % LUMI_PICKS.length),
+      9000,
+    );
+    return () => window.clearInterval(timer);
+  }, [hasSearch]);
+
   const curated = useMemo(() => {
-    const picks = rotate(LUMI_PICKS, 4);
+    const picks = rotate(LUMI_PICKS, 4, curatedOffset);
     if (!hasSearch) return picks;
     const normalized = effectiveQuery.toLocaleLowerCase("pt-BR");
     return LUMI_PICKS.filter((book) =>
@@ -137,7 +147,7 @@ function DescobrirPage() {
         .toLocaleLowerCase("pt-BR")
         .includes(normalized),
     ).slice(0, 4);
-  }, [effectiveQuery, hasSearch]);
+  }, [curatedOffset, effectiveQuery, hasSearch]);
 
   function runSearch(event: React.FormEvent) {
     event.preventDefault();
@@ -259,7 +269,7 @@ function DescobrirPage() {
             Obras de domínio público com leitura completa dentro do aplicativo, sem depender de uma
             busca externa para aparecerem.
           </p>
-          <div className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-7 grid grid-cols-1 gap-4 transition-all duration-500 sm:grid-cols-2 lg:grid-cols-4">
             {curated.map((book) => (
               <CuratedReadableCard
                 key={book.gutenbergId}
@@ -280,6 +290,28 @@ function DescobrirPage() {
               />
             ))}
           </div>
+          {LUMI_PICKS.length > 4 && (
+            <div className="mt-5 flex items-center justify-between gap-3">
+              <p className="text-xs text-muted-foreground">
+                A estante muda sozinha para revelar outras leituras disponíveis.
+              </p>
+              <div className="flex gap-1.5" aria-label="Outras leituras disponíveis">
+                {Array.from({ length: Math.ceil(LUMI_PICKS.length / 4) }, (_, page) => (
+                  <button
+                    key={page}
+                    onClick={() => setCuratedOffset(page * 4)}
+                    aria-label={`Mostrar grupo ${page + 1} de leituras`}
+                    aria-pressed={Math.floor(curatedOffset / 4) === page}
+                    className={`h-2 rounded-full transition-all ${
+                      Math.floor(curatedOffset / 4) === page
+                        ? "w-6 bg-gold"
+                        : "w-2 bg-border hover:bg-gold/50"
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </section>
       ) : (
         <>
@@ -385,10 +417,9 @@ function DescobrirPage() {
             <BookOpenCheck className="h-5 w-5" />
           </span>
           <div>
-            <h2 className="font-display text-lg font-medium">Onde encontrar EPUBs</h2>
+            <h2 className="font-display text-lg font-medium">Onde encontrar livros</h2>
             <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-              Escolha o canal do Telegram ou consulte a fonte oficial de clássicos de domínio
-              público.
+              Escolha o canal do Telegram, consulte clássicos de domínio público ou procure PDFs.
             </p>
           </div>
         </div>
@@ -408,6 +439,14 @@ function DescobrirPage() {
             className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-medium transition hover:border-gold/45 hover:text-gold"
           >
             Fonte oficial <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+          <a
+            href={BAIXE_LIVROS_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-700 transition hover:border-blue-400 hover:bg-blue-100"
+          >
+            Procurar PDFs <ExternalLink className="h-3.5 w-3.5" />
           </a>
         </div>
       </section>

@@ -71,6 +71,7 @@ function formatMemberSince(createdAt: unknown): string | null {
 function PerfilPage({ user }: { user: User }) {
   const navigate = useNavigate();
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profileReady, setProfileReady] = useState(false);
   const [libraryCount, setLibraryCount] = useState(0);
 
   const [name, setName] = useState("");
@@ -112,7 +113,14 @@ function PerfilPage({ user }: { user: User }) {
   const provider = getPrimaryProvider(user);
   const [siteTheme, setSiteTheme] = useSiteTheme();
 
-  useEffect(() => subscribeUserProfile(user.uid, setProfile), [user.uid]);
+  useEffect(
+    () =>
+      subscribeUserProfile(user.uid, (nextProfile) => {
+        setProfile(nextProfile);
+        setProfileReady(true);
+      }),
+    [user.uid],
+  );
   useEffect(
     () => subscribeLibrary(user.uid, (entries) => setLibraryCount(entries.length)),
     [user.uid],
@@ -258,7 +266,12 @@ function PerfilPage({ user }: { user: User }) {
       {/* Summary header */}
       <div className="mt-8 flex flex-wrap items-center gap-5 rounded-2xl border border-border/60 bg-card/40 p-6">
         <div className="group relative shrink-0">
-          <UserAvatar profile={profile} user={user} size="lg" />
+          <UserAvatar
+            profile={profile}
+            user={user}
+            size="lg"
+            allowProviderFallback={profileReady}
+          />
           <label
             className={`absolute -bottom-1 -right-1 grid h-8 w-8 cursor-pointer place-items-center rounded-full bg-gold text-primary-foreground ring-2 ring-background transition hover:scale-105 ${photoSaving ? "pointer-events-none opacity-70" : ""}`}
             title="Trocar foto de perfil"

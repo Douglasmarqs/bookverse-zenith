@@ -15,6 +15,7 @@ import {
   X as XIcon,
   Trash2,
   Share2,
+  FileText,
 } from "lucide-react";
 
 import { getSampleBook, type Book } from "@/lib/sample-book";
@@ -25,6 +26,13 @@ import {
   isEpubReaderId,
   saveEpubBook,
 } from "@/lib/epub-store";
+import {
+  downloadPdfBookFromCloud,
+  getPdfBook,
+  isPdfReaderId,
+  savePdfBook,
+  type PdfBook,
+} from "@/lib/pdf-store";
 import {
   loadProgressRemote,
   loadSettings,
@@ -40,10 +48,12 @@ import {
   subscribeAnnotations,
   addHighlight,
   removeHighlight,
+  updateHighlightColor,
   updateHighlightNote,
   addBookmark,
   removeBookmark,
   type BookAnnotations,
+  type Highlight,
   type HighlightColor,
 } from "@/lib/annotations";
 import { ReaderSettingsPanel } from "@/components/reader/settings-panel";
@@ -71,12 +81,14 @@ export const Route = createFileRoute("/reader/$bookId")({
   }):
     | { source: "sample"; book: Book }
     | { source: "gutenberg"; gutenbergId: number }
-    | { source: "epub"; localId: string } => {
+    | { source: "epub"; localId: string }
+    | { source: "pdf"; localId: string } => {
     const sample = getSampleBook(params.bookId);
     if (sample) return { source: "sample", book: sample };
     const gutenbergId = parseGutenbergReaderId(params.bookId);
     if (gutenbergId !== null) return { source: "gutenberg", gutenbergId };
     if (isEpubReaderId(params.bookId)) return { source: "epub", localId: params.bookId };
+    if (isPdfReaderId(params.bookId)) return { source: "pdf", localId: params.bookId };
     throw notFound();
   },
   notFoundComponent: () => (
@@ -118,6 +130,9 @@ function GuardedReaderPage() {
   }
   if (loaderData.source === "epub") {
     return <EpubBookLoader uid={user.uid} localId={loaderData.localId} />;
+  }
+  if (loaderData.source === "pdf") {
+    return <PdfBookLoader uid={user.uid} localId={loaderData.localId} />;
   }
   return <GutenbergBookLoader uid={user.uid} gutenbergId={loaderData.gutenbergId} />;
 }
@@ -188,6 +203,121 @@ function EpubBookLoader({ uid, localId }: { uid: string; localId: string }) {
   }
 
   return <ReaderPage uid={uid} book={book} />;
+}
+
+function PdfBookLoader({ uid, localId }: { uid: string; localId: string }) {
+  const [book, setBook] = useState<PdfBook | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [stage, setStage] = useState<"local" | "cloud">("local");
+
+  useEffect(() => {
+    let cancelled = false;
+    setBook(null);
+    setError(null);
+    setStage("local");
+
+    async function load() {
+      const local = await getPdfBook(localId).catch((err) => {
+        console.warn("[reader] failed to read local pdf store", err);
+        return null;
+      });
+      if (cancelled) return;
+      if (local) {
+        setBook(local);
+        return;
+      }
+      setStage("cloud");
+      const cloudBook = await downloadPdfBookFromCloud(uid, localId);
+      if (cancelled) return;
+      if (cloudBook) {
+        setBook(cloudBook);
+        void savePdfBook(cloudBook).catch(() => {});
+        return;
+      }
+      setError(
+        "Este PDF não foi encontrado neste navegador nem na sua cópia privada. Importe-o novamente em Minha biblioteca.",
+      );
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [localId, uid]);
+
+  if (error) {
+    return (
+      <div className="mx-auto max-w-md px-6 py-32 text-center">
+        <h2 className="font-display text-3xl">Não foi possível abrir este PDF</h2>
+        <p className="mt-3 text-muted-foreground">{error}</p>
+        <Link
+          to="/biblioteca"
+          className="mt-6 inline-block rounded-full bg-gold px-5 py-2.5 text-sm font-medium text-primary-foreground"
+        >
+          Voltar à biblioteca
+        </Link>
+      </div>
+    );
+  }
+
+  if (!book) {
+    return (
+      <ReaderPageSkeleton label={stage === "cloud" ? "Preparando seu PDF…" : "Abrindo PDF…"} />
+    );
+  }
+
+  return <PdfReaderPage uid={uid} book={book} />;
+}
+
+function PdfReaderPage({ uid, book }: { uid: string; book: PdfBook }) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const objectUrl = URL.createObjectURL(book.source);
+    setUrl(objectUrl);
+    void markAsReading(uid, { title: book.title, author: book.author, cover: null }, book.id);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [book.author, book.id, book.source, book.title, uid]);
+
+  return (
+    <div className="fixed inset-0 z-30 flex flex-col bg-[#edf5ff] text-slate-950">
+      <header className="flex items-center justify-between gap-3 border-b border-blue-100 bg-white/95 px-4 py-3 shadow-sm backdrop-blur md:px-6">
+        <div className="flex min-w-0 items-center gap-2">
+          <Link
+            to="/biblioteca"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full transition hover:bg-blue-50"
+            aria-label="Voltar à biblioteca"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+          <div className="min-w-0">
+            <p className="truncate font-display text-sm font-medium">{book.title}</p>
+            <p className="truncate text-[11px] text-slate-500">PDF privado · {book.sourceName}</p>
+          </div>
+        </div>
+        <a
+          href={url ?? undefined}
+          download={book.sourceName}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-blue-200 px-3 py-2 text-xs font-medium text-blue-700 transition hover:bg-blue-50"
+        >
+          <FileText className="h-3.5 w-3.5" /> Baixar
+        </a>
+      </header>
+      <main className="min-h-0 flex-1 p-2 sm:p-4">
+        {url ? (
+          <iframe
+            title={`Leitura de ${book.title}`}
+            src={`${url}#view=FitH`}
+            className="h-full w-full rounded-xl border border-blue-100 bg-white shadow-sm"
+          />
+        ) : (
+          <div className="grid h-full place-items-center text-sm text-slate-500">
+            Abrindo seu PDF…
+          </div>
+        )}
+      </main>
+    </div>
+  );
 }
 
 function GutenbergBookLoader({ uid, gutenbergId }: { uid: string; gutenbergId: number }) {
@@ -300,13 +430,22 @@ const THEME_STYLES = {
 } as const;
 
 const PAGE_GESTURE_HINT_KEY = "bookverse:reader-page-gesture-tip";
-const PAGE_TURN_DURATION_MS = 720;
+const PAGE_TURN_DURATION_MS = 640;
 type PageTurnDirection = "next" | "previous";
 
 type PageTurn = {
   direction: PageTurnDirection;
   pageIndex: number;
   snapshot: string;
+};
+
+type SelectedPassage = {
+  text: string;
+  context: string;
+  startParagraphIndex: number;
+  endParagraphIndex: number;
+  startOffset: number;
+  endOffset: number;
 };
 
 function ReaderPage({ uid, book }: { uid: string; book: Book }) {
@@ -320,15 +459,13 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     highlights: [],
     bookmarks: [],
   });
-  const [activeParagraph, setActiveParagraph] = useState<number | null>(null);
+  const [activeHighlightId, setActiveHighlightId] = useState<string | null>(null);
   const [editingNoteFor, setEditingNoteFor] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
   const [saved, setSaved] = useState(true);
   const [hydrated, setHydrated] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
-  const [selectedPassage, setSelectedPassage] = useState<{ text: string; context: string } | null>(
-    null,
-  );
+  const [selectedPassage, setSelectedPassage] = useState<SelectedPassage | null>(null);
   const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Paginated mode: content is laid out in CSS columns exactly as wide as
@@ -457,7 +594,8 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       }
       setChapterIndex(clamped);
       setScrollRatio(edgeRatio);
-      setActiveParagraph(null);
+      setActiveHighlightId(null);
+      setSelectedPassage(null);
       setEditingNoteFor(null);
       if (settings.mode === "paginated") {
         // Consumed by the page-measurement effect below once it knows how
@@ -636,12 +774,20 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   // lateral gesture advances exactly one virtual page, with the same paper
   // leaf animation used by the keyboard and the edge controls.
   const handlePaginatedTouchStart = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+    if (event.target instanceof Element && event.target.closest("[data-reader-action='true']")) {
+      touchStartRef.current = null;
+      return;
+    }
     const touch = event.touches[0];
     touchStartRef.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
   }, []);
 
   const handlePaginatedTouchEnd = useCallback(
     (event: React.TouchEvent<HTMLDivElement>) => {
+      if (event.target instanceof Element && event.target.closest("[data-reader-action='true']")) {
+        touchStartRef.current = null;
+        return;
+      }
       const start = touchStartRef.current;
       touchStartRef.current = null;
       const touch = event.changedTouches[0];
@@ -654,7 +800,9 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
 
       dismissPageGestureHint();
       revealControls();
-      goToPage(pageIndex + (dx < 0 ? 1 : -1));
+      // Preserve the original BookVerse gesture: dragging the leaf to the
+      // right advances; dragging it back to the left returns one page.
+      goToPage(pageIndex + (dx > 0 ? 1 : -1));
     },
     [dismissPageGestureHint, goToPage, pageIndex, revealControls],
   );
@@ -713,34 +861,88 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     return Math.min(1, chapterIndex * per + scrollRatio * per);
   }, [book.chapters.length, chapterIndex, scrollRatio]);
 
-  const currentHighlight = useCallback(
-    (paragraphIndex: number) =>
-      annotations.highlights.find(
-        (h) => h.chapterId === chapter.id && h.paragraphIndex === paragraphIndex,
-      ),
+  const chapterHighlights = useMemo(
+    () => annotations.highlights.filter((highlight) => highlight.chapterId === chapter.id),
     [annotations.highlights, chapter.id],
   );
+  const activeHighlight = useMemo(
+    () => chapterHighlights.find((highlight) => highlight.id === activeHighlightId) ?? null,
+    [activeHighlightId, chapterHighlights],
+  );
 
-  const captureTextSelection = useCallback(() => {
-    const selection = window.getSelection();
-    const text = selection?.toString().replace(/\s+/g, " ").trim() ?? "";
-    if (!text || text.length < 2 || !contentRef.current?.contains(selection?.anchorNode ?? null)) {
-      setSelectedPassage(null);
-      return;
-    }
-    const boundedText = text.slice(0, 900);
-    const anchor =
-      selection?.anchorNode?.parentElement?.closest<HTMLElement>("[data-paragraph-index]");
-    const index = Number(anchor?.dataset.paragraphIndex ?? 0);
-    const safeIndex = Number.isFinite(index)
-      ? Math.max(0, Math.min(chapter.paragraphs.length - 1, index))
-      : 0;
-    const nearby = chapter.paragraphs
-      .slice(Math.max(0, safeIndex - 1), Math.min(chapter.paragraphs.length, safeIndex + 2))
-      .join(" ")
-      .slice(0, 1500);
-    setSelectedPassage({ text: boundedText, context: nearby });
-  }, [chapter.paragraphs]);
+  const captureTextSelection = useCallback(
+    (event?: React.PointerEvent) => {
+      const selection = window.getSelection();
+      if (
+        event?.target instanceof Element &&
+        event.target.closest("[data-reader-action='true']") &&
+        (!selection || selection.isCollapsed)
+      ) {
+        return;
+      }
+      if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+        return;
+      }
+      const range = selection.getRangeAt(0);
+      const content = contentRef.current;
+      if (!content || !content.contains(range.commonAncestorContainer)) {
+        return;
+      }
+      const paragraphFor = (node: Node) => {
+        const element =
+          node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
+        return element?.closest<HTMLElement>("[data-paragraph-index]") ?? null;
+      };
+      const startParagraph = paragraphFor(range.startContainer);
+      const endParagraph = paragraphFor(range.endContainer);
+      if (!startParagraph || !endParagraph) return;
+
+      const startIndex = Number(startParagraph.dataset.paragraphIndex);
+      const endIndex = Number(endParagraph.dataset.paragraphIndex);
+      if (
+        !Number.isFinite(startIndex) ||
+        !Number.isFinite(endIndex) ||
+        startIndex < 0 ||
+        endIndex < startIndex
+      ) {
+        return;
+      }
+
+      const offsetIn = (paragraph: HTMLElement, node: Node, offset: number) => {
+        const before = document.createRange();
+        try {
+          before.selectNodeContents(paragraph);
+          before.setEnd(node, offset);
+          return Math.max(
+            0,
+            Math.min(paragraph.textContent?.length ?? 0, before.toString().length),
+          );
+        } catch {
+          return 0;
+        }
+      };
+      const text = selection.toString().replace(/\s+/g, " ").trim();
+      if (text.length < 2) return;
+
+      const startOffset = offsetIn(startParagraph, range.startContainer, range.startOffset);
+      const endOffset = offsetIn(endParagraph, range.endContainer, range.endOffset);
+      if (startIndex === endIndex && endOffset <= startOffset) return;
+      const context = chapter.paragraphs
+        .slice(Math.max(0, startIndex - 1), Math.min(chapter.paragraphs.length, endIndex + 2))
+        .join(" ")
+        .slice(0, 1500);
+      setActiveHighlightId(null);
+      setSelectedPassage({
+        text: text.slice(0, 1800),
+        context,
+        startParagraphIndex: startIndex,
+        endParagraphIndex: endIndex,
+        startOffset,
+        endOffset,
+      });
+    },
+    [chapter.paragraphs],
+  );
 
   function askLumiAboutPassage(action: string, passage = selectedPassage) {
     if (!passage) return;
@@ -757,39 +959,56 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     setSelectedPassage(null);
   }
 
-  async function handleHighlight(paragraphIndex: number, color: HighlightColor) {
-    const existing = currentHighlight(paragraphIndex);
+  async function handleHighlightColor(color: HighlightColor) {
     try {
-      if (existing) {
-        if (existing.color === color) {
-          await removeHighlight(uid, book.id, existing.id);
+      if (activeHighlight) {
+        if (activeHighlight.color === color) {
+          await removeHighlight(uid, book.id, activeHighlight.id);
+          setActiveHighlightId(null);
         } else {
-          await removeHighlight(uid, book.id, existing.id);
-          await addHighlight(uid, book.id, {
-            chapterId: chapter.id,
-            chapterIndex,
-            paragraphIndex,
-            color,
-            excerpt: chapter.paragraphs[paragraphIndex].slice(0, 140),
-          });
+          await updateHighlightColor(uid, book.id, activeHighlight.id, color);
         }
-      } else {
+        return;
+      }
+      if (!selectedPassage) return;
+      let created = 0;
+      for (
+        let paragraphIndex = selectedPassage.startParagraphIndex;
+        paragraphIndex <= selectedPassage.endParagraphIndex;
+        paragraphIndex += 1
+      ) {
+        const paragraph = chapter.paragraphs[paragraphIndex] ?? "";
+        const startOffset =
+          paragraphIndex === selectedPassage.startParagraphIndex ? selectedPassage.startOffset : 0;
+        const endOffset =
+          paragraphIndex === selectedPassage.endParagraphIndex
+            ? selectedPassage.endOffset
+            : paragraph.length;
+        if (endOffset <= startOffset) continue;
         await addHighlight(uid, book.id, {
           chapterId: chapter.id,
           chapterIndex,
           paragraphIndex,
+          startOffset,
+          endOffset,
           color,
-          excerpt: chapter.paragraphs[paragraphIndex].slice(0, 140),
+          excerpt: paragraph.slice(startOffset, Math.min(endOffset, startOffset + 140)),
         });
-        void awardXp(uid, 2);
+        created += 1;
       }
+      if (created > 0) void awardXp(uid, 2);
+      window.getSelection()?.removeAllRanges();
+      setSelectedPassage(null);
     } catch (err) {
       toast.error(describeFirestoreError(err, "Não foi possível salvar o destaque agora."));
     }
   }
 
-  async function handleShareHighlight(paragraphIndex: number) {
-    const quote = chapter.paragraphs[paragraphIndex]?.trim();
+  async function handleShareHighlight(highlight: Highlight) {
+    const paragraph = chapter.paragraphs[highlight.paragraphIndex] ?? "";
+    const start = Math.max(0, highlight.startOffset ?? 0);
+    const end = Math.min(paragraph.length, highlight.endOffset ?? paragraph.length);
+    const quote = paragraph.slice(start, end).trim();
     if (!quote) return;
     const text = `"${quote}"\n— ${book.title}${book.author ? `, ${book.author}` : ""}\n\nLido no BookVerse 🦉`;
     try {
@@ -1020,116 +1239,53 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
               }
               const i = block.paragraphIndex;
               const p = chapter.paragraphs[i];
-              const highlight = currentHighlight(i);
-              const isActive = activeParagraph === i;
-              const isEditingNote = highlight && editingNoteFor === highlight.id;
+              const paragraphHighlights = chapterHighlights.filter(
+                (highlight) => highlight.paragraphIndex === i,
+              );
+              const editingHighlight =
+                paragraphHighlights.find((highlight) => highlight.id === editingNoteFor) ?? null;
               return (
                 <div key={i} className="relative" style={{ breakInside: "avoid" }}>
                   <p
                     data-paragraph-index={i}
-                    onClick={() => setActiveParagraph(isActive ? null : i)}
-                    className="cursor-pointer rounded-sm px-2 -mx-2 py-0.5 [hyphens:auto] transition-colors"
-                    style={
-                      highlight
-                        ? {
-                            backgroundColor: HIGHLIGHT_BG[highlight.color],
-                            boxShadow: `inset 3px 0 0 0 ${HIGHLIGHT_ACCENT[highlight.color]}`,
-                            marginBottom: 0,
-                            textAlign: settings.alignment,
-                          }
-                        : { marginBottom: 0, textAlign: settings.alignment }
-                    }
+                    className="rounded-sm px-2 -mx-2 py-0.5 [hyphens:auto]"
+                    style={{ marginBottom: 0, textAlign: settings.alignment }}
                   >
-                    {p}
+                    <HighlightedParagraph
+                      text={p}
+                      highlights={paragraphHighlights}
+                      activeHighlightId={activeHighlightId}
+                      onHighlightClick={(highlight) => {
+                        window.getSelection()?.removeAllRanges();
+                        setSelectedPassage(null);
+                        setActiveHighlightId(highlight.id);
+                      }}
+                    />
                   </p>
 
-                  {highlight?.note && !isEditingNote && (
-                    <button
-                      onClick={() => {
-                        setEditingNoteFor(highlight.id);
-                        setNoteDraft(highlight.note ?? "");
-                      }}
-                      className="mb-6 mt-1 flex items-start gap-2 rounded-lg border-l-2 py-1 pl-3 pr-2 text-left text-sm italic"
-                      style={{ borderColor: theme.accent, color: theme.muted }}
-                    >
-                      <StickyNote className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                      {highlight.note}
-                    </button>
-                  )}
-                  {!highlight?.note && <div style={{ height: `${settings.paragraphSpacing}em` }} />}
-
-                  {isActive && (
-                    <div
-                      className="mb-4 -mt-1 flex flex-wrap items-center gap-2 rounded-2xl border px-3 py-2 text-xs"
-                      style={{ borderColor: theme.rule, fontFamily: "var(--font-sans)" }}
-                    >
-                      <Highlighter className="h-3.5 w-3.5" style={{ color: theme.muted }} />
-                      {(["gold", "green", "blue", "pink"] as HighlightColor[]).map((c) => (
-                        <button
-                          key={c}
-                          onClick={() => void handleHighlight(i, c)}
-                          aria-label={`Destacar em ${c}`}
-                          className="h-6 w-6 rounded-full ring-1 ring-black/10 transition hover:scale-110"
-                          style={{
-                            backgroundColor: HIGHLIGHT_ACCENT[c],
-                            outline: highlight?.color === c ? `2px solid ${theme.fg}` : "none",
-                            outlineOffset: "2px",
-                          }}
-                        />
-                      ))}
-                      <span className="mx-1 h-4 w-px" style={{ backgroundColor: theme.rule }} />
-                      {highlight ? (
-                        <>
-                          <button
-                            onClick={() => {
-                              setEditingNoteFor(highlight.id);
-                              setNoteDraft(highlight.note ?? "");
-                            }}
-                            className="inline-flex items-center gap-1 rounded-full px-2 py-1 hover:opacity-70"
-                          >
-                            <StickyNote className="h-3.5 w-3.5" /> Nota
-                          </button>
-                          <button
-                            onClick={() => void handleShareHighlight(i)}
-                            className="inline-flex items-center gap-1 rounded-full px-2 py-1 hover:opacity-70"
-                          >
-                            <Share2 className="h-3.5 w-3.5" /> Compartilhar
-                          </button>
-                          <button
-                            onClick={() => void handleHighlight(i, highlight.color)}
-                            className="inline-flex items-center gap-1 rounded-full px-2 py-1 hover:opacity-70"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" /> Remover
-                          </button>
-                        </>
-                      ) : (
-                        <span style={{ color: theme.muted }}>Toque numa cor pra destacar</span>
-                      )}
+                  {paragraphHighlights
+                    .filter((highlight) => highlight.note && highlight.id !== editingNoteFor)
+                    .map((highlight) => (
                       <button
-                        onClick={() =>
-                          askLumiAboutPassage("Explique em linguagem simples", {
-                            text: p.slice(0, 900),
-                            context: chapter.paragraphs
-                              .slice(Math.max(0, i - 1), Math.min(chapter.paragraphs.length, i + 2))
-                              .join(" ")
-                              .slice(0, 1500),
-                          })
-                        }
-                        className="inline-flex items-center gap-1 rounded-full px-2 py-1 hover:opacity-70"
+                        key={highlight.id}
+                        data-reader-action="true"
+                        onClick={() => {
+                          setActiveHighlightId(highlight.id);
+                          setEditingNoteFor(highlight.id);
+                          setNoteDraft(highlight.note ?? "");
+                        }}
+                        className="mb-4 mt-1 flex items-start gap-2 rounded-lg border-l-2 py-1 pl-3 pr-2 text-left text-sm italic"
+                        style={{ borderColor: theme.accent, color: theme.muted }}
                       >
-                        <Sparkles className="h-3.5 w-3.5" /> Explicar
+                        <StickyNote className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        {highlight.note}
                       </button>
-                      <button
-                        onClick={() => setActiveParagraph(null)}
-                        className="ml-auto rounded-full p-1 hover:opacity-70"
-                      >
-                        <XIcon className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  )}
+                    ))}
+                  <div style={{ height: String(settings.paragraphSpacing) + "em" }} />
 
-                  {isEditingNote && (
+                  {editingHighlight && (
                     <div
+                      data-reader-action="true"
                       className="mb-6 -mt-1 rounded-lg border p-3"
                       style={{ borderColor: theme.rule }}
                     >
@@ -1157,7 +1313,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                           Cancelar
                         </button>
                         <button
-                          onClick={() => void handleSaveNote(highlight!.id)}
+                          onClick={() => void handleSaveNote(editingHighlight.id)}
                           className="rounded-full px-3 py-1.5 text-xs font-medium"
                           style={{ backgroundColor: theme.accent, color: theme.bg }}
                         >
@@ -1254,12 +1410,13 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
               fontFamily: "var(--font-sans)",
             }}
           >
-            Deslize para os lados para virar a página
+            Deslize à direita para avançar a página
           </button>
         )}
 
-        {selectedPassage && (
+        {(selectedPassage || activeHighlight) && (
           <div
+            data-reader-action="true"
             className="absolute bottom-5 left-1/2 z-30 flex w-[min(94vw,42rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 rounded-2xl border p-2 shadow-xl backdrop-blur-xl"
             style={{
               borderColor: theme.rule,
@@ -1267,27 +1424,72 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
               fontFamily: "var(--font-sans)",
             }}
           >
-            {[
-              ["O que significa?", "Explique o significado de"],
-              ["Explique", "Explique em linguagem simples"],
-              ["Resumir", "Resuma"],
-              ["Contexto", "Dê o contexto de"],
-              ["Por que?", "Explique por que isso acontece em"],
-            ].map(([label, action]) => (
+            <Highlighter className="ml-1 h-3.5 w-3.5" style={{ color: theme.muted }} />
+            {(["gold", "green", "blue", "pink"] as HighlightColor[]).map((color) => (
               <button
-                key={label}
-                onClick={() => askLumiAboutPassage(action)}
-                className="rounded-full px-3 py-1.5 text-xs font-medium transition hover:opacity-70"
-                style={{ color: theme.fg, backgroundColor: theme.rule }}
-              >
-                {label}
-              </button>
+                key={color}
+                data-reader-action="true"
+                onClick={() => void handleHighlightColor(color)}
+                aria-label={`Destacar em ${color}`}
+                className="h-7 w-7 rounded-full ring-1 ring-black/10 transition hover:scale-110"
+                style={{
+                  backgroundColor: HIGHLIGHT_ACCENT[color],
+                  outline: activeHighlight?.color === color ? `2px solid ${theme.fg}` : "none",
+                  outlineOffset: "2px",
+                }}
+              />
             ))}
+            <span className="mx-0.5 h-5 w-px" style={{ backgroundColor: theme.rule }} />
+            {activeHighlight ? (
+              <>
+                <button
+                  data-reader-action="true"
+                  onClick={() => {
+                    setEditingNoteFor(activeHighlight.id);
+                    setNoteDraft(activeHighlight.note ?? "");
+                  }}
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-1.5 text-xs font-medium transition hover:opacity-70"
+                >
+                  <StickyNote className="h-3.5 w-3.5" /> Nota
+                </button>
+                <button
+                  data-reader-action="true"
+                  onClick={() => void handleShareHighlight(activeHighlight)}
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-1.5 text-xs font-medium transition hover:opacity-70"
+                >
+                  <Share2 className="h-3.5 w-3.5" /> Compartilhar
+                </button>
+                <button
+                  data-reader-action="true"
+                  onClick={() => {
+                    void removeHighlight(uid, book.id, activeHighlight.id);
+                    setActiveHighlightId(null);
+                  }}
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-1.5 text-xs font-medium transition hover:opacity-70"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Remover
+                </button>
+              </>
+            ) : (
+              <>
+                <span className="hidden text-xs sm:inline" style={{ color: theme.muted }}>
+                  Toque numa cor para destacar
+                </span>
+                <button
+                  data-reader-action="true"
+                  onClick={() => askLumiAboutPassage("Explique em linguagem simples")}
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-1.5 text-xs font-medium transition hover:opacity-70"
+                >
+                  <Sparkles className="h-3.5 w-3.5" /> Explicar
+                </button>
+              </>
+            )}
             <button
               aria-label="Fechar ações do trecho"
               onClick={() => {
                 window.getSelection()?.removeAllRanges();
                 setSelectedPassage(null);
+                setActiveHighlightId(null);
               }}
               className="rounded-full p-1.5"
               style={{ color: theme.muted }}
@@ -1407,7 +1609,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
               (annotations.highlights.length === 0 ? (
                 <div className="flex-1 p-6 text-center text-sm" style={{ color: theme.muted }}>
                   <Highlighter className="mx-auto h-5 w-5" />
-                  <p className="mt-3">Toque em um parágrafo durante a leitura para destacá-lo.</p>
+                  <p className="mt-3">Selecione um trecho durante a leitura para destacá-lo.</p>
                 </div>
               ) : (
                 <ul className="flex-1 space-y-2 overflow-y-auto p-3">
@@ -1495,6 +1697,62 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       )}
     </div>
   );
+}
+
+function HighlightedParagraph({
+  text,
+  highlights,
+  activeHighlightId,
+  onHighlightClick,
+}: {
+  text: string;
+  highlights: Highlight[];
+  activeHighlightId: string | null;
+  onHighlightClick: (highlight: Highlight) => void;
+}) {
+  const ranges = highlights
+    .map((highlight) => ({
+      highlight,
+      start: Math.max(0, Math.min(text.length, highlight.startOffset ?? 0)),
+      end: Math.max(0, Math.min(text.length, highlight.endOffset ?? text.length)),
+    }))
+    .filter((range) => range.end > range.start)
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+
+  const parts: React.ReactNode[] = [];
+  let cursor = 0;
+  for (const range of ranges) {
+    // Do not nest marks when a legacy full-paragraph highlight overlaps a
+    // newer selection. The newer range is still stored; rendering remains
+    // readable until the legacy mark is removed.
+    if (range.start < cursor) continue;
+    if (range.start > cursor) {
+      parts.push(text.slice(cursor, range.start));
+    }
+    const selected = range.highlight.id === activeHighlightId;
+    parts.push(
+      <mark
+        key={range.highlight.id}
+        data-reader-action="true"
+        onClick={() => {
+          if (window.getSelection()?.isCollapsed) onHighlightClick(range.highlight);
+        }}
+        className="cursor-pointer rounded-[0.18em] px-[0.04em] transition-shadow"
+        style={{
+          backgroundColor: HIGHLIGHT_BG[range.highlight.color],
+          boxShadow: selected
+            ? `inset 0 -2px 0 ${HIGHLIGHT_ACCENT[range.highlight.color]}, 0 0 0 1px ${HIGHLIGHT_ACCENT[range.highlight.color]}`
+            : `inset 0 -2px 0 ${HIGHLIGHT_ACCENT[range.highlight.color]}`,
+          color: "inherit",
+        }}
+      >
+        {text.slice(range.start, range.end)}
+      </mark>,
+    );
+    cursor = range.end;
+  }
+  if (cursor < text.length) parts.push(text.slice(cursor));
+  return <>{parts}</>;
 }
 
 function IconBtn({
