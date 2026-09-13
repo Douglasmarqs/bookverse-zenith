@@ -28,7 +28,6 @@ const inFlightMeta = createInFlightMap<BookMeta | null>();
 const fnBreaker = createBreaker(5 * 60_000);
 const googleBreaker = createBreaker(10 * 60_000);
 
-
 export interface BookMeta {
   title: string;
   author: string;
@@ -223,7 +222,9 @@ async function resolveBookMeta(
       const fn = httpsCallable<{ title: string; author?: string }, { meta: BookMeta | null }>(
         getFunctions(fb.app),
         "getGoogleBookMeta",
-        { timeout: 6000 },
+        // The function's upstream Google Books request can take up to 9 s;
+        // leave room for a cold start and the network round trip.
+        { timeout: 15_000 },
       );
       const res = await fn({ title, author });
       meta = res.data.meta;
@@ -270,7 +271,6 @@ async function resolveBookMeta(
   return meta;
 }
 
-
 /** Full-text search across Google Books — used by the "Descobrir" catalog. */
 export async function searchBooks(
   query: string,
@@ -285,7 +285,7 @@ export async function searchBooks(
       const fn = httpsCallable<
         { query: string; category?: string; maxResults?: number },
         { results: BookMeta[]; error?: boolean }
-      >(getFunctions(fb.app), "searchGoogleBooks", { timeout: 6000 });
+      >(getFunctions(fb.app), "searchGoogleBooks", { timeout: 15_000 });
       const res = await fn({
         query: trimmed,
         category: opts.category,
@@ -303,7 +303,6 @@ export async function searchBooks(
       );
     }
   }
-
 
   try {
     const results = await directSearchBooks(trimmed, opts.category, opts.maxResults ?? 24);

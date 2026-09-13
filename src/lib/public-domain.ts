@@ -292,7 +292,9 @@ export async function searchPublicDomainBooks(
       const fn = httpsCallable<
         { query: string; maxResults?: number },
         { results: PublicDomainSummary[] }
-      >(getFunctions(fb.app), "searchPublicDomainBooks", { timeout: 6000 });
+        // Gutendex has a 9 s server-side deadline; a shorter client deadline
+        // made a healthy callable function look unavailable.
+      >(getFunctions(fb.app), "searchPublicDomainBooks", { timeout: 15_000 });
       const res = await fn({ query, maxResults });
       return res.data.results ?? [];
     } catch (err) {
@@ -303,7 +305,6 @@ export async function searchPublicDomainBooks(
       );
     }
   }
-
 
   try {
     return await directSearchPublicDomain(query, maxResults);
@@ -322,7 +323,7 @@ export async function getPublicDomainBook(gutenbergId: number): Promise<Book> {
       const fn = httpsCallable<{ gutenbergId: number }, Book>(
         getFunctions(fb.app),
         "getPublicDomainBook",
-        { timeout: 8000 },
+        { timeout: 30_000 },
       );
       const res = await fn({ gutenbergId });
       return res.data;
@@ -334,7 +335,6 @@ export async function getPublicDomainBook(gutenbergId: number): Promise<Book> {
       );
     }
   }
-
 
   try {
     return await directGetPublicDomainBook(gutenbergId);
