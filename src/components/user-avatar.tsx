@@ -23,13 +23,20 @@ export function UserAvatar({
   user,
   size = "md",
   className = "",
+  allowProviderFallback = true,
 }: {
   profile?: MinimalProfile | null;
   user?: User | null;
   size?: keyof typeof SIZES;
   className?: string;
+  /** Avoid briefly flashing the provider image while a saved custom photo is
+   * still loading from Firestore. */
+  allowProviderFallback?: boolean;
 }) {
-  const photo = profile?.customPhotoDataUrl || profile?.photoURL || user?.photoURL;
+  const photo =
+    profile?.customPhotoDataUrl ||
+    profile?.photoURL ||
+    (allowProviderFallback ? user?.photoURL : null);
   const name = (profile?.displayName || user?.displayName || user?.email || "Leitor").trim();
   const base = `relative grid shrink-0 place-items-center overflow-hidden rounded-full bg-gold/10 ring-1 ring-gold/40 ${SIZES[size]} ${className}`;
 
@@ -43,6 +50,7 @@ export function UserAvatar({
             the content is taken out of grid flow entirely. That grid
             blowout was the cause of the oval, overflowing avatar. */}
         <img
+          key={photo}
           src={photo}
           alt=""
           className="absolute inset-0 h-full w-full rounded-full object-cover"

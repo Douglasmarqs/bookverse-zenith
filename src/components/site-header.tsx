@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Search, Menu, X, BookOpen, LogOut, Settings, Sparkles } from "lucide-react";
+import { Search, Menu, X, BookOpen, LogOut, Settings, Sparkles, UserRound } from "lucide-react";
 import type { User } from "firebase/auth";
 import { signOut, subscribeAuth } from "../lib/firebase";
 import { ensureUserProfile, subscribeUserProfile, type UserProfile } from "../lib/user-profile";
@@ -23,6 +23,7 @@ export function SiteHeader() {
   const [open, setOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profileReady, setProfileReady] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
@@ -47,9 +48,14 @@ export function SiteHeader() {
   useEffect(() => {
     if (!user || user.isAnonymous) {
       setProfile(null);
+      setProfileReady(false);
       return;
     }
-    return subscribeUserProfile(user.uid, setProfile);
+    setProfileReady(false);
+    return subscribeUserProfile(user.uid, (nextProfile) => {
+      setProfile(nextProfile);
+      setProfileReady(true);
+    });
   }, [user]);
 
   function submitSearch(e: React.FormEvent) {
@@ -73,7 +79,9 @@ export function SiteHeader() {
   return (
     <header
       className={`sticky top-0 z-50 transition-all duration-500 ${
-        scrolled ? "border-b border-border/80 bg-background/92 shadow-sm backdrop-blur-xl" : "bg-background/78 backdrop-blur-md"
+        scrolled
+          ? "border-b border-border/80 bg-background/92 shadow-sm backdrop-blur-xl"
+          : "bg-background/78 backdrop-blur-md"
       }`}
     >
       <div className="mx-auto grid max-w-7xl grid-cols-[auto_1fr_auto] items-center gap-4 px-5 py-3 md:px-8">
@@ -86,13 +94,19 @@ export function SiteHeader() {
           </span>
         </Link>
 
-        <nav className="hidden lg:flex items-center justify-center gap-0.5" aria-label="Navegação principal">
+        <nav
+          className="hidden lg:flex items-center justify-center gap-0.5"
+          aria-label="Navegação principal"
+        >
           {NAV.map((item) => (
             <Link
               key={item.label}
               to={item.to}
               className="relative rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary/80 hover:text-foreground"
-              activeProps={{ className: "relative rounded-lg bg-gold/10 px-3 py-2 text-sm font-semibold text-gold" }}
+              activeProps={{
+                className:
+                  "relative rounded-lg bg-gold/10 px-3 py-2 text-sm font-semibold text-gold",
+              }}
             >
               {item.label}
             </Link>
@@ -139,7 +153,12 @@ export function SiteHeader() {
                 aria-label="Conta"
                 className="rounded-full ring-2 ring-transparent transition hover:opacity-90 hover:ring-gold/30"
               >
-                <UserAvatar profile={profile} user={user} size="md" />
+                <UserAvatar
+                  profile={profile}
+                  user={user}
+                  size="md"
+                  allowProviderFallback={profileReady}
+                />
               </button>
               {menuOpen && (
                 <div
@@ -241,7 +260,7 @@ export function SiteHeader() {
                   }}
                   className="mt-2 inline-flex items-center justify-center gap-2 rounded-full border border-border px-5 py-3 text-sm font-medium"
                 >
-                  <UserIcon className="h-4 w-4" /> Sair ({user?.email})
+                  <UserRound className="h-4 w-4" /> Sair ({user?.email})
                 </button>
               </>
             ) : (
@@ -260,4 +279,3 @@ export function SiteHeader() {
     </header>
   );
 }
-

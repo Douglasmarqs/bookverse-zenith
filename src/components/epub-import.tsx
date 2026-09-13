@@ -10,13 +10,20 @@ import {
   saveEpubBook,
   uploadEpubBookToCloud,
 } from "@/lib/epub-store";
+import {
+  createPdfBook,
+  deletePdfBook,
+  deletePdfBookFromCloud,
+  savePdfBook,
+  uploadPdfBookToCloud,
+} from "@/lib/pdf-store";
 import { addToLibrary } from "@/lib/library";
 import { describeFirestoreError } from "@/lib/async-utils";
 
 /**
- * Drag-and-drop EPUB import surface. Parses the file fully in the browser,
- * stores it locally (IndexedDB), registers it in the reader's library and
- * mirrors it to the cloud so the same book opens on other devices.
+ * Drag-and-drop book import surface. EPUBs are parsed into reflowable text;
+ * PDFs retain their original layout. Both formats are private, synced and
+ * open from the same library on another device.
  */
 export function EpubImport({ className = "" }: { className?: string }) {
   const user = useAuthUser();
@@ -35,6 +42,26 @@ export function EpubImport({ className = "" }: { className?: string }) {
     }
     setBusy(true);
     try {
+      const isPdf = file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf";
+      if (isPdf) {
+        const book = createPdfBook(file);
+        await savePdfBook(book);
+        try {
+          await uploadPdfBookToCloud(user.uid, book);
+          await addToLibrary(
+            user.uid,
+            { title: book.title, author: book.author, cover: null, readerId: book.id },
+            "lendo",
+          );
+        } catch (err) {
+          void deletePdfBook(book.id).catch(() => {});
+          void deletePdfBookFromCloud(user.uid, book.id).catch(() => {});
+          throw err;
+        }
+        toast.success('"' + book.title + '" pronto para leitura.');
+        void navigate({ to: "/reader/$bookId", params: { bookId: book.id } });
+        return;
+      }
       const { parseEpubFile } = await import("@/lib/epub-parser");
       const book = await parseEpubFile(file);
       await saveEpubBook(book);
@@ -55,7 +82,7 @@ export function EpubImport({ className = "" }: { className?: string }) {
       toast.success(`"${book.title}" pronto para leitura.`);
       void navigate({ to: "/reader/$bookId", params: { bookId: book.id } });
     } catch (err) {
-      toast.error(describeFirestoreError(err, "Não foi possível importar este EPUB."));
+      toast.error(describeFirestoreError(err, "Não foi possível importar este arquivo."));
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -81,7 +108,7 @@ export function EpubImport({ className = "" }: { className?: string }) {
       <input
         ref={inputRef}
         type="file"
-        accept=".epub"
+        accept=".epub,.pdf,application/epub+zip,application/pdf"
         className="hidden"
         onChange={(e) => void handleFile(e.target.files?.[0])}
       />
@@ -89,11 +116,10 @@ export function EpubImport({ className = "" }: { className?: string }) {
         {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <UploadCloud className="h-5 w-5" />}
       </div>
       <p className="mt-4 font-display text-lg font-medium">
-        {busy ? "Processando seu livro…" : "Arraste um .epub aqui"}
+        {busy ? "Processando seu livro…" : "Arraste um .epub ou .pdf aqui"}
       </p>
       <p className="mt-1.5 text-sm text-muted-foreground">
-        O EPUB fica privado na sua conta, com capa, capítulos, anotações e progresso disponíveis
-        também nos seus outros aparelhos.
+        EPUBs e PDFs ficam privados na sua conta e disponíveis também nos seus outros aparelhos.
       </p>
       <button
         type="button"

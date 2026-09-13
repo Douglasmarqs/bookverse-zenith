@@ -1,5 +1,5 @@
-import { ArrowUpRight, BookOpenCheck, Send } from "lucide-react";
-import { TELEGRAM_CHANNEL_URL } from "@/lib/editorial";
+import { ArrowUpRight, BookOpenCheck, FileText, Send } from "lucide-react";
+import { BAIXE_LIVROS_URL, TELEGRAM_CHANNEL_URL } from "@/lib/editorial";
 
 export function TelegramCard({ compact = false }: { compact?: boolean }) {
   return (
@@ -10,11 +10,11 @@ export function TelegramCard({ compact = false }: { compact?: boolean }) {
             <BookOpenCheck className="h-3.5 w-3.5" /> EPUBs
           </p>
           <h2 className="mt-2 font-display text-2xl font-medium md:text-3xl">
-            Escolha onde procurar seu próximo EPUB
+            Escolha onde procurar seu próximo livro
           </h2>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
-            Encontre livros pelo canal do Telegram ou consulte os clássicos disponíveis na fonte
-            oficial.
+            Encontre EPUBs pelo Telegram, clássicos na fonte oficial ou arquivos em PDF no Baixe
+            Livros.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
@@ -37,6 +37,16 @@ export function TelegramCard({ compact = false }: { compact?: boolean }) {
             Fonte oficial
             <ArrowUpRight className="h-3.5 w-3.5" />
           </a>
+          <a
+            href={BAIXE_LIVROS_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex shrink-0 items-center gap-2 rounded-full border border-blue-200 bg-blue-50/70 px-5 py-3 text-sm font-medium text-blue-700 transition hover:border-blue-400 hover:bg-blue-100"
+          >
+            <FileText className="h-4 w-4" />
+            Procurar PDFs
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </a>
         </div>
       </div>
 
@@ -45,7 +55,7 @@ export function TelegramCard({ compact = false }: { compact?: boolean }) {
           {[
             "Escolha o canal do Telegram para ver EPUBs compartilhados.",
             "Use a fonte oficial para explorar clássicos de domínio público.",
-            "Importe o seu EPUB na biblioteca para começar a ler.",
+            "Procure PDFs e importe EPUB ou PDF na biblioteca para começar a ler.",
           ].map((step, i) => (
             <li
               key={i}

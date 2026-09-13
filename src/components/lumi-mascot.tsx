@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import owl from "@/assets/owl-mascot.webp";
+import owl from "@/assets/lumi-bookverse-blue.png";
 
 /**
  * The Lumi owl mascot, wherever it appears (hero, login screen, chat
