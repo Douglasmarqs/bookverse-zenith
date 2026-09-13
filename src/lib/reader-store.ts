@@ -24,6 +24,10 @@ export interface ReaderSettings {
   maxWidth: number;
   alignment: ReaderAlignment;
   mode: ReaderMode;
+  /** When enabled, a one-page navigation folds the previous virtual page
+   * away like a paper leaf. Kept optional for backwards-compatible saved
+   * preferences from older BookVerse versions. */
+  pageTurn?: boolean;
   /** Millisecond client timestamp used only to reconcile preferences across
    * devices. Reading settings are personal presentation data, not stats. */
   updatedAt?: number;
@@ -55,6 +59,7 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
   maxWidth: 66,
   alignment: "justify",
   mode: "paginated",
+  pageTurn: true,
 };
 
 const SETTINGS_KEY = "bookverse:reader:settings";

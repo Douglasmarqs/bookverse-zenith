@@ -6,10 +6,15 @@
  * it can be opened on another device.
  */
 import type { Book } from "./sample-book";
+import { withDeadline } from "./async-utils";
 
 const DB_NAME = "bookverse-epub";
 const STORE = "books";
 const DB_VERSION = 1;
+/** Short-lived cache for the current browser session. IndexedDB remains the
+ * durable device cache; this simply avoids opening its transaction again
+ * when a reader navigates back to an EPUB it has just opened. */
+const memoryBooks = new Map<string, Book>();
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -50,9 +55,12 @@ export async function saveEpubBook(book: Book): Promise<void> {
     tx.onerror = () => reject(tx.error ?? new Error("Falha ao salvar o livro localmente."));
   });
   db.close();
+  memoryBooks.set(book.id, book);
 }
 
 export async function getEpubBook(id: string): Promise<Book | null> {
+  const inMemory = memoryBooks.get(id);
+  if (inMemory) return inMemory;
   const db = await openDb();
   const result = await new Promise<Book | null>((resolve, reject) => {
     const tx = db.transaction(STORE, "readonly");
@@ -61,6 +69,7 @@ export async function getEpubBook(id: string): Promise<Book | null> {
     req.onerror = () => reject(req.error ?? new Error("Falha ao ler o livro local."));
   });
   db.close();
+  if (result) memoryBooks.set(id, result);
   return result;
 }
 
@@ -73,6 +82,7 @@ export async function deleteEpubBook(id: string): Promise<void> {
     tx.onerror = () => reject(tx.error ?? new Error("Falha ao remover o livro local."));
   });
   db.close();
+  memoryBooks.delete(id);
 }
 
 /* ------------------------------------------------------------------ *
@@ -168,6 +178,8 @@ async function downloadLegacyEpubBook(uid: string, id: string): Promise<Book | n
 }
 
 export async function downloadEpubBookFromCloud(uid: string, id: string): Promise<Book | null> {
+  const cached = memoryBooks.get(id);
+  if (cached) return cached;
   const { getFirebase } = await import("./firebase");
   const fb = getFirebase();
   if (!fb) return null;
@@ -176,11 +188,14 @@ export async function downloadEpubBookFromCloud(uid: string, id: string): Promis
     // Firebase's default download ceiling is only 10 MB. Illustrated EPUBs
     // legitimately exceed that once parsed, while import intentionally caps
     // source files at 60 MB.
-    const bytes = await getBytes(
-      ref(fb.storage, storagePath(uid, id, "book.json")),
-      80 * 1024 * 1024,
+    const bytes = await withDeadline(
+      getBytes(ref(fb.storage, storagePath(uid, id, "book.json")), 80 * 1024 * 1024),
+      20_000,
+      "timeout",
     );
-    return JSON.parse(new TextDecoder().decode(bytes)) as Book;
+    const book = JSON.parse(new TextDecoder().decode(bytes)) as Book;
+    memoryBooks.set(id, book);
+    return book;
   } catch (storageError) {
     try {
       const legacy = await downloadLegacyEpubBook(uid, id);
