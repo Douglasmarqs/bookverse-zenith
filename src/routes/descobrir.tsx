@@ -8,13 +8,12 @@ import {
   Loader2,
   Plus,
   Search,
-  ShieldCheck,
   Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { describeFirestoreError } from "@/lib/async-utils";
-import { rotate, LUMI_PICKS } from "@/lib/editorial";
+import { rotate, LUMI_PICKS, TELEGRAM_CHANNEL_URL } from "@/lib/editorial";
 import { searchBooks, type BookMeta } from "@/lib/google-books";
 import { addToLibrary, slugFor } from "@/lib/library";
 import { searchOpenLibrary } from "@/lib/open-library";
@@ -383,24 +382,34 @@ function DescobrirPage() {
       <section className="mt-14 rounded-3xl border border-border/70 bg-secondary/35 p-5 sm:flex sm:items-center sm:justify-between sm:gap-6 sm:p-7">
         <div className="flex gap-3">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-gold/12 text-gold">
-            <ShieldCheck className="h-5 w-5" />
+            <BookOpenCheck className="h-5 w-5" />
           </span>
           <div>
-            <h2 className="font-display text-lg font-medium">EPUBs com origem clara</h2>
+            <h2 className="font-display text-lg font-medium">Onde encontrar EPUBs</h2>
             <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-              Para obter um arquivo EPUB, use uma fonte autorizada. Os clássicos de domínio público
-              podem ser lidos aqui ou consultados na página oficial do Project Gutenberg.
+              Escolha o canal do Telegram ou consulte a fonte oficial de clássicos de domínio
+              público.
             </p>
           </div>
         </div>
-        <a
-          href="https://www.gutenberg.org/"
-          target="_blank"
-          rel="noreferrer"
-          className="mt-4 inline-flex shrink-0 items-center gap-2 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-medium transition hover:border-gold/45 hover:text-gold sm:mt-0"
-        >
-          Ver fonte oficial <ExternalLink className="h-3.5 w-3.5" />
-        </a>
+        <div className="mt-4 flex flex-wrap gap-3 sm:mt-0">
+          <a
+            href={TELEGRAM_CHANNEL_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-gold px-4 py-2.5 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+          >
+            Abrir Telegram <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+          <a
+            href="https://www.gutenberg.org/"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-medium transition hover:border-gold/45 hover:text-gold"
+          >
+            Fonte oficial <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        </div>
       </section>
     </main>
   );
