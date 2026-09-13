@@ -297,9 +297,7 @@ const THEME_STYLES = {
     accent: "#D6B56F",
     rule: "rgba(242,240,234,0.14)",
   },
-} as const;
-
-const PAGE_GESTURE_HINT_KEY = "bookverse:reader-page-gesture-tip";
+} as const;const PAGE_GESTURE_HINT_KEY = "bookverse:reader-page-gesture-tip"; type PageTurnDirection = "next" | "previous"; type PageTurn = { direction: PageTurnDirection; pageIndex: number; snapshot: string; };
 
 function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   const [settings, setSettings] = useState<ReaderSettings>(DEFAULT_SETTINGS);
@@ -329,14 +327,14 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   const [pageIndex, setPageIndex] = useState(0);
   const [pageCount, setPageCount] = useState(1);
   const [pageWidthPx, setPageWidthPx] = useState(0);
-  const [showPageGestureHint, setShowPageGestureHint] = useState(false);
+  const [showPageGestureHint, setShowPageGestureHint] = useState(false); const [pageTurn, setPageTurn] = useState<PageTurn | null>(null);
   const pendingRatioRef = useRef<number | null>(null);
   const isProgrammaticScroll = useRef(false);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
-  const contentRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null); const articleRef = useRef<HTMLElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const snapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const snapTimer = useRef<ReturnType<typeof setTimeout> | null>(null); const pageTurnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const revealControls = useCallback(() => {
     setControlsVisible(true);
@@ -539,7 +537,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     settings.font,
   ]);
 
-  const goToPage = useCallback(
+  const startPageTurn = useCallback((direction: PageTurnDirection) => { const article = articleRef.current; if (!article || pageWidthPx <= 0) return false; if (pageTurnTimer.current) clearTimeout(pageTurnTimer.current); setPageTurn({ direction, pageIndex, snapshot: article.outerHTML }); pageTurnTimer.current = setTimeout(() => setPageTurn(null), 620); return true; }, [pageIndex, pageWidthPx]); useEffect(() => () => { if (pageTurnTimer.current) clearTimeout(pageTurnTimer.current); }, []); const goToPage = useCallback(
     (targetPage: number) => {
       if (targetPage < 0) {
         goto(chapterIndex - 1, 1);
@@ -550,18 +548,18 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
         return;
       }
       const el = contentRef.current;
-      if (!el || pageWidthPx <= 0) return;
+      if (!el || pageWidthPx <= 0) return; const turningOneLeaf = Math.abs(targetPage - pageIndex) === 1 && startPageTurn(targetPage > pageIndex ? "next" : "previous");
       isProgrammaticScroll.current = true;
-      el.scrollTo({ left: targetPage * pageWidthPx, behavior: "smooth" });
+      el.scrollTo({ left: targetPage * pageWidthPx, behavior: (turningOneLeaf ? "instant" : "smooth") as ScrollBehavior });
       setPageIndex(targetPage);
       const r = pageCount > 1 ? targetPage / (pageCount - 1) : 0;
       setScrollRatio(r);
       queueSave(makeProgress(chapterIndex, r, { index: targetPage, count: pageCount }));
       setTimeout(() => {
         isProgrammaticScroll.current = false;
-      }, 500);
+      }, turningOneLeaf ? 620 : 500);
     },
-    [chapterIndex, pageCount, pageWidthPx, goto, makeProgress, queueSave],
+    [chapterIndex, pageCount, pageWidthPx, pageIndex, goto, makeProgress, queueSave, startPageTurn],
   );
 
   const dismissPageGestureHint = useCallback(() => {
@@ -909,7 +907,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
           style={contentStyle}
           className="h-full"
         >
-          <article
+          <article ref={articleRef}
             className="mx-auto"
             style={{
               maxWidth: `${settings.maxWidth}ch`,
@@ -1133,7 +1131,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                 Próximo <ChevronRight className="h-4 w-4" />
               </button>
             </nav>
-          </article>
+          </article>{settings.mode === "paginated" && pageTurn && (<div aria-hidden="true" className={`reader-page-turn reader-page-turn--${pageTurn.direction}`}><div className="reader-page-turn__sheet" style={{ backgroundColor: theme.bg, color: theme.fg }}><div className="reader-page-turn__content" style={{ width: `${pageWidthPx}px`, height: "100%", columnWidth: `${pageWidthPx}px`, columnGap: "0px", columnFill: "auto", padding: "5rem 0 4rem", boxSizing: "border-box", transform: `translateX(${-pageTurn.pageIndex * pageWidthPx}px)` }} dangerouslySetInnerHTML={{ __html: pageTurn.snapshot }} /></div></div></div>) }
         </div>
 
         {settings.mode === "paginated" && (
