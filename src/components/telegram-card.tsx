@@ -1,43 +1,48 @@
-import { Send, ArrowUpRight } from "lucide-react";
-import { TELEGRAM_CHANNEL_URL } from "@/lib/editorial";
+import { ArrowUpRight, BookOpenCheck, ShieldCheck } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 
-/** Convite para o canal de leitores no Telegram, com o fluxo prático de
- * "baixar EPUB lá → importar aqui" — é o principal caminho de entrada de
- * livros no app, então vale explicar em três passos. */
+/**
+ * The previous version sent people to a Telegram channel described only as
+ * an EPUB archive. It did not state who owns each file or which licences
+ * apply, so it cannot be presented as a BookVerse acquisition source.
+ *
+ * Keep the component name for existing route imports, but turn it into a
+ * useful, legal path: full public-domain reading in the app and an official
+ * source page for a person who chooses to download a permitted EPUB.
+ */
 export function TelegramCard({ compact = false }: { compact?: boolean }) {
-  if (!TELEGRAM_CHANNEL_URL) return null;
-
   return (
     <section className="glass-plate mt-10 overflow-hidden rounded-3xl p-6 md:p-8">
       <div className="flex flex-wrap items-start justify-between gap-5">
         <div className="min-w-0">
-          <p className="text-[11px] uppercase tracking-[0.28em] text-gold">Comunidade</p>
+          <p className="flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-gold">
+            <ShieldCheck className="h-3.5 w-3.5" /> Fonte autorizada
+          </p>
           <h2 className="mt-2 font-display text-2xl font-medium md:text-3xl">
-            Chat de leitores e troca de EPUBs
+            Clássicos gratuitos, com origem clara
           </h2>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
-            Indicações, clubes de leitura e um acervo de arquivos <code>.epub</code> para você
-            importar direto no BookVerse.
+            Explore obras de domínio público no leitor do BookVerse. Se preferir um arquivo EPUB,
+            use o catálogo oficial e confira os direitos aplicáveis no seu país.
           </p>
         </div>
-        <a
-          href={TELEGRAM_CHANNEL_URL}
-          target="_blank"
-          rel="noreferrer"
+        <Link
+          to="/descobrir"
+          search={{ q: undefined, categoria: "Clássicos" }}
           className="inline-flex shrink-0 items-center gap-2 rounded-full bg-gold px-5 py-3 text-sm font-medium text-primary-foreground transition hover:opacity-90"
         >
-          <Send className="h-4 w-4" />
-          Entrar no canal
+          <BookOpenCheck className="h-4 w-4" />
+          Ler clássicos
           <ArrowUpRight className="h-3.5 w-3.5" />
-        </a>
+        </Link>
       </div>
 
       {!compact && (
         <ol className="mt-6 grid gap-3 sm:grid-cols-3">
           {[
-            "Abra o canal e baixe o arquivo .epub do livro que quiser.",
-            'Volte aqui e toque em "Adicionar EPUB" na sua biblioteca.',
-            "Pronto: o livro abre no leitor e o progresso sincroniza entre seus aparelhos.",
+            "Abra um clássico de domínio público direto no BookVerse.",
+            "Se você já possui um EPUB autorizado, importe-o na sua biblioteca.",
+            "O progresso e suas anotações acompanham a sua conta em outros aparelhos.",
           ].map((step, i) => (
             <li
               key={i}
