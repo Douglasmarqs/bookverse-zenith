@@ -48,6 +48,8 @@ interface LumiContext {
   bookAuthor?: string;
   chapterTitle?: string;
   chapterExcerpt?: string;
+  selectedText?: string;
+  positionLabel?: string;
 }
 
 interface AskLumiRequest {
@@ -76,6 +78,12 @@ function buildSystemPrompt(context?: LumiContext | null): string {
   }
   if (context?.chapterExcerpt) {
     prompt += ` Trecho de referência do capítulo (contexto interno, não repita literalmente): ${context.chapterExcerpt.slice(0, 1500)}`;
+  }
+  if (context?.selectedText) {
+    prompt += ` Trecho que a pessoa selecionou agora: ${context.selectedText.slice(0, 900)}.`;
+  }
+  if (context?.positionLabel) {
+    prompt += ` Posição aproximada de leitura: ${context.positionLabel.slice(0, 120)}.`;
   }
   return prompt;
 }
@@ -178,7 +186,11 @@ export const recommendNextBook = onCall<RecommendRequest>(
       const raw = (completion.choices[0]?.message?.content ?? "").trim();
       const jsonMatch = raw.match(/\{[\s\S]*\}/);
       if (!jsonMatch) throw new Error("Lumi's reply didn't contain a JSON object");
-      const parsed = JSON.parse(jsonMatch[0]) as { title?: string; author?: string; reason?: string };
+      const parsed = JSON.parse(jsonMatch[0]) as {
+        title?: string;
+        author?: string;
+        reason?: string;
+      };
       if (!parsed.title) throw new Error("Lumi's reply was missing a title");
 
       return {
