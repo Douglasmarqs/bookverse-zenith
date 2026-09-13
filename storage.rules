@@ -18,5 +18,19 @@ service firebase.storage {
 
       allow delete: if request.auth != null && request.auth.uid == uid;
     }
+
+    match /users/{uid}/pdfs/{bookId}/{fileName} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+
+      allow create, update: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.size < 80 * 1024 * 1024
+        && (
+          (fileName == 'book.json' && request.resource.contentType == 'application/json')
+          || (fileName == 'source.pdf' && request.resource.contentType == 'application/pdf')
+        );
+
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
   }
 }
