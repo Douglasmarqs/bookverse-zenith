@@ -50,7 +50,7 @@
   --shadow-glow: 0 18px 48px -26px color-mix(in oklab, var(--gold) 58%, transparent);
   --shadow-plate: 0 24px 60px -34px oklch(0.2 0.02 250 / 0.25);
   --gradient-gold: linear-gradient(135deg, oklch(0.62 0.16 244), oklch(0.52 0.18 255));
-  --gradient-ember: radial-gradient(ellipse at top, oklch(0.7 0.12 235 / 0.20), transparent 62%);
+  --gradient-ember: radial-gradient(ellipse at top, oklch(0.7 0.12 235 / 0.2), transparent 62%);
 }
 
 :root {
@@ -99,9 +99,9 @@
   --surface: oklch(0.22 0.028 250);
   --surface-2: oklch(0.27 0.03 250);
   --parchment: oklch(0.93 0.015 245);
-  --gold: oklch(0.70 0.14 240);
+  --gold: oklch(0.7 0.14 240);
   --gold-soft: oklch(0.78 0.11 238);
-  --oxide: oklch(0.60 0.13 252);
+  --oxide: oklch(0.6 0.13 252);
 
   --background: var(--ink);
   --foreground: var(--parchment);
@@ -312,7 +312,10 @@
 }
 
 @utility social-card-hover {
-  transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+  transition:
+    transform 220ms ease,
+    box-shadow 220ms ease,
+    border-color 220ms ease;
 }
 .social-card-hover:hover {
   transform: translateY(-3px);
@@ -403,7 +406,7 @@
   height: 22.6%;
   width: 20.1%;
   border-radius: 999px;
-  background: #f4e6cf;
+  background: #eaf4ff;
   transform: scaleY(0);
   transform-origin: top center;
   will-change: transform;
@@ -456,6 +459,191 @@
   animation: shimmer-line 3s linear infinite;
 }
 
+/* A real page turn uses a copy of the exact rendered leaf that was on
+   screen. The next/previous column is placed underneath first, then this
+   overlay folds away from the spine with paper-like light and shadow. */
+.reader-page-turn {
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  overflow: hidden;
+  pointer-events: none;
+  perspective: 1800px;
+  perspective-origin: 50% 50%;
+  isolation: isolate;
+}
+
+.reader-page-turn__sheet {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transform-style: preserve-3d;
+  contain: layout paint;
+  will-change: transform, opacity, filter, box-shadow;
+  translate: 0 0;
+}
+
+.reader-page-turn__sheet::before,
+.reader-page-turn__sheet::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  opacity: 0;
+}
+
+.reader-page-turn__sheet::before {
+  background: linear-gradient(
+    90deg,
+    rgb(0 0 0 / 0.36),
+    transparent 14%,
+    transparent 82%,
+    rgb(255 255 255 / 0.12)
+  );
+  mix-blend-mode: multiply;
+}
+
+.reader-page-turn__content {
+  overflow: visible;
+  transform-origin: left center;
+}
+
+.reader-page-turn--next .reader-page-turn__sheet {
+  transform-origin: left center;
+  animation: reader-page-turn-next 640ms cubic-bezier(0.16, 0.82, 0.2, 1) both;
+  box-shadow: 14px 0 22px -15px rgb(0 0 0 / 0.72);
+}
+
+.reader-page-turn--next .reader-page-turn__sheet::after {
+  background: linear-gradient(90deg, rgb(0 0 0 / 0.32), transparent 50%, rgb(255 255 255 / 0.1));
+  animation: reader-page-turn-next-light 640ms ease-out both;
+}
+
+.reader-page-turn--next .reader-page-turn__sheet::before {
+  animation: reader-page-turn-next-depth 640ms ease-out both;
+}
+
+.reader-page-turn--previous .reader-page-turn__sheet {
+  transform-origin: right center;
+  animation: reader-page-turn-previous 640ms cubic-bezier(0.16, 0.82, 0.2, 1) both;
+  box-shadow: -14px 0 22px -15px rgb(0 0 0 / 0.72);
+}
+
+.reader-page-turn--previous .reader-page-turn__sheet::after {
+  background: linear-gradient(270deg, rgb(0 0 0 / 0.32), transparent 50%, rgb(255 255 255 / 0.1));
+  animation: reader-page-turn-previous-light 640ms ease-out both;
+}
+
+.reader-page-turn--previous .reader-page-turn__sheet::before {
+  animation: reader-page-turn-previous-depth 640ms ease-out both;
+}
+
+@keyframes reader-page-turn-next {
+  0% {
+    opacity: 1;
+    filter: brightness(1);
+    transform: rotateY(0deg);
+  }
+  18% {
+    opacity: 1;
+    filter: brightness(0.96);
+    transform: rotateY(-14deg) translateZ(1px);
+  }
+  52% {
+    opacity: 0.98;
+    filter: brightness(0.76);
+    transform: rotateY(-86deg) translateZ(2px);
+  }
+  82% {
+    opacity: 0.5;
+    filter: brightness(0.62);
+    transform: rotateY(-152deg);
+  }
+  100% {
+    opacity: 0;
+    filter: brightness(0.58);
+    transform: rotateY(-180deg);
+  }
+}
+
+@keyframes reader-page-turn-previous {
+  0% {
+    opacity: 1;
+    filter: brightness(1);
+    transform: rotateY(0deg);
+  }
+  18% {
+    opacity: 1;
+    filter: brightness(0.96);
+    transform: rotateY(14deg) translateZ(1px);
+  }
+  52% {
+    opacity: 0.98;
+    filter: brightness(0.76);
+    transform: rotateY(86deg) translateZ(2px);
+  }
+  82% {
+    opacity: 0.5;
+    filter: brightness(0.62);
+    transform: rotateY(152deg);
+  }
+  100% {
+    opacity: 0;
+    filter: brightness(0.58);
+    transform: rotateY(180deg);
+  }
+}
+
+@keyframes reader-page-turn-next-light {
+  0% {
+    opacity: 0;
+  }
+  48% {
+    opacity: 0.78;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes reader-page-turn-previous-light {
+  0% {
+    opacity: 0;
+  }
+  48% {
+    opacity: 0.78;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes reader-page-turn-next-depth {
+  0% {
+    opacity: 0;
+  }
+  48% {
+    opacity: 0.55;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes reader-page-turn-previous-depth {
+  0% {
+    opacity: 0;
+  }
+  48% {
+    opacity: 0.55;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
 /* Skips layout/paint work for offscreen sections (long shelf pages scroll
    noticeably smoother on low-end phones). */
 @utility content-auto {
@@ -474,170 +662,4 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-}
-
-
-/* Realistic book leaf: the current page is kept above the destination and folds
-   away from its spine. Light and shadow change while the paper turns. */
-.reader-page-turn {
-  position: absolute;
-  inset: 0;
-  z-index: 15;
-  overflow: hidden;
-  pointer-events: none;
-  perspective: 1800px;
-  perspective-origin: 50% 50%;
-}
-.reader-page-turn__sheet {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  backface-visibility: hidden;
-  transform-style: preserve-3d;
-  will-change: transform, opacity, filter;
-}
-.reader-page-turn__sheet::after {
-  position: absolute;
-  inset: 0;
-  content: "";
-  pointer-events: none;
-  opacity: 0;
-}
-.reader-page-turn__content {
-  overflow: visible;
-  transform-origin: left center;
-}
-.reader-page-turn--next .reader-page-turn__sheet {
-  transform-origin: left center;
-  animation: reader-page-turn-next 620ms cubic-bezier(0.22, 0.7, 0.18, 1) both;
-  box-shadow: 14px 0 22px -15px rgb(0 0 0 / 0.72);
-}
-.reader-page-turn--next .reader-page-turn__sheet::after {
-  background: linear-gradient(90deg, rgb(0 0 0 / 0.32), transparent 50%, rgb(255 255 255 / 0.1));
-  animation: reader-page-turn-next-light 620ms ease-out both;
-}
-.reader-page-turn--previous .reader-page-turn__sheet {
-  transform-origin: right center;
-  animation: reader-page-turn-previous 620ms cubic-bezier(0.22, 0.7, 0.18, 1) both;
-  box-shadow: -14px 0 22px -15px rgb(0 0 0 / 0.72);
-}
-.reader-page-turn--previous .reader-page-turn__sheet::after {
-  background: linear-gradient(270deg, rgb(0 0 0 / 0.32), transparent 50%, rgb(255 255 255 / 0.1));
-  animation: reader-page-turn-previous-light 620ms ease-out both;
-}
-@keyframes reader-page-turn-next {
-  0% { opacity: 1; filter: brightness(1); transform: rotateY(0deg); }
-  42% { opacity: 1; filter: brightness(0.78); transform: rotateY(-76deg); }
-  100% { opacity: 0; filter: brightness(0.58); transform: rotateY(-180deg); }
-}
-@keyframes reader-page-turn-previous {
-  0% { opacity: 1; filter: brightness(1); transform: rotateY(0deg); }
-  42% { opacity: 1; filter: brightness(0.78); transform: rotateY(76deg); }
-  100% { opacity: 0; filter: brightness(0.58); transform: rotateY(180deg); }
-}
-@keyframes reader-page-turn-next-light {
-  0% { opacity: 0; }
-  38% { opacity: 0.72; }
-  100% { opacity: 0; }
-}
-@keyframes reader-page-turn-previous-light {
-  0% { opacity: 0; }
-  38% { opacity: 0.72; }
-  100% { opacity: 0; }
-}
-
-
-/* Refino da virada de página: mais suave e com profundidade de folha. */
-.reader-page-turn {
-  isolation: isolate;
-}
-
-.reader-page-turn__sheet {
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
-  will-change: transform, opacity, box-shadow;
-}
-
-.reader-page-turn__sheet::before {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  content: "";
-  opacity: 0;
-  background: linear-gradient(90deg, rgba(38, 29, 20, 0.18), transparent 15%, transparent 72%, rgba(38, 29, 20, 0.12));
-}
-
-.reader-page-turn--next .reader-page-turn__sheet {
-  transform-origin: right center;
-  animation: book-page-turn-next 720ms cubic-bezier(0.22, 0.74, 0.18, 1) both;
-}
-
-.reader-page-turn--previous .reader-page-turn__sheet {
-  transform-origin: left center;
-  animation: book-page-turn-previous 720ms cubic-bezier(0.22, 0.74, 0.18, 1) both;
-}
-
-.reader-page-turn--next .reader-page-turn__sheet::before,
-.reader-page-turn--previous .reader-page-turn__sheet::before {
-  animation: book-page-turn-depth 720ms ease-out both;
-}
-
-@keyframes book-page-turn-next {
-  0% {
-    opacity: 1;
-    transform: perspective(2100px) rotateY(0deg) scaleX(1);
-    box-shadow: 0 0 0 rgba(31, 23, 15, 0);
-  }
-  18% {
-    opacity: 1;
-    transform: perspective(2100px) rotateY(-13deg) scaleX(0.992);
-    box-shadow: -15px 4px 22px rgba(31, 23, 15, 0.11);
-  }
-  52% {
-    opacity: 0.96;
-    transform: perspective(2100px) rotateY(-91deg) scaleX(0.96);
-    box-shadow: -32px 7px 32px rgba(31, 23, 15, 0.2);
-  }
-  82% {
-    opacity: 0.46;
-    transform: perspective(2100px) rotateY(-154deg) scaleX(0.91);
-  }
-  100% {
-    opacity: 0;
-    transform: perspective(2100px) rotateY(-180deg) scaleX(0.88);
-    box-shadow: -42px 9px 38px rgba(31, 23, 15, 0);
-  }
-}
-
-@keyframes book-page-turn-previous {
-  0% {
-    opacity: 1;
-    transform: perspective(2100px) rotateY(0deg) scaleX(1);
-    box-shadow: 0 0 0 rgba(31, 23, 15, 0);
-  }
-  18% {
-    opacity: 1;
-    transform: perspective(2100px) rotateY(13deg) scaleX(0.992);
-    box-shadow: 15px 4px 22px rgba(31, 23, 15, 0.11);
-  }
-  52% {
-    opacity: 0.96;
-    transform: perspective(2100px) rotateY(91deg) scaleX(0.96);
-    box-shadow: 32px 7px 32px rgba(31, 23, 15, 0.2);
-  }
-  82% {
-    opacity: 0.46;
-    transform: perspective(2100px) rotateY(154deg) scaleX(0.91);
-  }
-  100% {
-    opacity: 0;
-    transform: perspective(2100px) rotateY(180deg) scaleX(0.88);
-    box-shadow: 42px 9px 38px rgba(31, 23, 15, 0);
-  }
-}
-
-@keyframes book-page-turn-depth {
-  0%, 100% { opacity: 0; }
-  48% { opacity: 1; }
 }
