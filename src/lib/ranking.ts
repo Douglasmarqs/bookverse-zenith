@@ -13,11 +13,19 @@ import {
 import { getFirebase } from "./firebase";
 import type { UserProfile } from "./user-profile";
 
-export type RankingRow = Pick<
-  UserProfile,
-  "uid" | "displayName" | "photoURL" | "xp" | "avatarEmoji"
-> & {
+export type RankingMetric = "xp" | "weeklyXp" | "currentStreak" | "chaptersRead" | "booksCompleted";
+
+export type RankingRow = Pick<UserProfile, "uid" | "displayName" | "photoURL" | "xp"> & {
   pos: number;
+  value: number;
+};
+
+const METRIC_FIELD: Record<RankingMetric, string> = {
+  xp: "xp",
+  weeklyXp: "weeklyXp",
+  currentStreak: "currentStreak",
+  chaptersRead: "chaptersRead",
+  booksCompleted: "booksCompleted",
 };
 
 /**
@@ -25,14 +33,19 @@ export type RankingRow = Pick<
  * Firebase isn't configured (e.g. missing API key) so callers can show a
  * graceful empty state instead of crashing.
  */
-export function subscribeRanking(n: number, cb: (rows: RankingRow[] | null) => void): Unsubscribe {
+export function subscribeRanking(
+  n: number,
+  cb: (rows: RankingRow[] | null) => void,
+  metric: RankingMetric = "xp",
+): Unsubscribe {
   const fb = getFirebase();
   if (!fb) {
     cb(null);
     return () => {};
   }
 
-  const q = query(collection(fb.db, "users"), orderBy("xp", "desc"), limit(n));
+  const field = METRIC_FIELD[metric];
+  const q = query(collection(fb.db, "users"), orderBy(field, "desc"), limit(n));
   return onSnapshot(
     q,
     (snap) => {
@@ -42,8 +55,8 @@ export function subscribeRanking(n: number, cb: (rows: RankingRow[] | null) => v
           uid: d.id,
           displayName: data.displayName ?? "Leitor",
           photoURL: data.photoURL ?? null,
-          avatarEmoji: data.avatarEmoji ?? null,
           xp: data.xp ?? 0,
+          value: Number(data[field] ?? 0),
           pos: i + 1,
         } satisfies RankingRow;
       });

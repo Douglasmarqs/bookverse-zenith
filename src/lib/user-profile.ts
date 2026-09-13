@@ -1,7 +1,7 @@
 /**
  * User profile + XP — backs the real ranking. Document lives at
  * `users/{uid}` with shape:
- *   { displayName, email, photoURL, xp, booksCompleted, createdAt, updatedAt }
+ *   { displayName, username, bio, email, photoURL, xp, booksCompleted, createdAt, updatedAt }
  *
  * Requires a Firestore security rule allowing:
  *   - read: anyone signed in (ranking needs to read other users' public fields)
@@ -26,17 +26,16 @@ import { withDeadline, withFallback } from "./async-utils";
 export interface UserProfile {
   uid: string;
   displayName: string;
+  username?: string | null;
+  bio?: string | null;
   email: string | null;
   photoURL: string | null;
   /** A user-uploaded photo, stored as a small JPEG data URL — kept
    * separate from `photoURL` (which tracks the provider's photo, e.g.
    * Google) so `ensureUserProfile` re-syncing that field on sign-in never
    * clobbers a photo the person chose themselves. Takes priority over
-   * `photoURL` but not over `avatarEmoji` (see UserAvatar). */
+   * `photoURL`. */
   customPhotoDataUrl?: string | null;
-  /** A short emoji chosen from the in-app avatar picker — takes priority
-   * over both photo fields for display when set (see components that render it). */
-  avatarEmoji?: string | null;
   xp: number;
   booksCompleted: number;
   /** Total chapters finished across every book — the closest proxy we
@@ -237,11 +236,16 @@ export async function incrementBooksCompleted(uid: string): Promise<void> {
   }
 }
 
-/** Updates editable profile fields (display name, chosen avatar emoji).
+/** Updates editable profile fields.
  * Throws on failure so the settings page can show a clear error. */
 export async function updateProfileFields(
   uid: string,
-  patch: { displayName?: string; avatarEmoji?: string | null; customPhotoDataUrl?: string | null },
+  patch: {
+    displayName?: string;
+    username?: string | null;
+    bio?: string | null;
+    customPhotoDataUrl?: string | null;
+  },
 ): Promise<void> {
   const fb = getFirebase();
   if (!fb) throw new Error("O login não está disponível neste ambiente agora.");
