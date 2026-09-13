@@ -299,6 +299,8 @@ const THEME_STYLES = {
   },
 } as const;
 
+const PAGE_GESTURE_HINT_KEY = "bookverse:reader-page-gesture-tip";
+
 function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   const [settings, setSettings] = useState<ReaderSettings>(DEFAULT_SETTINGS);
   const [chapterIndex, setChapterIndex] = useState(0);
@@ -327,8 +329,10 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   const [pageIndex, setPageIndex] = useState(0);
   const [pageCount, setPageCount] = useState(1);
   const [pageWidthPx, setPageWidthPx] = useState(0);
+  const [showPageGestureHint, setShowPageGestureHint] = useState(false);
   const pendingRatioRef = useRef<number | null>(null);
   const isProgrammaticScroll = useRef(false);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const contentRef = useRef<HTMLDivElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -560,6 +564,54 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     [chapterIndex, pageCount, pageWidthPx, goto, makeProgress, queueSave],
   );
 
+  const dismissPageGestureHint = useCallback(() => {
+    setShowPageGestureHint(false);
+    try {
+      localStorage.setItem(PAGE_GESTURE_HINT_KEY, "seen");
+    } catch {
+      // Private browsing can disable storage. The hint is still harmless.
+    }
+  }, []);
+
+  // Page turns are deliberate rather than a raw horizontal scrollbar: a
+  // lateral gesture advances exactly one virtual page, then `goToPage`
+  // performs the smooth horizontal slide. This feels natural on phones and
+  // prevents an accidental partial page from being left on screen.
+  const handlePaginatedTouchStart = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+    const touch = event.touches[0];
+    touchStartRef.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
+  }, []);
+
+  const handlePaginatedTouchEnd = useCallback(
+    (event: React.TouchEvent<HTMLDivElement>) => {
+      const start = touchStartRef.current;
+      touchStartRef.current = null;
+      const touch = event.changedTouches[0];
+      if (!start || !touch) return;
+
+      const dx = touch.clientX - start.x;
+      const dy = touch.clientY - start.y;
+      // Ignore taps, text-selection gestures, and mostly vertical motions.
+      if (Math.abs(dx) < 44 || Math.abs(dx) <= Math.abs(dy) * 1.2) return;
+
+      dismissPageGestureHint();
+      revealControls();
+      goToPage(pageIndex + (dx < 0 ? 1 : -1));
+    },
+    [dismissPageGestureHint, goToPage, pageIndex, revealControls],
+  );
+
+  useEffect(() => {
+    if (!hydrated || settings.mode !== "paginated") return;
+    try {
+      if (localStorage.getItem(PAGE_GESTURE_HINT_KEY) !== "seen") {
+        setShowPageGestureHint(true);
+      }
+    } catch {
+      setShowPageGestureHint(true);
+    }
+  }, [hydrated, settings.mode]);
+
   // Native swipe/drag is left free (no CSS scroll-snap — it can't target
   // individual CSS-column boundaries), then snapped to the nearest page
   // once the gesture settles. Skipped while a `goToPage` call is already
@@ -762,6 +814,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
           overflowY: "hidden",
           overflowX: "auto",
           scrollbarWidth: "none",
+          touchAction: "pan-y",
           padding: "5rem 0 4rem",
           boxSizing: "border-box",
         }
@@ -851,6 +904,8 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                 ? onPaginatedScroll
                 : undefined
           }
+          onTouchStart={settings.mode === "paginated" ? handlePaginatedTouchStart : undefined}
+          onTouchEnd={settings.mode === "paginated" ? handlePaginatedTouchEnd : undefined}
           style={contentStyle}
           className="h-full"
         >
@@ -1096,6 +1151,22 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
               className="absolute inset-y-0 right-0 w-[15%] min-w-10 cursor-pointer disabled:cursor-default"
             />
           </>
+        )}
+
+        {settings.mode === "paginated" && showPageGestureHint && (
+          <button
+            type="button"
+            onClick={dismissPageGestureHint}
+            className="absolute bottom-5 left-1/2 z-20 -translate-x-1/2 rounded-full border px-4 py-2 text-xs shadow-lg backdrop-blur-md transition hover:opacity-80"
+            style={{
+              borderColor: theme.rule,
+              color: theme.fg,
+              backgroundColor: theme.bg + "EB",
+              fontFamily: "var(--font-sans)",
+            }}
+          >
+            Deslize para os lados para virar a página
+          </button>
         )}
 
         {selectedPassage && (
