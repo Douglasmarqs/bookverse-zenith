@@ -42,6 +42,7 @@ export function LumiPanel() {
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const autoPromptRef = useRef<string | null>(null);
   const contextKey = contextKeyFor(context?.bookTitle);
   const canPersist = !!user && !user.isAnonymous;
 
@@ -92,6 +93,25 @@ export function LumiPanel() {
     }
   }
 
+  // A contextual reader action ("Explique", "O que significa?", etc.)
+  // should feel like an answer, not like a prefilled chatbot. The prompt is
+  // sent once per selection/action after that book's saved thread is ready.
+  useEffect(() => {
+    if (!open) {
+      autoPromptRef.current = null;
+      return;
+    }
+    const prompt = context?.initialPrompt?.trim();
+    if (!historyLoaded || !prompt) return;
+    const key = `${contextKey}:${prompt}`;
+    if (autoPromptRef.current === key) return;
+    autoPromptRef.current = key;
+    void send(prompt);
+    // `send` is intentionally excluded: its identity changes every render,
+    // while this effect is keyed to a newly opened contextual action.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, historyLoaded, context?.initialPrompt, contextKey]);
+
   async function handleClear() {
     const fresh = [greeting(context ?? null)];
     setMessages(fresh);
@@ -119,7 +139,9 @@ export function LumiPanel() {
           <div className="min-w-0 flex-1">
             <p className="font-display text-base font-semibold">Lumi</p>
             <p className="truncate text-xs text-muted-foreground">
-              {context?.bookTitle ? `Lendo: ${context.bookTitle}` : "IA literária"}
+              {context?.bookTitle
+                ? `${context.positionLabel ? `${context.positionLabel} · ` : ""}${context.bookTitle}`
+                : "IA literária"}
             </p>
           </div>
           <button
