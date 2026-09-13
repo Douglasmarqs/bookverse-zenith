@@ -31,12 +31,8 @@ import { getLevelInfo } from "@/lib/achievements";
 import { describeFirestoreError } from "@/lib/async-utils";
 import { UserAvatar } from "@/components/user-avatar";
 import { LumiMascot } from "@/components/lumi-mascot";
-import { AVATAR_EMOJIS } from "@/lib/avatar-emojis";
 import { downscaleImageFile } from "@/lib/image-utils";
-import {
-  notificationPermission,
-  requestNotificationPermission,
-} from "@/lib/reading-reminder";
+import { notificationPermission, requestNotificationPermission } from "@/lib/reading-reminder";
 import { useSiteTheme } from "@/hooks/use-site-theme";
 import { THEME_LABEL, THEME_PREVIEW, allThemes } from "@/lib/theme";
 
@@ -78,8 +74,9 @@ function PerfilPage({ user }: { user: User }) {
   const [libraryCount, setLibraryCount] = useState(0);
 
   const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
+  const [bio, setBio] = useState("");
   const [nameSaving, setNameSaving] = useState(false);
-  const [avatarSaving, setAvatarSaving] = useState<string | null>(null);
   const [photoSaving, setPhotoSaving] = useState(false);
   const [notifSupport, setNotifSupport] = useState<NotificationPermission | "unsupported">(
     "default",
@@ -95,7 +92,9 @@ function PerfilPage({ user }: { user: User }) {
     if (result === "granted") {
       toast.success("Lembretes ativados — a Lumi vai te dar um toque quando precisar.");
     } else if (result === "denied") {
-      toast.error("Notificações bloqueadas. Você pode ativar depois nas configurações do navegador.");
+      toast.error(
+        "Notificações bloqueadas. Você pode ativar depois nas configurações do navegador.",
+      );
     }
   }
 
@@ -122,39 +121,42 @@ function PerfilPage({ user }: { user: User }) {
   useEffect(() => {
     if (profile?.displayName) setName(profile.displayName);
     else if (user.displayName) setName(user.displayName);
-  }, [profile?.displayName, user.displayName]);
+    setUsername(profile?.username ?? "");
+    setBio(profile?.bio ?? "");
+  }, [profile?.displayName, profile?.username, profile?.bio, user.displayName]);
 
-  async function handleSaveName(e: React.FormEvent) {
+  async function handleSaveProfile(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) {
       toast.error("O nome não pode ficar em branco.");
       return;
     }
+    const normalizedUsername = username
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_.-]/g, "");
+    if (username.trim() && normalizedUsername.length < 3) {
+      toast.error("O identificador precisa ter pelo menos 3 caracteres.");
+      return;
+    }
+    if (bio.trim().length > 280) {
+      toast.error("A bio pode ter até 280 caracteres.");
+      return;
+    }
     setNameSaving(true);
     try {
       await updateDisplayName(trimmed);
-      await updateProfileFields(user.uid, { displayName: trimmed });
-      toast.success("Nome atualizado.");
+      await updateProfileFields(user.uid, {
+        displayName: trimmed,
+        username: normalizedUsername || null,
+        bio: bio.trim() || null,
+      });
+      toast.success("Perfil atualizado.");
     } catch (err) {
       toast.error(describeFirestoreError(err, "Não foi possível salvar o nome agora."));
     } finally {
       setNameSaving(false);
-    }
-  }
-
-  async function handlePickAvatar(emoji: string) {
-    setAvatarSaving(emoji);
-    try {
-      // Emoji and a custom photo are mutually exclusive as the "chosen"
-      // avatar — clearing the other keeps the profile doc small and
-      // avoids ambiguity about which one is actually active.
-      await updateProfileFields(user.uid, { avatarEmoji: emoji, customPhotoDataUrl: null });
-      toast.success("Avatar atualizado.");
-    } catch (err) {
-      toast.error(describeFirestoreError(err, "Não foi possível salvar o avatar agora."));
-    } finally {
-      setAvatarSaving(null);
     }
   }
 
@@ -172,7 +174,7 @@ function PerfilPage({ user }: { user: User }) {
       // and keeps the encoded JPEG comfortably under Firestore's 1MB
       // per-document limit (typically 15–50KB at this size).
       const dataUrl = await downscaleImageFile(file, 320, 0.85);
-      await updateProfileFields(user.uid, { customPhotoDataUrl: dataUrl, avatarEmoji: null });
+      await updateProfileFields(user.uid, { customPhotoDataUrl: dataUrl });
       toast.success("Foto de perfil atualizada.");
     } catch (err) {
       toast.error(describeFirestoreError(err, "Não foi possível salvar a foto agora."));
@@ -289,7 +291,13 @@ function PerfilPage({ user }: { user: User }) {
           <p className="truncate font-display text-xl font-medium">
             {profile?.displayName || user.displayName || "Leitor"}
           </p>
+          {profile?.username && <p className="mt-0.5 text-sm text-gold">@{profile.username}</p>}
           <p className="truncate text-sm text-muted-foreground">{user.email}</p>
+          {profile?.bio && (
+            <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
+              {profile.bio}
+            </p>
+          )}
           {memberSince && (
             <p className="mt-1 text-xs text-muted-foreground">Membro desde {memberSince}</p>
           )}
@@ -328,35 +336,8 @@ function PerfilPage({ user }: { user: User }) {
       <section className="mt-10 rounded-2xl border border-border/60 bg-card/40 p-6">
         <h2 className="font-display text-xl font-medium">Editar perfil</h2>
 
-        <p className="mt-5 text-sm text-muted-foreground">
-          Escolha um avatar — ou use sua própria foto pelo ícone de câmera acima
-        </p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {AVATAR_EMOJIS.map((emoji) => (
-            <button
-              key={emoji}
-              onClick={() => handlePickAvatar(emoji)}
-              disabled={avatarSaving !== null}
-              className={`grid h-11 w-11 place-items-center rounded-full text-lg ring-1 transition disabled:opacity-60 ${
-                profile?.avatarEmoji === emoji
-                  ? "bg-gold/15 ring-gold"
-                  : "bg-secondary/40 ring-border/60 hover:ring-gold/40"
-              }`}
-            >
-              {avatarSaving === emoji ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <span aria-hidden>{emoji}</span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        <form
-          onSubmit={handleSaveName}
-          className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-end"
-        >
-          <label className="flex-1">
+        <form onSubmit={handleSaveProfile} className="mt-5 grid gap-3 sm:grid-cols-2">
+          <label>
             <span className="text-sm text-muted-foreground">Nome de exibição</span>
             <input
               value={name}
@@ -364,10 +345,36 @@ function PerfilPage({ user }: { user: User }) {
               className="mt-1.5 w-full rounded-xl border border-border bg-background/50 px-4 py-3 text-sm outline-none focus:border-gold/60"
             />
           </label>
+          <label>
+            <span className="text-sm text-muted-foreground">Identificador</span>
+            <div className="mt-1.5 flex items-center rounded-xl border border-border bg-background/50 px-4 focus-within:border-gold/60">
+              <span className="text-sm text-muted-foreground">@</span>
+              <input
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                maxLength={32}
+                placeholder="seu_nome"
+                className="min-w-0 flex-1 bg-transparent py-3 pl-1 text-sm outline-none"
+              />
+            </div>
+          </label>
+          <label className="sm:col-span-2">
+            <span className="text-sm text-muted-foreground">
+              Bio <span className="text-xs">({bio.length}/280)</span>
+            </span>
+            <textarea
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              maxLength={280}
+              rows={3}
+              placeholder="Conte brevemente o que você gosta de ler."
+              className="mt-1.5 w-full resize-y rounded-xl border border-border bg-background/50 px-4 py-3 text-sm outline-none focus:border-gold/60"
+            />
+          </label>
           <button
             type="submit"
             disabled={nameSaving}
-            className="inline-flex items-center justify-center gap-2 rounded-full bg-gold px-5 py-3 text-sm font-medium text-primary-foreground disabled:opacity-60"
+            className="inline-flex items-center justify-center gap-2 self-end rounded-full bg-gold px-5 py-3 text-sm font-medium text-primary-foreground disabled:opacity-60 sm:col-span-2 sm:justify-self-start"
           >
             {nameSaving ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -423,15 +430,13 @@ function PerfilPage({ user }: { user: User }) {
         <div className="mt-4 flex items-center gap-3">
           <LumiMascot size={40} blink={false} />
           {notifSupport === "unsupported" ? (
-            <p className="text-sm text-muted-foreground">
-              Seu navegador não aceita notificações.
-            </p>
+            <p className="text-sm text-muted-foreground">Seu navegador não aceita notificações.</p>
           ) : notifSupport === "granted" ? (
             <p className="text-sm text-emerald-500">Ativados — bom te ter por perto. 🦉</p>
           ) : notifSupport === "denied" ? (
             <p className="text-sm text-muted-foreground">
-              Bloqueados nas configurações do navegador. Para ativar, libere notificações para
-              este site e recarregue a página.
+              Bloqueados nas configurações do navegador. Para ativar, libere notificações para este
+              site e recarregue a página.
             </p>
           ) : (
             <button

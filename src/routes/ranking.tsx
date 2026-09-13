@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Trophy, Medal } from "lucide-react";
-import { subscribeRanking, type RankingRow } from "@/lib/ranking";
+import { Medal, Trophy } from "lucide-react";
+import { subscribeRanking, type RankingMetric, type RankingRow } from "@/lib/ranking";
 import { subscribeAuth } from "@/lib/firebase";
 import { getLevelInfo } from "@/lib/achievements";
 import { UserAvatar } from "@/components/user-avatar";
@@ -12,11 +12,22 @@ export const Route = createFileRoute("/ranking")({
   head: () => ({
     meta: [
       { title: "Ranking — BookVerse" },
-      { name: "description", content: "Os leitores com mais XP no BookVerse." },
+      {
+        name: "description",
+        content: "Ranking de leitura com dados reais da comunidade BookVerse.",
+      },
     ],
   }),
   component: RankingPage,
 });
+
+const METRICS: { id: RankingMetric; label: string; plural: string }[] = [
+  { id: "xp", label: "XP geral", plural: "XP" },
+  { id: "weeklyXp", label: "Esta semana", plural: "XP na semana" },
+  { id: "currentStreak", label: "Sequência", plural: "dias" },
+  { id: "chaptersRead", label: "Capítulos", plural: "capítulos" },
+  { id: "booksCompleted", label: "Concluídos", plural: "livros" },
+];
 
 const PODIUM_STYLE: Record<number, { ring: string; badge: string; medal: string; lift: string }> = {
   1: {
@@ -39,9 +50,22 @@ const PODIUM_STYLE: Record<number, { ring: string; badge: string; medal: string;
   },
 };
 
-function PodiumCard({ row, place, isMe }: { row: RankingRow; place: 1 | 2 | 3; isMe: boolean }) {
+function formatted(value: number, unit: string) {
+  return `${value.toLocaleString("pt-BR")} ${unit}`;
+}
+
+function PodiumCard({
+  row,
+  place,
+  isMe,
+  unit,
+}: {
+  row: RankingRow;
+  place: 1 | 2 | 3;
+  isMe: boolean;
+  unit: string;
+}) {
   const style = PODIUM_STYLE[place];
-  const level = getLevelInfo(row.xp).level;
   return (
     <div
       className={`glass-plate flex flex-col items-center rounded-2xl p-5 text-center transition-transform ${style.lift}`}
@@ -58,115 +82,128 @@ function PodiumCard({ row, place, isMe }: { row: RankingRow; place: 1 | 2 | 3; i
       <p className={`mt-1 truncate text-sm font-medium ${isMe ? "text-gold" : "text-foreground"}`}>
         {isMe ? "Você" : row.displayName}
       </p>
-      <p className="mt-0.5 text-xs text-muted-foreground">Nv. {level}</p>
-      <p className="mt-1.5 text-sm font-semibold tabular-nums">
-        {row.xp.toLocaleString("pt-BR")} XP
-      </p>
+      <p className="mt-0.5 text-xs text-muted-foreground">Nv. {getLevelInfo(row.xp).level}</p>
+      <p className="mt-1.5 text-sm font-semibold tabular-nums">{formatted(row.value, unit)}</p>
     </div>
   );
 }
 
 function RankingPage() {
+  const [metric, setMetric] = useState<RankingMetric>("xp");
   const [rows, setRows] = useState<RankingRow[] | null | undefined>(undefined);
   const [user, setUser] = useState<User | null>(null);
+  const currentMetric = METRICS.find((item) => item.id === metric)!;
 
   useEffect(() => subscribeAuth(setUser), []);
-  useEffect(() => subscribeRanking(50, setRows), []);
-
-  // Safety net: if Firestore's realtime listener never calls back at all
-  // (fully offline/blocked, no cache), stop showing "Carregando…" forever.
   useEffect(() => {
-    const timer = setTimeout(() => setRows((r) => (r === undefined ? null : r)), 10000);
+    setRows(undefined);
+    return subscribeRanking(50, setRows, metric);
+  }, [metric]);
+  useEffect(() => {
+    const timer = setTimeout(
+      () => setRows((current) => (current === undefined ? null : current)),
+      10000,
+    );
     return () => clearTimeout(timer);
-  }, []);
+  }, [metric]);
 
   const podium = rows?.slice(0, 3) ?? [];
   const rest = rows?.slice(3) ?? [];
+  const myRow = rows?.find((row) => !user?.isAnonymous && row.uid === user?.uid);
+  const nextRow = myRow && rows ? rows[myRow.pos - 2] : undefined;
+  const distance = myRow && nextRow ? Math.max(0, nextRow.value - myRow.value) : null;
 
   return (
-    <div className="mx-auto max-w-3xl px-5 py-12 md:px-8">
-      <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-gold">
+    <main className="mx-auto max-w-3xl px-5 py-12 md:px-8">
+      <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-gold">
         <Trophy className="h-4 w-4" /> Ranking
       </div>
-      <h1 className="mt-2 font-display text-4xl font-medium md:text-5xl">Top leitores</h1>
-      <p className="mt-3 text-muted-foreground">
-        XP é ganho lendo capítulos, concluindo livros e adicionando novos títulos à sua biblioteca.
+      <h1 className="mt-2 font-display text-4xl font-medium md:text-5xl">Leitores em movimento</h1>
+      <p className="mt-3 max-w-2xl text-muted-foreground">
+        Os rankings mostram os dados registrados nas contas. Cada aba usa uma métrica diferente, sem
+        transformar livros de catálogo em leitura concluída.
       </p>
-
-      {rows === undefined ? (
-        <div className="mt-10 glass-plate rounded-3xl p-10 text-center text-sm text-muted-foreground">
-          Carregando ranking…
-        </div>
-      ) : rows === null ? (
-        <div className="mt-10 glass-plate rounded-3xl p-10 text-center text-sm text-muted-foreground">
-          Não foi possível carregar o ranking agora.
-        </div>
-      ) : rows.length === 0 ? (
-        <div className="mt-10 glass-plate flex flex-col items-center gap-3 rounded-3xl p-10 text-center">
-          <LumiMascot size={56} blink={false} />
-          <p className="text-sm text-muted-foreground">
-            Ainda ninguém pontuou — seja o primeiro a ler e aparecer aqui!
+      <div className="mt-7 flex gap-2 overflow-x-auto pb-1">
+        {METRICS.map((item) => (
+          <button
+            key={item.id}
+            onClick={() => setMetric(item.id)}
+            className={`shrink-0 rounded-full border px-3.5 py-2 text-sm transition ${item.id === metric ? "border-gold bg-gold/10 text-gold" : "border-border text-muted-foreground hover:border-gold/45 hover:text-foreground"}`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+      {myRow && (
+        <div className="mt-5 rounded-2xl border border-gold/25 bg-gold/5 px-5 py-4 text-sm">
+          <p className="font-medium">Você está em {myRow.pos}º neste ranking.</p>
+          <p className="mt-1 text-muted-foreground">
+            {distance === null
+              ? "Você está no topo."
+              : distance === 0
+                ? "Empate técnico com a próxima posição."
+                : `Faltam ${formatted(distance, currentMetric.plural)} para a próxima posição.`}
           </p>
         </div>
+      )}
+      {rows === undefined ? (
+        <Loading />
+      ) : rows === null ? (
+        <Message text="Não foi possível carregar o ranking agora." />
+      ) : rows.length === 0 ? (
+        <Empty />
       ) : (
         <>
-          {podium.length > 0 && (
-            <div className="mt-10 grid grid-cols-3 items-end gap-3 sm:gap-4">
-              {podium[1] && (
-                <PodiumCard
-                  row={podium[1]}
-                  place={2}
-                  isMe={!!user && !user.isAnonymous && podium[1].uid === user.uid}
-                />
-              )}
-              {podium[0] && (
-                <PodiumCard
-                  row={podium[0]}
-                  place={1}
-                  isMe={!!user && !user.isAnonymous && podium[0].uid === user.uid}
-                />
-              )}
-              {podium[2] && (
-                <PodiumCard
-                  row={podium[2]}
-                  place={3}
-                  isMe={!!user && !user.isAnonymous && podium[2].uid === user.uid}
-                />
-              )}
-            </div>
-          )}
-
+          <div className="mt-10 grid grid-cols-3 items-end gap-3 sm:gap-4">
+            {podium[1] && (
+              <PodiumCard
+                row={podium[1]}
+                place={2}
+                isMe={!!user && !user.isAnonymous && podium[1].uid === user.uid}
+                unit={currentMetric.plural}
+              />
+            )}
+            {podium[0] && (
+              <PodiumCard
+                row={podium[0]}
+                place={1}
+                isMe={!!user && !user.isAnonymous && podium[0].uid === user.uid}
+                unit={currentMetric.plural}
+              />
+            )}
+            {podium[2] && (
+              <PodiumCard
+                row={podium[2]}
+                place={3}
+                isMe={!!user && !user.isAnonymous && podium[2].uid === user.uid}
+                unit={currentMetric.plural}
+              />
+            )}
+          </div>
           {rest.length > 0 && (
             <div className="mt-6 glass-plate rounded-3xl p-4 sm:p-7">
               <ul className="divide-y divide-border/60">
-                {rest.map((r) => {
-                  const me = !!user && !user.isAnonymous && r.uid === user.uid;
-                  const level = getLevelInfo(r.xp).level;
+                {rest.map((row) => {
+                  const me = !!user && !user.isAnonymous && row.uid === user.uid;
                   return (
                     <li
-                      key={r.uid}
-                      className={`grid grid-cols-[auto_auto_1fr_auto] items-center gap-4 rounded-xl px-2 py-3.5 transition-colors ${
-                        me
-                          ? "bg-gold/8 text-foreground"
-                          : "text-foreground/85 hover:bg-secondary/40"
-                      }`}
+                      key={row.uid}
+                      className={`grid grid-cols-[auto_auto_1fr_auto] items-center gap-4 rounded-xl px-2 py-3.5 ${me ? "bg-gold/8" : ""}`}
                     >
                       <span
-                        className={`grid h-8 w-8 place-items-center rounded-full text-sm font-medium ${
-                          me ? "bg-gold text-primary-foreground" : "bg-secondary text-foreground/70"
-                        }`}
+                        className={`grid h-8 w-8 place-items-center rounded-full text-sm font-medium ${me ? "bg-gold text-primary-foreground" : "bg-secondary text-foreground/70"}`}
                       >
-                        {r.pos}
+                        {row.pos}
                       </span>
-                      <UserAvatar profile={r} size="sm" />
-                      <span className={`truncate ${me ? "font-medium" : ""}`}>
-                        {me ? "Você" : r.displayName}
-                        <span className="ml-2 rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                          Nv. {level}
+                      <UserAvatar profile={row} size="sm" />
+                      <span className={`truncate ${me ? "font-medium text-gold" : ""}`}>
+                        {me ? "Você" : row.displayName}
+                        <span className="ml-2 rounded-full bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                          Nv. {getLevelInfo(row.xp).level}
                         </span>
                       </span>
                       <span className="text-sm tabular-nums text-muted-foreground">
-                        {r.xp.toLocaleString("pt-BR")} XP
+                        {formatted(row.value, currentMetric.plural)}
                       </span>
                     </li>
                   );
@@ -176,6 +213,25 @@ function RankingPage() {
           )}
         </>
       )}
+    </main>
+  );
+}
+
+function Loading() {
+  return <Message text="Carregando ranking…" />;
+}
+function Message({ text }: { text: string }) {
+  return (
+    <div className="mt-10 glass-plate rounded-3xl p-10 text-center text-sm text-muted-foreground">
+      {text}
+    </div>
+  );
+}
+function Empty() {
+  return (
+    <div className="mt-10 glass-plate flex flex-col items-center gap-3 rounded-3xl p-10 text-center">
+      <LumiMascot size={56} blink={false} />
+      <p className="text-sm text-muted-foreground">Ainda não há dados suficientes nesta métrica.</p>
     </div>
   );
 }

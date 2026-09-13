@@ -28,8 +28,10 @@ import {
 import {
   loadProgressRemote,
   loadSettings,
+  loadSettingsRemote,
   saveProgress,
   saveSettings,
+  saveSettingsRemote,
   DEFAULT_SETTINGS,
   type ReaderSettings,
   type ReadingProgress,
@@ -46,7 +48,6 @@ import {
 } from "@/lib/annotations";
 import { ReaderSettingsPanel } from "@/components/reader/settings-panel";
 import { useRequireAuth } from "@/hooks/use-require-auth";
-import { useSiteTheme } from "@/hooks/use-site-theme";
 import { openLumiPanel } from "@/lib/lumi-panel-store";
 import { awardXp, incrementBooksCompleted, recordReadingActivity } from "@/lib/user-profile";
 import { markAsReading, setLibraryStatus, slugFor } from "@/lib/library";
@@ -289,6 +290,13 @@ const THEME_STYLES = {
     accent: "#C89B6A",
     rule: "rgba(232,223,211,0.12)",
   },
+  amoled: {
+    bg: "#000000",
+    fg: "#F2F0EA",
+    muted: "#A39C91",
+    accent: "#D6B56F",
+    rule: "rgba(242,240,234,0.14)",
+  },
 } as const;
 
 function ReaderPage({ uid, book }: { uid: string; book: Book }) {
@@ -307,6 +315,11 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   const [noteDraft, setNoteDraft] = useState("");
   const [saved, setSaved] = useState(true);
   const [hydrated, setHydrated] = useState(false);
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const [selectedPassage, setSelectedPassage] = useState<{ text: string; context: string } | null>(
+    null,
+  );
+  const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Paginated mode: content is laid out in CSS columns exactly as wide as
   // the visible container, so each "column" is one full page — navigation
@@ -321,6 +334,19 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const snapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const revealControls = useCallback(() => {
+    setControlsVisible(true);
+    if (controlsTimer.current) clearTimeout(controlsTimer.current);
+    controlsTimer.current = setTimeout(() => setControlsVisible(false), 3600);
+  }, []);
+
+  useEffect(() => {
+    revealControls();
+    return () => {
+      if (controlsTimer.current) clearTimeout(controlsTimer.current);
+    };
+  }, [book.id, revealControls]);
+
   // Opening a book counts as "starting" it — track it in the library so it
   // shows up under "Minha biblioteca" / "Continue lendo" and can be resumed.
   useEffect(() => {
@@ -333,6 +359,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   useEffect(() => {
     const s = loadSettings();
     setSettings(s);
+    void loadSettingsRemote(uid, s).then((remote) => setSettings(remote));
     void loadProgressRemote(book.id).then((p) => {
       if (p) {
         setChapterIndex(Math.min(p.chapterIndex, book.chapters.length - 1));
@@ -349,13 +376,14 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       }
       setHydrated(true);
     });
-  }, [book.id, book.chapters.length]);
+  }, [book.id, book.chapters.length, uid]);
 
   // Persist settings.
   useEffect(() => {
     if (!hydrated) return;
     saveSettings(settings);
-  }, [settings, hydrated]);
+    void saveSettingsRemote(uid, settings);
+  }, [settings, hydrated, uid]);
 
   // Debounced progress save.
   const queueSave = useCallback(
@@ -370,14 +398,33 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     [book.id],
   );
 
+  const makeProgress = useCallback(
+    (
+      nextChapterIndex: number,
+      nextScrollRatio: number,
+      page?: { index: number; count: number },
+    ): ReadingProgress => ({
+      chapterIndex: nextChapterIndex,
+      scrollRatio: nextScrollRatio,
+      overallRatio: Math.min(
+        1,
+        (nextChapterIndex + Math.max(0, Math.min(1, nextScrollRatio))) / book.chapters.length,
+      ),
+      chapterCount: book.chapters.length,
+      ...(page ? { pageIndex: page.index, pageCount: page.count } : {}),
+      updatedAt: Date.now(),
+    }),
+    [book.chapters.length],
+  );
+
   const onScroll = useCallback(() => {
     const el = contentRef.current;
     if (!el) return;
     const denom = el.scrollHeight - el.clientHeight;
     const r = denom > 0 ? el.scrollTop / denom : 0;
     setScrollRatio(r);
-    queueSave({ chapterIndex, scrollRatio: r, updatedAt: Date.now() });
-  }, [chapterIndex, queueSave]);
+    queueSave(makeProgress(chapterIndex, r));
+  }, [chapterIndex, makeProgress, queueSave]);
 
   const goto = useCallback(
     (i: number, edgeRatio: 0 | 1 = 0) => {
@@ -412,10 +459,19 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
             });
         });
       }
-      queueSave({ chapterIndex: clamped, scrollRatio: edgeRatio, updatedAt: Date.now() });
+      queueSave(makeProgress(clamped, edgeRatio));
       setTocOpen(false);
     },
-    [book.chapters.length, book.title, book.author, chapterIndex, queueSave, settings.mode, uid],
+    [
+      book.chapters.length,
+      book.title,
+      book.author,
+      chapterIndex,
+      makeProgress,
+      queueSave,
+      settings.mode,
+      uid,
+    ],
   );
 
   // Track the container's visible width — each CSS column is set to
@@ -496,12 +552,12 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       setPageIndex(targetPage);
       const r = pageCount > 1 ? targetPage / (pageCount - 1) : 0;
       setScrollRatio(r);
-      queueSave({ chapterIndex, scrollRatio: r, updatedAt: Date.now() });
+      queueSave(makeProgress(chapterIndex, r, { index: targetPage, count: pageCount }));
       setTimeout(() => {
         isProgrammaticScroll.current = false;
       }, 500);
     },
-    [chapterIndex, pageCount, pageWidthPx, goto, queueSave],
+    [chapterIndex, pageCount, pageWidthPx, goto, makeProgress, queueSave],
   );
 
   // Native swipe/drag is left free (no CSS scroll-snap — it can't target
@@ -521,9 +577,9 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       setPageIndex(nearest);
       const r = pageCount > 1 ? nearest / (pageCount - 1) : 0;
       setScrollRatio(r);
-      queueSave({ chapterIndex, scrollRatio: r, updatedAt: Date.now() });
+      queueSave(makeProgress(chapterIndex, r, { index: nearest, count: pageCount }));
     }, 120);
-  }, [pageWidthPx, pageCount, chapterIndex, queueSave]);
+  }, [pageWidthPx, pageCount, chapterIndex, makeProgress, queueSave]);
 
   // Keyboard page-turning on desktop — ignored while typing in a note or
   // any other input so arrow keys still work normally there.
@@ -539,8 +595,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [settings.mode, pageIndex, goToPage]);
 
-  const [siteTheme, setSiteTheme] = useSiteTheme();
-  const theme = THEME_STYLES[siteTheme];
+  const theme = THEME_STYLES[settings.theme];
   const chapter = book.chapters[chapterIndex];
 
   const overallProgress = useMemo(() => {
@@ -555,6 +610,42 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       ),
     [annotations.highlights, chapter.id],
   );
+
+  const captureTextSelection = useCallback(() => {
+    const selection = window.getSelection();
+    const text = selection?.toString().replace(/\s+/g, " ").trim() ?? "";
+    if (!text || text.length < 2 || !contentRef.current?.contains(selection?.anchorNode ?? null)) {
+      setSelectedPassage(null);
+      return;
+    }
+    const boundedText = text.slice(0, 900);
+    const anchor =
+      selection?.anchorNode?.parentElement?.closest<HTMLElement>("[data-paragraph-index]");
+    const index = Number(anchor?.dataset.paragraphIndex ?? 0);
+    const safeIndex = Number.isFinite(index)
+      ? Math.max(0, Math.min(chapter.paragraphs.length - 1, index))
+      : 0;
+    const nearby = chapter.paragraphs
+      .slice(Math.max(0, safeIndex - 1), Math.min(chapter.paragraphs.length, safeIndex + 2))
+      .join(" ")
+      .slice(0, 1500);
+    setSelectedPassage({ text: boundedText, context: nearby });
+  }, [chapter.paragraphs]);
+
+  function askLumiAboutPassage(action: string, passage = selectedPassage) {
+    if (!passage) return;
+    openLumiPanel({
+      bookTitle: book.title,
+      bookAuthor: book.author,
+      chapterTitle: chapter.title,
+      chapterExcerpt: passage.context,
+      selectedText: passage.text,
+      positionLabel: `Capítulo ${chapterIndex + 1} de ${book.chapters.length}`,
+      initialPrompt: `${action} o trecho selecionado, considerando o contexto da leitura.`,
+    });
+    window.getSelection()?.removeAllRanges();
+    setSelectedPassage(null);
+  }
 
   async function handleHighlight(paragraphIndex: number, color: HighlightColor) {
     const existing = currentHighlight(paragraphIndex);
@@ -671,23 +762,30 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
           overflowY: "hidden",
           overflowX: "auto",
           scrollbarWidth: "none",
-          padding: "2.5rem 0",
+          padding: "5rem 0 4rem",
           boxSizing: "border-box",
         }
       : {
           overflowY: "auto",
-          padding: `3rem ${settings.margin}px 8rem`,
+          padding: `5rem ${settings.margin}px 5rem`,
         };
 
   return (
     <div
       className="fixed inset-0 z-30 flex flex-col transition-colors duration-300"
       style={{ backgroundColor: theme.bg, color: theme.fg }}
+      onPointerMove={revealControls}
+      onPointerDown={revealControls}
+      onPointerUp={captureTextSelection}
     >
       {/* Top bar */}
       <header
-        className="flex items-center justify-between gap-3 border-b px-4 py-3 transition-colors duration-300 md:px-6"
-        style={{ borderColor: theme.rule }}
+        className={`absolute inset-x-0 top-0 z-30 flex items-center justify-between gap-3 border-b px-4 py-3 transition-all duration-300 md:px-6 ${
+          controlsVisible
+            ? "translate-y-0 opacity-100"
+            : "pointer-events-none -translate-y-full opacity-0"
+        }`}
+        style={{ borderColor: theme.rule, backgroundColor: theme.bg + "F2" }}
       >
         <div className="flex min-w-0 items-center gap-2">
           <Link
@@ -729,6 +827,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                 bookAuthor: book.author,
                 chapterTitle: chapter.title,
                 chapterExcerpt: chapter.paragraphs.slice(0, 3).join(" "),
+                positionLabel: `Capítulo ${chapterIndex + 1} de ${book.chapters.length}`,
               })
             }
             label="Perguntar à Lumi"
@@ -813,15 +912,18 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
               return (
                 <div key={i} className="relative" style={{ breakInside: "avoid" }}>
                   <p
+                    data-paragraph-index={i}
                     onClick={() => setActiveParagraph(isActive ? null : i)}
-                    className="mb-1 cursor-pointer rounded-sm px-2 -mx-2 py-0.5 [hyphens:auto] [text-align:justify] transition-colors"
+                    className="cursor-pointer rounded-sm px-2 -mx-2 py-0.5 [hyphens:auto] transition-colors"
                     style={
                       highlight
                         ? {
                             backgroundColor: HIGHLIGHT_BG[highlight.color],
                             boxShadow: `inset 3px 0 0 0 ${HIGHLIGHT_ACCENT[highlight.color]}`,
+                            marginBottom: 0,
+                            textAlign: settings.alignment,
                           }
-                        : undefined
+                        : { marginBottom: 0, textAlign: settings.alignment }
                     }
                   >
                     {p}
@@ -840,7 +942,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                       {highlight.note}
                     </button>
                   )}
-                  {!highlight?.note && <div className="mb-6" />}
+                  {!highlight?.note && <div style={{ height: `${settings.paragraphSpacing}em` }} />}
 
                   {isActive && (
                     <div
@@ -889,6 +991,20 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                       ) : (
                         <span style={{ color: theme.muted }}>Toque numa cor pra destacar</span>
                       )}
+                      <button
+                        onClick={() =>
+                          askLumiAboutPassage("Explique em linguagem simples", {
+                            text: p.slice(0, 900),
+                            context: chapter.paragraphs
+                              .slice(Math.max(0, i - 1), Math.min(chapter.paragraphs.length, i + 2))
+                              .join(" ")
+                              .slice(0, 1500),
+                          })
+                        }
+                        className="inline-flex items-center gap-1 rounded-full px-2 py-1 hover:opacity-70"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" /> Explicar
+                      </button>
                       <button
                         onClick={() => setActiveParagraph(null)}
                         className="ml-auto rounded-full p-1 hover:opacity-70"
@@ -981,12 +1097,59 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
             />
           </>
         )}
+
+        {selectedPassage && (
+          <div
+            className="absolute bottom-5 left-1/2 z-30 flex w-[min(94vw,42rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 rounded-2xl border p-2 shadow-xl backdrop-blur-xl"
+            style={{
+              borderColor: theme.rule,
+              backgroundColor: theme.bg + "F5",
+              fontFamily: "var(--font-sans)",
+            }}
+          >
+            {[
+              ["O que significa?", "Explique o significado de"],
+              ["Explique", "Explique em linguagem simples"],
+              ["Resumir", "Resuma"],
+              ["Contexto", "Dê o contexto de"],
+              ["Por que?", "Explique por que isso acontece em"],
+            ].map(([label, action]) => (
+              <button
+                key={label}
+                onClick={() => askLumiAboutPassage(action)}
+                className="rounded-full px-3 py-1.5 text-xs font-medium transition hover:opacity-70"
+                style={{ color: theme.fg, backgroundColor: theme.rule }}
+              >
+                {label}
+              </button>
+            ))}
+            <button
+              aria-label="Fechar ações do trecho"
+              onClick={() => {
+                window.getSelection()?.removeAllRanges();
+                setSelectedPassage(null);
+              }}
+              className="rounded-full p-1.5"
+              style={{ color: theme.muted }}
+            >
+              <XIcon className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Progress rail */}
       <div
-        className="border-t px-4 py-2.5 md:px-6"
-        style={{ borderColor: theme.rule, fontFamily: "var(--font-sans)" }}
+        className={`absolute inset-x-0 bottom-0 z-30 border-t px-4 py-2.5 transition-all duration-300 md:px-6 ${
+          controlsVisible
+            ? "translate-y-0 opacity-100"
+            : "pointer-events-none translate-y-full opacity-0"
+        }`}
+        style={{
+          borderColor: theme.rule,
+          fontFamily: "var(--font-sans)",
+          backgroundColor: theme.bg + "F2",
+        }}
       >
         <div className="flex items-center gap-3 text-[11px]" style={{ color: theme.muted }}>
           <span className="tabular-nums">{Math.round(overallProgress * 100)}%</span>
@@ -1012,10 +1175,8 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
         open={panelOpen}
         onClose={() => setPanelOpen(false)}
         settings={settings}
-        onChange={(patch) => setSettings((s) => ({ ...s, ...patch }))}
+        onChange={(patch) => setSettings((s) => ({ ...s, ...patch, updatedAt: Date.now() }))}
         theme={theme}
-        siteTheme={siteTheme}
-        onSiteThemeChange={setSiteTheme}
       />
 
       {/* Table of contents / highlights / bookmarks */}

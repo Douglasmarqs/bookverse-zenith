@@ -31,11 +31,11 @@ import {
 } from "@/lib/library";
 import {
   deleteEpubBook,
+  deleteEpubBookFromCloud,
   isEpubReaderId,
   saveEpubBook,
   uploadEpubBookToCloud,
 } from "@/lib/epub-store";
-
 
 export const Route = createFileRoute("/biblioteca")({
   head: () => ({
@@ -67,7 +67,6 @@ const STATUS_BADGE: Record<LibraryStatus, string> = {
 
 type FilterTab = "todos" | "favoritos" | LibraryStatus;
 type SortKey = "recent" | "title" | "author" | "rating";
-
 
 function GuardedBibliotecaPage() {
   const { state, user } = useRequireAuth();
@@ -127,10 +126,15 @@ function BibliotecaPage({ uid }: { uid: string }) {
     if (busy.has(entry.id)) return;
     setBusy((s) => new Set(s).add(entry.id));
     try {
-      await removeFromLibrary(uid, entry.id);
       if (entry.readerId && isEpubReaderId(entry.readerId)) {
-        void deleteEpubBook(entry.readerId).catch(() => {});
+        // Delete the durable source before its library pointer. If the cloud
+        // operation is denied or interrupted, leave the entry intact so the
+        // person never sees a false "removed" success while a private file
+        // remains orphaned.
+        await deleteEpubBookFromCloud(uid, entry.readerId);
+        await deleteEpubBook(entry.readerId).catch(() => {});
       }
+      await removeFromLibrary(uid, entry.id);
       toast.success("Livro removido da biblioteca.");
     } catch (err) {
       toast.error(describeFirestoreError(err, "Não foi possível remover este livro."));
@@ -150,13 +154,18 @@ function BibliotecaPage({ uid }: { uid: string }) {
       const { parseEpubFile } = await import("@/lib/epub-parser");
       const book = await parseEpubFile(file);
       await saveEpubBook(book);
-      // Mirror to the cloud (best effort) so the same book opens on other devices.
-      void uploadEpubBookToCloud(uid, book);
-      await addToLibrary(
-        uid,
-        { title: book.title, author: book.author, cover: book.cover, readerId: book.id },
-        "quero-ler",
-      );
+      try {
+        await uploadEpubBookToCloud(uid, book, file);
+        await addToLibrary(
+          uid,
+          { title: book.title, author: book.author, cover: book.cover, readerId: book.id },
+          "quero-ler",
+        );
+      } catch (err) {
+        void deleteEpubBook(book.id).catch(() => {});
+        void deleteEpubBookFromCloud(uid, book.id).catch(() => {});
+        throw err;
+      }
       toast.success(`"${book.title}" adicionado à sua biblioteca.`, {
         action: {
           label: "Ler agora",
@@ -230,18 +239,19 @@ function BibliotecaPage({ uid }: { uid: string }) {
     }
   }
 
-
   return (
     <div className="mx-auto max-w-7xl px-5 py-10 md:px-8 md:py-12">
       {/* Header */}
       <div className="social-card flex flex-wrap items-end justify-between gap-4 p-5 sm:p-7">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gold">Minha biblioteca</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gold">
+            Minha biblioteca
+          </p>
           <h1 className="mt-2 font-display text-4xl font-semibold md:text-5xl">Sua estante</h1>
           {entries && entries.length > 0 && (
             <p className="mt-2 text-sm text-muted-foreground">
-              {counts.todos} {counts.todos === 1 ? "livro" : "livros"} organizados · {counts.lendo} lendo ·{" "}
-              {counts.concluido} concluído{counts.concluido === 1 ? "" : "s"}
+              {counts.todos} {counts.todos === 1 ? "livro" : "livros"} organizados · {counts.lendo}{" "}
+              lendo · {counts.concluido} concluído{counts.concluido === 1 ? "" : "s"}
             </p>
           )}
         </div>
@@ -272,9 +282,9 @@ function BibliotecaPage({ uid }: { uid: string }) {
         </div>
       </div>
       <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-        Importe um arquivo <code className="font-mono">.epub</code> do seu computador para ler aqui
-        mesmo, com a mesma experiência de leitura dos outros livros. O arquivo fica salvo neste
-        navegador — se quiser lê-lo em outro dispositivo, importe-o novamente lá.
+        Importe um arquivo <code className="font-mono">.epub</code> seu para lê-lo aqui com a mesma
+        experiência dos outros livros. O arquivo é guardado de forma privada na sua conta e pode ser
+        aberto nos seus outros dispositivos.
       </p>
 
       {entries && entries.length > 0 && (
@@ -296,7 +306,6 @@ function BibliotecaPage({ uid }: { uid: string }) {
               </button>
             ))}
           </div>
-
 
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:ml-auto">
             <label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-border/70 bg-card/70 px-3 py-2 sm:flex-none">
@@ -424,7 +433,6 @@ function BookCard({
   onToggleFavorite: () => void;
   onRate: (rating: number) => void;
 }) {
-
   const [menuOpen, setMenuOpen] = useState(false);
   const primaryHref = entry.readerId
     ? { to: "/reader/$bookId" as const, params: { bookId: entry.readerId } }
@@ -459,10 +467,9 @@ function BookCard({
 
           {entry.readerId && isEpubReaderId(entry.readerId) && (
             <span className="absolute bottom-2 left-2 rounded-full bg-background/85 px-2 py-0.5 text-[9px] font-medium text-foreground/80 ring-1 ring-border/60 backdrop-blur-sm">
-              EPUB local
+              EPUB privado
             </span>
           )}
-
 
           {/* Hover overlay with the primary action, like a Kindle/Apple Books tap target */}
           <div className="absolute inset-0 hidden items-end justify-center rounded-lg bg-gradient-to-t from-black/70 via-black/10 to-transparent p-3 opacity-0 transition-opacity group-hover:opacity-100 md:flex">
@@ -509,16 +516,13 @@ function BookCard({
               >
                 <Star
                   className={`h-3 w-3 ${
-                    (entry.rating ?? 0) >= star
-                      ? "fill-gold text-gold"
-                      : "text-muted-foreground/50"
+                    (entry.rating ?? 0) >= star ? "fill-gold text-gold" : "text-muted-foreground/50"
                   }`}
                 />
               </button>
             ))}
           </div>
         </div>
-
 
         <div className="relative shrink-0">
           <button
@@ -578,4 +582,3 @@ function MoreDots() {
     </svg>
   );
 }
-
