@@ -182,7 +182,7 @@ function EpubBookLoader({ uid, localId }: { uid: string; localId: string }) {
   if (!book) {
     return (
       <ReaderPageSkeleton
-        label={stage === "cloud" ? "Sincronizando da nuvem…" : "Abrindo seu arquivo…"}
+        label={stage === "cloud" ? "Preparando sua cópia privada…" : "Abrindo seu livro…"}
       />
     );
   }
@@ -300,6 +300,7 @@ const THEME_STYLES = {
 } as const;
 
 const PAGE_GESTURE_HINT_KEY = "bookverse:reader-page-gesture-tip";
+const PAGE_TURN_DURATION_MS = 720;
 type PageTurnDirection = "next" | "previous";
 
 type PageTurn = {
@@ -347,6 +348,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const snapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pageTurnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isPageTurningRef = useRef(false);
 
   const revealControls = useCallback(() => {
     setControlsVisible(true);
@@ -555,25 +557,33 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   const startPageTurn = useCallback(
     (direction: PageTurnDirection) => {
       const article = articleRef.current;
-      if (!article || pageWidthPx <= 0) return false;
+      if (!settings.pageTurn || !article || pageWidthPx <= 0 || isPageTurningRef.current) {
+        return false;
+      }
 
       if (pageTurnTimer.current) clearTimeout(pageTurnTimer.current);
+      isPageTurningRef.current = true;
       setPageTurn({ direction, pageIndex, snapshot: article.outerHTML });
-      pageTurnTimer.current = setTimeout(() => setPageTurn(null), 620);
+      pageTurnTimer.current = setTimeout(() => {
+        isPageTurningRef.current = false;
+        setPageTurn(null);
+      }, PAGE_TURN_DURATION_MS);
       return true;
     },
-    [pageIndex, pageWidthPx],
+    [pageIndex, pageWidthPx, settings.pageTurn],
   );
 
   useEffect(
     () => () => {
       if (pageTurnTimer.current) clearTimeout(pageTurnTimer.current);
+      isPageTurningRef.current = false;
     },
     [],
   );
 
   const goToPage = useCallback(
     (targetPage: number) => {
+      if (isPageTurningRef.current) return;
       if (targetPage < 0) {
         goto(chapterIndex - 1, 1);
         return;
@@ -588,23 +598,27 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
         Math.abs(targetPage - pageIndex) === 1 &&
         startPageTurn(targetPage > pageIndex ? "next" : "previous");
       isProgrammaticScroll.current = true;
-      // When there is a leaf animation, reveal the destination immediately
-      // behind the captured page. The visual movement is the rotating sheet,
-      // not a second sliding animation competing with it.
-      el.scrollTo({
-        left: targetPage * pageWidthPx,
-        behavior: (turningOneLeaf ? "instant" : "smooth") as ScrollBehavior,
-      });
-      setPageIndex(targetPage);
-      const r = pageCount > 1 ? targetPage / (pageCount - 1) : 0;
-      setScrollRatio(r);
-      queueSave(makeProgress(chapterIndex, r, { index: targetPage, count: pageCount }));
-      setTimeout(
-        () => {
-          isProgrammaticScroll.current = false;
-        },
-        turningOneLeaf ? 620 : 500,
-      );
+      const revealDestination = () => {
+        // Paint the captured leaf first; moving the real column on the
+        // following frame prevents a white flash on slower computers.
+        el.scrollTo({
+          left: targetPage * pageWidthPx,
+          behavior: (turningOneLeaf ? "instant" : "smooth") as ScrollBehavior,
+        });
+        setPageIndex(targetPage);
+        const r = pageCount > 1 ? targetPage / (pageCount - 1) : 0;
+        setScrollRatio(r);
+        queueSave(makeProgress(chapterIndex, r, { index: targetPage, count: pageCount }));
+        setTimeout(
+          () => {
+            isProgrammaticScroll.current = false;
+          },
+          turningOneLeaf ? PAGE_TURN_DURATION_MS : 500,
+        );
+      };
+
+      if (turningOneLeaf) requestAnimationFrame(revealDestination);
+      else revealDestination();
     },
     [chapterIndex, pageCount, pageWidthPx, pageIndex, goto, makeProgress, queueSave, startPageTurn],
   );
@@ -1181,7 +1195,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
           </article>
         </div>
 
-        {settings.mode === "paginated" && pageTurn && (
+        {settings.mode === "paginated" && settings.pageTurn !== false && pageTurn && (
           <div
             aria-hidden="true"
             className={`reader-page-turn reader-page-turn--${pageTurn.direction}`}
