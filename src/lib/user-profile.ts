@@ -127,7 +127,10 @@ export async function ensureUserProfile(user: User): Promise<void> {
     if (user.displayName && data.displayName !== user.displayName) {
       patch.displayName = user.displayName;
     }
-    if (user.photoURL && data.photoURL !== user.photoURL) {
+    // A custom BookVerse photo takes precedence. Once it exists, keeping
+    // rewriting the provider (Google) photo at sign-in only causes a brief
+    // flash of the wrong avatar before the custom photo is painted.
+    if (!data.customPhotoDataUrl && user.photoURL && data.photoURL !== user.photoURL) {
       patch.photoURL = user.photoURL;
     }
     if (Object.keys(patch).length > 0) {

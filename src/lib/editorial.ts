@@ -8,6 +8,7 @@
  */
 
 export const TELEGRAM_CHANNEL_URL = "https://t.me/livros_em_epub";
+export const BAIXE_LIVROS_URL = "https://www.baixelivros.com.br/";
 
 export interface LumiPick {
   /** Project Gutenberg id — abre no leitor via gutenbergReaderId(). */

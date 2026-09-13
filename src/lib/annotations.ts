@@ -14,6 +14,10 @@ export interface Highlight {
   chapterId: string;
   chapterIndex: number;
   paragraphIndex: number;
+  /** Character offsets inside the paragraph. Older highlights do not have
+   * these fields and remain valid full-paragraph highlights. */
+  startOffset?: number;
+  endOffset?: number;
   color: HighlightColor;
   note?: string;
   /** First ~140 chars of the paragraph — shown in the "Destaques" list so
@@ -114,6 +118,23 @@ export async function updateHighlightNote(
     setDoc(r, { highlights }, { merge: true }),
     WRITE_TIMEOUT_MS,
     "Não foi possível salvar a anotação agora. Tente novamente.",
+  );
+}
+
+export async function updateHighlightColor(
+  uid: string,
+  bookId: string,
+  highlightId: string,
+  color: HighlightColor,
+): Promise<void> {
+  const r = ref(uid, bookId);
+  if (!r) throw new Error("O login não está disponível neste ambiente agora.");
+  const current = await readCurrent(uid, bookId);
+  const highlights = current.highlights.map((h) => (h.id === highlightId ? { ...h, color } : h));
+  await withDeadline(
+    setDoc(r, { highlights }, { merge: true }),
+    WRITE_TIMEOUT_MS,
+    "Não foi possível atualizar a cor do destaque agora. Tente novamente.",
   );
 }
 
