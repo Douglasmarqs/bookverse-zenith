@@ -297,7 +297,16 @@ const THEME_STYLES = {
     accent: "#D6B56F",
     rule: "rgba(242,240,234,0.14)",
   },
-} as const;const PAGE_GESTURE_HINT_KEY = "bookverse:reader-page-gesture-tip"; type PageTurnDirection = "next" | "previous"; type PageTurn = { direction: PageTurnDirection; pageIndex: number; snapshot: string; };
+} as const;
+
+const PAGE_GESTURE_HINT_KEY = "bookverse:reader-page-gesture-tip";
+type PageTurnDirection = "next" | "previous";
+
+type PageTurn = {
+  direction: PageTurnDirection;
+  pageIndex: number;
+  snapshot: string;
+};
 
 function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   const [settings, setSettings] = useState<ReaderSettings>(DEFAULT_SETTINGS);
@@ -327,14 +336,17 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   const [pageIndex, setPageIndex] = useState(0);
   const [pageCount, setPageCount] = useState(1);
   const [pageWidthPx, setPageWidthPx] = useState(0);
-  const [showPageGestureHint, setShowPageGestureHint] = useState(false); const [pageTurn, setPageTurn] = useState<PageTurn | null>(null);
+  const [showPageGestureHint, setShowPageGestureHint] = useState(false);
+  const [pageTurn, setPageTurn] = useState<PageTurn | null>(null);
   const pendingRatioRef = useRef<number | null>(null);
   const isProgrammaticScroll = useRef(false);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
-  const contentRef = useRef<HTMLDivElement>(null); const articleRef = useRef<HTMLElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const articleRef = useRef<HTMLElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const snapTimer = useRef<ReturnType<typeof setTimeout> | null>(null); const pageTurnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const snapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pageTurnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const revealControls = useCallback(() => {
     setControlsVisible(true);
@@ -537,7 +549,30 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     settings.font,
   ]);
 
-  const startPageTurn = useCallback((direction: PageTurnDirection) => { const article = articleRef.current; if (!article || pageWidthPx <= 0) return false; if (pageTurnTimer.current) clearTimeout(pageTurnTimer.current); setPageTurn({ direction, pageIndex, snapshot: article.outerHTML }); pageTurnTimer.current = setTimeout(() => setPageTurn(null), 620); return true; }, [pageIndex, pageWidthPx]); useEffect(() => () => { if (pageTurnTimer.current) clearTimeout(pageTurnTimer.current); }, []); const goToPage = useCallback(
+  // Capture the page that is actually on screen before moving the column
+  // underneath it. The temporary copy is then rotated as a paper leaf, so
+  // the reader never sees a generic/empty transition layer.
+  const startPageTurn = useCallback(
+    (direction: PageTurnDirection) => {
+      const article = articleRef.current;
+      if (!article || pageWidthPx <= 0) return false;
+
+      if (pageTurnTimer.current) clearTimeout(pageTurnTimer.current);
+      setPageTurn({ direction, pageIndex, snapshot: article.outerHTML });
+      pageTurnTimer.current = setTimeout(() => setPageTurn(null), 620);
+      return true;
+    },
+    [pageIndex, pageWidthPx],
+  );
+
+  useEffect(
+    () => () => {
+      if (pageTurnTimer.current) clearTimeout(pageTurnTimer.current);
+    },
+    [],
+  );
+
+  const goToPage = useCallback(
     (targetPage: number) => {
       if (targetPage < 0) {
         goto(chapterIndex - 1, 1);
@@ -548,16 +583,28 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
         return;
       }
       const el = contentRef.current;
-      if (!el || pageWidthPx <= 0) return; const turningOneLeaf = Math.abs(targetPage - pageIndex) === 1 && startPageTurn(targetPage > pageIndex ? "next" : "previous");
+      if (!el || pageWidthPx <= 0) return;
+      const turningOneLeaf =
+        Math.abs(targetPage - pageIndex) === 1 &&
+        startPageTurn(targetPage > pageIndex ? "next" : "previous");
       isProgrammaticScroll.current = true;
-      el.scrollTo({ left: targetPage * pageWidthPx, behavior: (turningOneLeaf ? "instant" : "smooth") as ScrollBehavior });
+      // When there is a leaf animation, reveal the destination immediately
+      // behind the captured page. The visual movement is the rotating sheet,
+      // not a second sliding animation competing with it.
+      el.scrollTo({
+        left: targetPage * pageWidthPx,
+        behavior: (turningOneLeaf ? "instant" : "smooth") as ScrollBehavior,
+      });
       setPageIndex(targetPage);
       const r = pageCount > 1 ? targetPage / (pageCount - 1) : 0;
       setScrollRatio(r);
       queueSave(makeProgress(chapterIndex, r, { index: targetPage, count: pageCount }));
-      setTimeout(() => {
-        isProgrammaticScroll.current = false;
-      }, turningOneLeaf ? 620 : 500);
+      setTimeout(
+        () => {
+          isProgrammaticScroll.current = false;
+        },
+        turningOneLeaf ? 620 : 500,
+      );
     },
     [chapterIndex, pageCount, pageWidthPx, pageIndex, goto, makeProgress, queueSave, startPageTurn],
   );
@@ -572,9 +619,8 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   }, []);
 
   // Page turns are deliberate rather than a raw horizontal scrollbar: a
-  // lateral gesture advances exactly one virtual page, then `goToPage`
-  // performs the smooth horizontal slide. This feels natural on phones and
-  // prevents an accidental partial page from being left on screen.
+  // lateral gesture advances exactly one virtual page, with the same paper
+  // leaf animation used by the keyboard and the edge controls.
   const handlePaginatedTouchStart = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
     const touch = event.touches[0];
     touchStartRef.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
@@ -907,7 +953,8 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
           style={contentStyle}
           className="h-full"
         >
-          <article ref={articleRef}
+          <article
+            ref={articleRef}
             className="mx-auto"
             style={{
               maxWidth: `${settings.maxWidth}ch`,
@@ -1131,8 +1178,38 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                 Próximo <ChevronRight className="h-4 w-4" />
               </button>
             </nav>
-          </article>{settings.mode === "paginated" && pageTurn && (<div aria-hidden="true" className={`reader-page-turn reader-page-turn--${pageTurn.direction}`}><div className="reader-page-turn__sheet" style={{ backgroundColor: theme.bg, color: theme.fg }}><div className="reader-page-turn__content" style={{ width: `${pageWidthPx}px`, height: "100%", columnWidth: `${pageWidthPx}px`, columnGap: "0px", columnFill: "auto", padding: "5rem 0 4rem", boxSizing: "border-box", transform: `translateX(${-pageTurn.pageIndex * pageWidthPx}px)` }} dangerouslySetInnerHTML={{ __html: pageTurn.snapshot }} /></div></div></div>) }
+          </article>
         </div>
+
+        {settings.mode === "paginated" && pageTurn && (
+          <div
+            aria-hidden="true"
+            className={`reader-page-turn reader-page-turn--${pageTurn.direction}`}
+          >
+            <div
+              className="reader-page-turn__sheet"
+              style={{ backgroundColor: theme.bg, color: theme.fg }}
+            >
+              <div
+                className="reader-page-turn__content"
+                style={{
+                  width: `${pageWidthPx}px`,
+                  height: "100%",
+                  columnWidth: `${pageWidthPx}px`,
+                  columnGap: "0px",
+                  columnFill: "auto",
+                  padding: "5rem 0 4rem",
+                  boxSizing: "border-box",
+                  transform: `translateX(${-pageTurn.pageIndex * pageWidthPx}px)`,
+                }}
+                // This is a snapshot of our already-rendered article, never
+                // raw EPUB markup. It keeps the exact text, images and theme
+                // visible while the virtual sheet turns.
+                dangerouslySetInnerHTML={{ __html: pageTurn.snapshot }}
+              />
+            </div>
+          </div>
+        )}
 
         {settings.mode === "paginated" && (
           <>
