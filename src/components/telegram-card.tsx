@@ -1,48 +1,51 @@
-import { ArrowUpRight, BookOpenCheck, ShieldCheck } from "lucide-react";
-import { Link } from "@tanstack/react-router";
+import { ArrowUpRight, BookOpenCheck, Send } from "lucide-react";
+import { TELEGRAM_CHANNEL_URL } from "@/lib/editorial";
 
-/**
- * The previous version sent people to a Telegram channel described only as
- * an EPUB archive. It did not state who owns each file or which licences
- * apply, so it cannot be presented as a BookVerse acquisition source.
- *
- * Keep the component name for existing route imports, but turn it into a
- * useful, legal path: full public-domain reading in the app and an official
- * source page for a person who chooses to download a permitted EPUB.
- */
 export function TelegramCard({ compact = false }: { compact?: boolean }) {
   return (
     <section className="glass-plate mt-10 overflow-hidden rounded-3xl p-6 md:p-8">
       <div className="flex flex-wrap items-start justify-between gap-5">
         <div className="min-w-0">
           <p className="flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-gold">
-            <ShieldCheck className="h-3.5 w-3.5" /> Fonte autorizada
+            <BookOpenCheck className="h-3.5 w-3.5" /> EPUBs
           </p>
           <h2 className="mt-2 font-display text-2xl font-medium md:text-3xl">
-            Clássicos gratuitos, com origem clara
+            Escolha onde procurar seu próximo EPUB
           </h2>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
-            Explore obras de domínio público no leitor do BookVerse. Se preferir um arquivo EPUB,
-            use o catálogo oficial e confira os direitos aplicáveis no seu país.
+            Encontre livros pelo canal do Telegram ou consulte os clássicos disponíveis na fonte
+            oficial.
           </p>
         </div>
-        <Link
-          to="/descobrir"
-          search={{ q: undefined, categoria: "Clássicos" }}
-          className="inline-flex shrink-0 items-center gap-2 rounded-full bg-gold px-5 py-3 text-sm font-medium text-primary-foreground transition hover:opacity-90"
-        >
-          <BookOpenCheck className="h-4 w-4" />
-          Ler clássicos
-          <ArrowUpRight className="h-3.5 w-3.5" />
-        </Link>
+        <div className="flex flex-wrap gap-3">
+          <a
+            href={TELEGRAM_CHANNEL_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex shrink-0 items-center gap-2 rounded-full bg-gold px-5 py-3 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+          >
+            <Send className="h-4 w-4" />
+            Abrir Telegram
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </a>
+          <a
+            href="https://www.gutenberg.org/"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex shrink-0 items-center gap-2 rounded-full border border-border bg-background px-5 py-3 text-sm font-medium transition hover:border-gold/45 hover:text-gold"
+          >
+            Fonte oficial
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </a>
+        </div>
       </div>
 
       {!compact && (
         <ol className="mt-6 grid gap-3 sm:grid-cols-3">
           {[
-            "Abra um clássico de domínio público direto no BookVerse.",
-            "Se você já possui um EPUB autorizado, importe-o na sua biblioteca.",
-            "O progresso e suas anotações acompanham a sua conta em outros aparelhos.",
+            "Escolha o canal do Telegram para ver EPUBs compartilhados.",
+            "Use a fonte oficial para explorar clássicos de domínio público.",
+            "Importe o seu EPUB na biblioteca para começar a ler.",
           ].map((step, i) => (
             <li
               key={i}
