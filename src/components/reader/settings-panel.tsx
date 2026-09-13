@@ -128,6 +128,45 @@ export function ReaderSettingsPanel({ open, onClose, settings, onChange, theme }
             />
           </Group>
 
+          {settings.mode === "paginated" && (
+            <Group label="Virada de página" theme={theme}>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={settings.pageTurn !== false}
+                onClick={() => onChange({ pageTurn: settings.pageTurn === false })}
+                className="flex w-full items-center justify-between rounded-2xl border p-3 text-left transition hover:opacity-80"
+                style={{ borderColor: theme.rule }}
+              >
+                <span>
+                  <span className="block text-sm font-medium">Efeito de folha</span>
+                  <span
+                    className="mt-0.5 block text-xs leading-relaxed"
+                    style={{ color: theme.muted }}
+                  >
+                    Dobra uma página por vez, como num leitor digital. Desative para uma troca
+                    direta.
+                  </span>
+                </span>
+                <span
+                  aria-hidden="true"
+                  className="relative ml-4 h-6 w-11 shrink-0 rounded-full transition-colors"
+                  style={{
+                    backgroundColor: settings.pageTurn !== false ? theme.accent : theme.rule,
+                  }}
+                >
+                  <span
+                    className="absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform"
+                    style={{
+                      left: 4,
+                      transform: settings.pageTurn !== false ? "translateX(20px)" : "translateX(0)",
+                    }}
+                  />
+                </span>
+              </button>
+            </Group>
+          )}
+
           <Slider
             theme={theme}
             label="Tamanho da fonte"
