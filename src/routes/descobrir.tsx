@@ -295,45 +295,41 @@ function DescobrirPage() {
             <RefreshCw className="h-3.5 w-3.5" /> Trocar seleção
           </button>
           <div className="mt-7 grid grid-cols-1 gap-4 transition-all duration-500 sm:grid-cols-2 lg:grid-cols-4">
-            {publicBooks.length ? (
-              rotate(publicBooks, 8, curatedOffset).map((book) => (
-                <PublicBookCard
-                  key={book.id}
-                  book={book}
-                  saving={saving.has(`public-${book.id}`)}
-                  added={added.has(`public-${book.id}`)}
-                  onSave={() =>
-                    saveBook(
-                      { title: book.title, author: book.author, cover: book.cover },
-                      `public-${book.id}`,
-                      gutenbergReaderId(book.id),
-                    )
-                  }
-                />
-              ))
-            ) : publicState === "loading" ? (
-              <LoadingCards />
-            ) : (
-              curated.map((book) => (
-                <CuratedReadableCard
-                  key={book.gutenbergId}
-                  book={book}
-                  saving={saving.has(`curated-${book.gutenbergId}`)}
-                  added={added.has(`curated-${book.gutenbergId}`)}
-                  onSave={() =>
-                    saveBook(
-                      {
-                        title: book.title,
-                        author: book.author,
-                        cover: gutenbergCover(book.gutenbergId),
-                      },
-                      `curated-${book.gutenbergId}`,
-                      gutenbergReaderId(book.gutenbergId),
-                    )
-                  }
-                />
-              ))
-            )}
+            {publicBooks.length
+              ? rotate(publicBooks, 8, curatedOffset).map((book) => (
+                  <PublicBookCard
+                    key={book.id}
+                    book={book}
+                    saving={saving.has(`public-${book.id}`)}
+                    added={added.has(`public-${book.id}`)}
+                    onSave={() =>
+                      saveBook(
+                        { title: book.title, author: book.author, cover: book.cover },
+                        `public-${book.id}`,
+                        gutenbergReaderId(book.id),
+                      )
+                    }
+                  />
+                ))
+              : curated.map((book) => (
+                  <CuratedReadableCard
+                    key={book.gutenbergId}
+                    book={book}
+                    saving={saving.has(`curated-${book.gutenbergId}`)}
+                    added={added.has(`curated-${book.gutenbergId}`)}
+                    onSave={() =>
+                      saveBook(
+                        {
+                          title: book.title,
+                          author: book.author,
+                          cover: gutenbergCover(book.gutenbergId),
+                        },
+                        `curated-${book.gutenbergId}`,
+                        gutenbergReaderId(book.gutenbergId),
+                      )
+                    }
+                  />
+                ))}
           </div>
         </section>
       ) : (
