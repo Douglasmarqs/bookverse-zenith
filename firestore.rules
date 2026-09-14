@@ -27,9 +27,36 @@ rules_version = '2';
 //                                  access below.
 service cloud.firestore {
   match /databases/{database}/documents {
+    function owns(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
     match /users/{uid} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == uid;
+      // Ranking fields are only changed by `recordReadingMilestone` on the
+      // server. A browser may edit identity fields, but cannot submit an XP
+      // value, streak or completion count directly.
+      allow create: if owns(uid)
+        && request.resource.data.uid == uid
+        && request.resource.data.xp == 0
+        && request.resource.data.booksCompleted == 0
+        && request.resource.data.chaptersRead == 0
+        && request.resource.data.currentStreak == 0
+        && request.resource.data.longestStreak == 0
+        && request.resource.data.weeklyXp == 0
+        && request.resource.data.weeklyChaptersRead == 0
+        && request.resource.data.weeklyBooksAdded == 0
+        && request.resource.data.monthlyXp == 0
+        && request.resource.data.monthlyChaptersRead == 0
+        && request.resource.data.monthlyReadingMinutes == 0
+        && request.resource.data.readingMinutes == 0
+        && request.resource.data.pagesRead == 0;
+      allow update: if owns(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayName', 'username', 'bio', 'email', 'photoURL',
+          'customPhotoDataUrl', 'updatedAt'
+        ]);
+      allow delete: if owns(uid);
 
       match /library/{bookId} {
         allow read, write: if request.auth != null && request.auth.uid == uid;
