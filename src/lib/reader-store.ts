@@ -42,6 +42,13 @@ export interface ReadingProgress {
   chapterCount?: number;
   pageIndex?: number;
   pageCount?: number;
+  /** Chapters explicitly confirmed by the reader. Keeping the ids in the
+   * progress document makes the completion reward idempotent across reloads
+   * and devices; merely jumping through the table of contents never counts
+   * as reading. */
+  completedChapterIndexes?: number[];
+  /** Set only after the one-time book-completion action has been recorded. */
+  bookCompletionRecorded?: boolean;
   updatedAt: number;
 }
 
@@ -63,6 +70,7 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
 };
 
 const SETTINGS_KEY = "bookverse:reader:settings";
+const PENDING_PROGRESS_KEY = "bookverse:reader:pending-progress:v1";
 // One-time migration flag — see loadSettings() below.
 const PAGINATED_MIGRATION_KEY = "bookverse:reader:settings:paginated-default-v1";
 const progressKey = (bookId: string) => `bookverse:reader:progress:${bookId}`;
@@ -216,7 +224,44 @@ export async function loadProgressRemote(bookId: string): Promise<ReadingProgres
 export function saveProgress(bookId: string, p: ReadingProgress): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(progressKey(bookId), JSON.stringify(p));
+  queuePendingProgress(bookId, p);
   void writeRemote(bookId, p);
+}
+
+function pendingProgress(): Record<string, ReadingProgress> {
+  if (typeof window === "undefined") return {};
+  try {
+    return JSON.parse(localStorage.getItem(PENDING_PROGRESS_KEY) ?? "{}") as Record<
+      string,
+      ReadingProgress
+    >;
+  } catch {
+    return {};
+  }
+}
+
+function queuePendingProgress(bookId: string, progress: ReadingProgress) {
+  if (typeof window === "undefined") return;
+  try {
+    const queued = pendingProgress();
+    queued[bookId] = progress;
+    localStorage.setItem(PENDING_PROGRESS_KEY, JSON.stringify(queued));
+  } catch {
+    // local progress still exists under its own compact key.
+  }
+}
+
+function clearPendingProgress(bookId: string, updatedAt: number) {
+  if (typeof window === "undefined") return;
+  try {
+    const queued = pendingProgress();
+    if (queued[bookId]?.updatedAt === updatedAt) {
+      delete queued[bookId];
+      localStorage.setItem(PENDING_PROGRESS_KEY, JSON.stringify(queued));
+    }
+  } catch {
+    // A stale queue is safe: the newest timestamp wins on the next sync.
+  }
 }
 
 async function writeRemote(bookId: string, p: ReadingProgress): Promise<void> {
@@ -231,7 +276,21 @@ async function writeRemote(bookId: string, p: ReadingProgress): Promise<void> {
       8000,
       "timeout",
     );
+    clearPendingProgress(bookId, p.updatedAt);
   } catch (err) {
     console.warn("[reader] writeRemote failed", err);
   }
+}
+
+/** Retries local-first saves after an offline reader reconnects. This is
+ * intentionally tiny and timestamp-based, so it cannot overwrite a newer
+ * position stored by another device. */
+export function flushPendingProgress(): void {
+  if (typeof window === "undefined" || !navigator.onLine) return;
+  const queued = pendingProgress();
+  Object.entries(queued).forEach(([bookId, progress]) => void writeRemote(bookId, progress));
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("online", flushPendingProgress, { passive: true });
 }

@@ -13,7 +13,14 @@ import {
 import { getFirebase } from "./firebase";
 import type { UserProfile } from "./user-profile";
 
-export type RankingMetric = "xp" | "weeklyXp" | "currentStreak" | "chaptersRead" | "booksCompleted";
+export type RankingMetric =
+  | "xp"
+  | "weeklyXp"
+  | "monthlyXp"
+  | "currentStreak"
+  | "chaptersRead"
+  | "monthlyChaptersRead"
+  | "booksCompleted";
 
 export type RankingRow = Pick<UserProfile, "uid" | "displayName" | "photoURL" | "xp"> & {
   pos: number;
@@ -23,8 +30,10 @@ export type RankingRow = Pick<UserProfile, "uid" | "displayName" | "photoURL" | 
 const METRIC_FIELD: Record<RankingMetric, string> = {
   xp: "xp",
   weeklyXp: "weeklyXp",
+  monthlyXp: "monthlyXp",
   currentStreak: "currentStreak",
   chaptersRead: "chaptersRead",
+  monthlyChaptersRead: "monthlyChaptersRead",
   booksCompleted: "booksCompleted",
 };
 
