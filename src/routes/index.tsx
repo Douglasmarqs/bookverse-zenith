@@ -12,6 +12,7 @@ import {
 
 import { EpubImport } from "@/components/epub-import";
 import { LumiRecommendationCard } from "@/components/lumi-recommendation-card";
+import { OnboardingCard } from "@/components/onboarding-card";
 import { useAuthUser } from "@/hooks/use-auth-user";
 import { subscribeLibrary, type LibraryEntry } from "@/lib/library";
 import { subscribeReadingProgress, type StoredReadingProgress } from "@/lib/reader-store";
@@ -125,6 +126,8 @@ function Home() {
         </div>
         <EpubImport />
       </section>
+
+      {signedIn && library?.length === 0 && <OnboardingCard />}
 
       <section className="mt-10">
         <SectionHeading eyebrow="Agora" title="Continue lendo" action="Ver biblioteca" />
