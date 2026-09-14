@@ -24,8 +24,10 @@ export const Route = createFileRoute("/ranking")({
 const METRICS: { id: RankingMetric; label: string; plural: string }[] = [
   { id: "xp", label: "XP geral", plural: "XP" },
   { id: "weeklyXp", label: "Esta semana", plural: "XP na semana" },
+  { id: "monthlyXp", label: "Este mês", plural: "XP no mês" },
   { id: "currentStreak", label: "Sequência", plural: "dias" },
   { id: "chaptersRead", label: "Capítulos", plural: "capítulos" },
+  { id: "monthlyChaptersRead", label: "Capítulos do mês", plural: "capítulos" },
   { id: "booksCompleted", label: "Concluídos", plural: "livros" },
 ];
 

@@ -15,6 +15,9 @@ import {
   Camera,
   X,
   BellRing,
+  BookOpenCheck,
+  Clock3,
+  Heart,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { User } from "firebase/auth";
@@ -26,7 +29,7 @@ import {
   updateProfileFields,
   type UserProfile,
 } from "@/lib/user-profile";
-import { subscribeLibrary } from "@/lib/library";
+import { subscribeLibrary, type LibraryEntry } from "@/lib/library";
 import { getLevelInfo } from "@/lib/achievements";
 import { describeFirestoreError } from "@/lib/async-utils";
 import { UserAvatar } from "@/components/user-avatar";
@@ -72,7 +75,7 @@ function PerfilPage({ user }: { user: User }) {
   const navigate = useNavigate();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [profileReady, setProfileReady] = useState(false);
-  const [libraryCount, setLibraryCount] = useState(0);
+  const [library, setLibrary] = useState<LibraryEntry[]>([]);
 
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
@@ -121,10 +124,7 @@ function PerfilPage({ user }: { user: User }) {
       }),
     [user.uid],
   );
-  useEffect(
-    () => subscribeLibrary(user.uid, (entries) => setLibraryCount(entries.length)),
-    [user.uid],
-  );
+  useEffect(() => subscribeLibrary(user.uid, setLibrary), [user.uid]);
 
   useEffect(() => {
     if (profile?.displayName) setName(profile.displayName);
@@ -318,7 +318,7 @@ function PerfilPage({ user }: { user: User }) {
       </div>
 
       {/* Stats */}
-      <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
         <StatCard
           icon={Trophy}
           label={`Nível ${getLevelInfo(profile?.xp ?? 0).level}`}
@@ -336,8 +336,29 @@ function PerfilPage({ user }: { user: User }) {
           label="Livros concluídos"
           value={profile?.booksCompleted ?? 0}
         />
-        <StatCard icon={Library} label="Na biblioteca" value={libraryCount} />
+        <StatCard icon={Library} label="Na biblioteca" value={library.length} />
+        <StatCard icon={BookOpenCheck} label="Capítulos lidos" value={profile?.chaptersRead ?? 0} />
+        <StatCard
+          icon={Clock3}
+          label="Tempo de leitura"
+          value={profile?.readingMinutes ?? 0}
+          suffix=" min"
+        />
+        <StatCard
+          icon={Heart}
+          label="Favoritos"
+          value={library.filter((entry) => entry.favorite).length}
+        />
       </div>
+      <section className="mt-4 grid gap-3 rounded-2xl border border-border/60 bg-card/35 p-5 sm:grid-cols-3">
+        <ReadingRecap label="XP nesta semana" value={profile?.weeklyXp ?? 0} suffix=" XP" />
+        <ReadingRecap label="Capítulos neste mês" value={profile?.monthlyChaptersRead ?? 0} />
+        <ReadingRecap
+          label="Minutos neste mês"
+          value={profile?.monthlyReadingMinutes ?? 0}
+          suffix=" min"
+        />
+      </section>
       <Link
         to="/desafios"
         className="mt-3 inline-flex items-center gap-1.5 text-xs text-gold underline underline-offset-4"
@@ -611,6 +632,18 @@ function StatCard({
         {suffix && <span className="text-base text-muted-foreground">{suffix}</span>}
       </p>
       <p className="mt-1 text-sm text-muted-foreground">{label}</p>
+    </div>
+  );
+}
+
+function ReadingRecap({ label, value, suffix }: { label: string; value: number; suffix?: string }) {
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 font-display text-2xl font-medium tabular-nums">
+        {value.toLocaleString("pt-BR")}
+        {suffix && <span className="text-sm text-muted-foreground">{suffix}</span>}
+      </p>
     </div>
   );
 }
