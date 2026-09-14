@@ -7,6 +7,7 @@ import {
   ExternalLink,
   Loader2,
   Plus,
+  RefreshCw,
   Search,
   Sparkles,
 } from "lucide-react";
@@ -25,6 +26,16 @@ import {
 import { useAuthUser } from "@/hooks/use-auth-user";
 
 const CATEGORIES = ["Clássicos", "Ficção", "Ficção científica", "Poesia", "Filosofia", "Mistério"];
+const DISCOVERY_THEMES = [
+  "adventure",
+  "romance",
+  "mystery",
+  "science",
+  "history",
+  "poetry",
+  "philosophy",
+  "short stories",
+];
 type SourceState = "idle" | "loading" | "ready" | "empty" | "error";
 
 export const Route = createFileRoute("/descobrir")({
@@ -57,15 +68,23 @@ function DescobrirPage() {
   const [saving, setSaving] = useState<Set<string>>(new Set());
   const [retryKey, setRetryKey] = useState(0);
   const [curatedOffset, setCuratedOffset] = useState(0);
+  const [discoverySeed, setDiscoverySeed] = useState(0);
 
   const hasSearch = Boolean(search.q?.trim() || search.categoria);
-  const effectiveQuery = `${search.q?.trim() ?? ""} ${search.categoria ?? ""}`.trim();
+  const discoveryTheme = DISCOVERY_THEMES[discoverySeed % DISCOVERY_THEMES.length]!;
+  const effectiveQuery = hasSearch
+    ? `${search.q?.trim() ?? ""} ${search.categoria ?? ""}`.trim()
+    : discoveryTheme;
 
   useEffect(() => setQuery(search.q ?? ""), [search.q]);
 
   useEffect(() => {
+    setDiscoverySeed(Math.floor(Date.now() / 86_400_000));
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
-    if (!hasSearch || !effectiveQuery) {
+    if (!effectiveQuery) {
       setPublicBooks([]);
       setCatalogBooks([]);
       setPublicState("idle");
@@ -78,64 +97,57 @@ function DescobrirPage() {
     setPublicBooks([]);
     setCatalogBooks([]);
     setPublicState("loading");
-    setCatalogState("loading");
+    setCatalogState(hasSearch ? "loading" : "idle");
 
     // Every source updates the page independently. A slow provider must not
     // make the complete discovery screen look blank.
-    void searchPublicDomainBooks(effectiveQuery, 12)
+    void searchPublicDomainBooks(effectiveQuery, hasSearch ? 12 : 32)
       .then((books) => {
         if (cancelled) return;
-        setPublicBooks(books);
+        setPublicBooks(hasSearch ? books : rotate(books, 12, discoverySeed * 7));
         setPublicState(books.length ? "ready" : "empty");
       })
       .catch(() => {
         if (!cancelled) setPublicState("error");
       });
 
-    void searchOpenLibrary(effectiveQuery, 20)
-      .then((books) => {
-        if (cancelled) return;
-        const results: BookMeta[] = books.map(({ title, author, cover }) => ({
-          title,
-          author,
-          cover,
-        }));
-        setCatalogBooks(results);
-        setCatalogState(results.length ? "ready" : "empty");
-      })
-      .catch(() => {
-        if (!cancelled) setCatalogState("error");
-      });
+    if (hasSearch) {
+      void searchOpenLibrary(effectiveQuery, 20)
+        .then((books) => {
+          if (cancelled) return;
+          const results: BookMeta[] = books.map(({ title, author, cover }) => ({
+            title,
+            author,
+            cover,
+          }));
+          setCatalogBooks(results);
+          setCatalogState(results.length ? "ready" : "empty");
+        })
+        .catch(() => {
+          if (!cancelled) setCatalogState("error");
+        });
 
-    // Google enriches the catalog in the background; it is deliberately not
-    // the gate for the first visible results.
-    void searchBooks(search.q?.trim() ?? effectiveQuery, {
-      category: search.categoria,
-      maxResults: 20,
-    })
-      .then((result) => {
-        if (cancelled || result.results.length === 0) return;
-        setCatalogBooks((current) => mergeBooks(current, result.results));
-        setCatalogState("ready");
+      // Google enriches the catalog in the background; it is deliberately not
+      // the gate for the first visible results.
+      void searchBooks(search.q?.trim() ?? effectiveQuery, {
+        category: search.categoria,
+        maxResults: 20,
       })
-      .catch(() => {
-        // Open Library already provides the first result path. A supplementary
-        // provider failure must not clear a catalog that is currently visible.
-      });
+        .then((result) => {
+          if (cancelled || result.results.length === 0) return;
+          setCatalogBooks((current) => mergeBooks(current, result.results));
+          setCatalogState("ready");
+        })
+        .catch(() => {
+          // Open Library already provides the first result path. A supplementary
+          // provider failure must not clear a catalog that is currently visible.
+        });
+    }
 
     return () => {
       cancelled = true;
     };
-  }, [effectiveQuery, hasSearch, retryKey, search.categoria, search.q]);
-
-  useEffect(() => {
-    if (hasSearch || LUMI_PICKS.length <= 4) return;
-    const timer = window.setInterval(
-      () => setCuratedOffset((offset) => (offset + 4) % LUMI_PICKS.length),
-      9000,
-    );
-    return () => window.clearInterval(timer);
-  }, [hasSearch]);
+  }, [discoverySeed, effectiveQuery, hasSearch, retryKey, search.categoria, search.q]);
 
   const curated = useMemo(() => {
     const picks = rotate(LUMI_PICKS, 4, curatedOffset);
@@ -266,52 +278,60 @@ function DescobrirPage() {
             icon={<Sparkles className="h-3.5 w-3.5" />}
           />
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            Obras de domínio público com leitura completa dentro do aplicativo, sem depender de uma
-            busca externa para aparecerem.
+            Uma seleção de domínio público renovada diariamente. Use “Trocar seleção” para explorar
+            outro tema sem repetir sempre a mesma estante.
           </p>
+          <button
+            type="button"
+            onClick={() => {
+              setCuratedOffset((offset) => offset + 4);
+              setDiscoverySeed((seed) => seed + 1);
+            }}
+            className="mt-5 inline-flex items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-xs font-semibold transition hover:border-gold/50 hover:text-gold"
+          >
+            <RefreshCw className="h-3.5 w-3.5" /> Trocar seleção
+          </button>
           <div className="mt-7 grid grid-cols-1 gap-4 transition-all duration-500 sm:grid-cols-2 lg:grid-cols-4">
-            {curated.map((book) => (
-              <CuratedReadableCard
-                key={book.gutenbergId}
-                book={book}
-                saving={saving.has(`curated-${book.gutenbergId}`)}
-                added={added.has(`curated-${book.gutenbergId}`)}
-                onSave={() =>
-                  saveBook(
-                    {
-                      title: book.title,
-                      author: book.author,
-                      cover: gutenbergCover(book.gutenbergId),
-                    },
-                    `curated-${book.gutenbergId}`,
-                    gutenbergReaderId(book.gutenbergId),
-                  )
-                }
-              />
-            ))}
+            {publicBooks.length ? (
+              rotate(publicBooks, 8, curatedOffset).map((book) => (
+                <PublicBookCard
+                  key={book.id}
+                  book={book}
+                  saving={saving.has(`public-${book.id}`)}
+                  added={added.has(`public-${book.id}`)}
+                  onSave={() =>
+                    saveBook(
+                      { title: book.title, author: book.author, cover: book.cover },
+                      `public-${book.id}`,
+                      gutenbergReaderId(book.id),
+                    )
+                  }
+                />
+              ))
+            ) : publicState === "loading" ? (
+              <LoadingCards />
+            ) : (
+              curated.map((book) => (
+                <CuratedReadableCard
+                  key={book.gutenbergId}
+                  book={book}
+                  saving={saving.has(`curated-${book.gutenbergId}`)}
+                  added={added.has(`curated-${book.gutenbergId}`)}
+                  onSave={() =>
+                    saveBook(
+                      {
+                        title: book.title,
+                        author: book.author,
+                        cover: gutenbergCover(book.gutenbergId),
+                      },
+                      `curated-${book.gutenbergId}`,
+                      gutenbergReaderId(book.gutenbergId),
+                    )
+                  }
+                />
+              ))
+            )}
           </div>
-          {LUMI_PICKS.length > 4 && (
-            <div className="mt-5 flex items-center justify-between gap-3">
-              <p className="text-xs text-muted-foreground">
-                A estante muda sozinha para revelar outras leituras disponíveis.
-              </p>
-              <div className="flex gap-1.5" aria-label="Outras leituras disponíveis">
-                {Array.from({ length: Math.ceil(LUMI_PICKS.length / 4) }, (_, page) => (
-                  <button
-                    key={page}
-                    onClick={() => setCuratedOffset(page * 4)}
-                    aria-label={`Mostrar grupo ${page + 1} de leituras`}
-                    aria-pressed={Math.floor(curatedOffset / 4) === page}
-                    className={`h-2 rounded-full transition-all ${
-                      Math.floor(curatedOffset / 4) === page
-                        ? "w-6 bg-gold"
-                        : "w-2 bg-border hover:bg-gold/50"
-                    }`}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
         </section>
       ) : (
         <>
