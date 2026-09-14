@@ -24,7 +24,7 @@ import {
 } from "firebase/firestore";
 import { getFirebase } from "./firebase";
 import { withDeadline, withFallback } from "./async-utils";
-import { awardXp } from "./user-profile";
+import { recordGamificationMilestone } from "./user-profile";
 
 export const REVIEW_MAX_LENGTH = 2000;
 export const REVIEW_MIN_LENGTH = 10;
@@ -55,10 +55,7 @@ function reviewsRef(bookId: string) {
   return collection(fb.db, "books", bookId, "reviews");
 }
 
-export function subscribeReviews(
-  bookId: string,
-  cb: (reviews: BookReview[]) => void,
-): Unsubscribe {
+export function subscribeReviews(bookId: string, cb: (reviews: BookReview[]) => void): Unsubscribe {
   const col = reviewsRef(bookId);
   if (!col) {
     cb([]);
@@ -122,11 +119,13 @@ export async function saveReview(
 
   // Índice espelho (fire-and-forget) para a exclusão de conta localizar as
   // resenhas sem precisar de collection group query.
-  void setDoc(doc(fb.db, "users", user.uid, "reviewIndex", bookId), { bookId }, { merge: true }).catch(
-    () => {},
-  );
+  void setDoc(
+    doc(fb.db, "users", user.uid, "reviewIndex", bookId),
+    { bookId },
+    { merge: true },
+  ).catch(() => {});
 
-  if (isNew) void awardXp(user.uid, REVIEW_XP);
+  if (isNew) void recordGamificationMilestone("review-published", bookId);
   return { isNew };
 }
 

@@ -13,12 +13,12 @@ import {
   doc,
   getDoc,
   getDocs,
-  increment,
   onSnapshot,
   serverTimestamp,
   setDoc,
   type Unsubscribe,
 } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import type { User } from "firebase/auth";
 import { getFirebase } from "./firebase";
 import { withDeadline, withFallback } from "./async-utils";
@@ -55,12 +55,55 @@ export interface UserProfile {
   weeklyChaptersRead?: number;
   weeklyXp?: number;
   weeklyBooksAdded?: number;
+  /** Calendar-month metrics are reset lazily on the next authenticated
+   * activity. They power the month ranking and the profile reading recap. */
+  monthStart?: string;
+  monthlyXp?: number;
+  monthlyChaptersRead?: number;
+  monthlyReadingMinutes?: number;
+  /** Cumulative estimates only from explicitly completed chapters. */
+  readingMinutes?: number;
+  pagesRead?: number;
   createdAt?: unknown;
   updatedAt?: unknown;
 }
 
 const READ_TIMEOUT_MS = 5000;
 const WRITE_TIMEOUT_MS = 10000;
+
+export type GamificationMilestone =
+  | "book-added"
+  | "chapter-completed"
+  | "book-completed"
+  | "diary-entry"
+  | "review-published"
+  | "reading-session";
+
+/** Sends a bounded, idempotent event to the callable Function. The server
+ * owns XP and ranking counters; callers never send a point total. */
+export async function recordGamificationMilestone(
+  type: GamificationMilestone,
+  resourceId: string,
+  details: {
+    chapterIndex?: number;
+    chapterCount?: number;
+    pagesRead?: number;
+    readingMinutes?: number;
+  } = {},
+): Promise<void> {
+  const fb = getFirebase();
+  if (!fb || !resourceId) return;
+  try {
+    const call = httpsCallable<
+      { type: GamificationMilestone; resourceId: string } & typeof details,
+      { accepted: boolean }
+    >(getFunctions(fb.app), "recordReadingMilestone", { timeout: 12_000 });
+    await call({ type, resourceId: resourceId.slice(0, 180), ...details });
+  } catch (err) {
+    // Never interrupt the book itself for a non-essential score update.
+    console.warn("[user-profile] milestone failed", err);
+  }
+}
 
 function localDateKey(d: Date): string {
   const y = d.getFullYear();
@@ -77,6 +120,10 @@ function mondayKey(d: Date): string {
   const diff = (day === 0 ? -6 : 1) - day;
   date.setDate(date.getDate() + diff);
   return localDateKey(date);
+}
+
+function monthKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
 }
 
 /**
@@ -113,6 +160,12 @@ export async function ensureUserProfile(user: User): Promise<void> {
           weeklyChaptersRead: 0,
           weeklyXp: 0,
           weeklyBooksAdded: 0,
+          monthStart: null,
+          monthlyXp: 0,
+          monthlyChaptersRead: 0,
+          monthlyReadingMinutes: 0,
+          readingMinutes: 0,
+          pagesRead: 0,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         }),
@@ -144,29 +197,9 @@ export async function ensureUserProfile(user: User): Promise<void> {
 
 /** Awards XP to a user (e.g. finishing a chapter, adding a book). */
 export async function awardXp(uid: string, amount: number): Promise<void> {
-  const fb = getFirebase();
-  if (!fb || amount <= 0) return;
-  const ref = doc(fb.db, "users", uid);
-  try {
-    const snap = await withFallback(getDoc(ref), READ_TIMEOUT_MS, null);
-    const data = (snap?.data() as Partial<UserProfile>) ?? {};
-    const thisMonday = mondayKey(new Date());
-    const sameWeek = data.weekStart === thisMonday;
-
-    const patch: Record<string, unknown> = {
-      xp: increment(amount),
-      updatedAt: serverTimestamp(),
-      weeklyXp: (sameWeek ? (data.weeklyXp ?? 0) : 0) + amount,
-    };
-    if (!sameWeek) {
-      patch.weekStart = thisMonday;
-      patch.weeklyChaptersRead = 0;
-      patch.weeklyBooksAdded = 0;
-    }
-    await withDeadline(setDoc(ref, patch, { merge: true }), WRITE_TIMEOUT_MS, "timeout");
-  } catch (err) {
-    console.warn("[user-profile] awardXp failed", err);
-  }
+  // Kept only as a compatibility export for older UI modules. New code must
+  // use `recordGamificationMilestone`, whose score is decided server-side.
+  console.warn("[user-profile] awardXp is deprecated", { uid, amount });
 }
 
 /**
@@ -178,65 +211,25 @@ export async function awardXp(uid: string, amount: number): Promise<void> {
  */
 export async function recordReadingActivity(
   uid: string,
-  opts: { chapterCompleted?: boolean; bookAdded?: boolean } = {},
+  opts: {
+    chapterCompleted?: boolean;
+    bookAdded?: boolean;
+    /** Estimated only when a chapter was explicitly confirmed. Bounds make
+     * accidental duplicate UI events harmless. */
+    readingMinutes?: number;
+    pagesRead?: number;
+  } = {},
 ): Promise<void> {
-  const fb = getFirebase();
-  if (!fb) return;
-  const ref = doc(fb.db, "users", uid);
-  try {
-    const snap = await withFallback(getDoc(ref), READ_TIMEOUT_MS, null);
-    const data = (snap?.data() as Partial<UserProfile>) ?? {};
-    const now = new Date();
-    const today = localDateKey(now);
-    const thisMonday = mondayKey(now);
-    const sameWeek = data.weekStart === thisMonday;
-
-    const patch: Record<string, unknown> = { updatedAt: serverTimestamp() };
-
-    // Streak — only re-evaluate once per calendar day, so opening the
-    // book five times in one day doesn't inflate anything.
-    if (data.lastActiveDate !== today) {
-      const prevDate = data.lastActiveDate ? new Date(`${data.lastActiveDate}T00:00:00`) : null;
-      const daysSince = prevDate
-        ? Math.round((new Date(`${today}T00:00:00`).getTime() - prevDate.getTime()) / 86400000)
-        : null;
-      const newStreak = daysSince === 1 ? (data.currentStreak ?? 0) + 1 : 1;
-      patch.currentStreak = newStreak;
-      patch.longestStreak = Math.max(newStreak, data.longestStreak ?? 0);
-      patch.lastActiveDate = today;
-    }
-
-    // Weekly mission counters — reset automatically when a new week starts.
-    patch.weekStart = thisMonday;
-    patch.weeklyChaptersRead =
-      (sameWeek ? (data.weeklyChaptersRead ?? 0) : 0) + (opts.chapterCompleted ? 1 : 0);
-    patch.weeklyBooksAdded =
-      (sameWeek ? (data.weeklyBooksAdded ?? 0) : 0) + (opts.bookAdded ? 1 : 0);
-    if (!sameWeek) patch.weeklyXp = 0;
-
-    if (opts.chapterCompleted) {
-      patch.chaptersRead = (data.chaptersRead ?? 0) + 1;
-    }
-
-    await withDeadline(setDoc(ref, patch, { merge: true }), WRITE_TIMEOUT_MS, "timeout");
-  } catch (err) {
-    console.warn("[user-profile] recordReadingActivity failed", err);
+  const day = localDateKey(new Date());
+  if (opts.chapterCompleted) {
+    console.warn("[user-profile] chapter activity requires its chapter milestone", { uid });
+    return;
   }
+  await recordGamificationMilestone("reading-session", day);
 }
 
 export async function incrementBooksCompleted(uid: string): Promise<void> {
-  const fb = getFirebase();
-  if (!fb) return;
-  const ref = doc(fb.db, "users", uid);
-  try {
-    await withDeadline(
-      setDoc(ref, { booksCompleted: increment(1), updatedAt: serverTimestamp() }, { merge: true }),
-      WRITE_TIMEOUT_MS,
-      "timeout",
-    );
-  } catch (err) {
-    console.warn("[user-profile] incrementBooksCompleted failed", err);
-  }
+  console.warn("[user-profile] incrementBooksCompleted is deprecated", { uid });
 }
 
 /** Updates editable profile fields.
@@ -268,6 +261,48 @@ export async function deleteUserData(uid: string): Promise<void> {
   const fb = getFirebase();
   if (!fb) return;
 
+  // Imported files are deliberately removed before their account metadata
+  // and Auth record. A failed Storage delete must stop account deletion so
+  // we never claim a private EPUB/PDF has gone away when it is still in the
+  // cloud. The operations are idempotent, so the person can safely retry.
+  try {
+    const removeOrphans = httpsCallable<undefined, { deleted: boolean }>(
+      getFunctions(fb.app),
+      "deletePrivateFiles",
+      { timeout: 20_000 },
+    );
+    await removeOrphans();
+    const [{ deleteEpubBook, deleteEpubBookFromCloud }, { deletePdfBook, deletePdfBookFromCloud }] =
+      await Promise.all([import("./epub-store"), import("./pdf-store")]);
+    const [epubs, pdfs] = await Promise.all([
+      withDeadline(
+        getDocs(collection(fb.db, "users", uid, "epubFiles")),
+        WRITE_TIMEOUT_MS,
+        "timeout",
+      ),
+      withDeadline(
+        getDocs(collection(fb.db, "users", uid, "pdfFiles")),
+        WRITE_TIMEOUT_MS,
+        "timeout",
+      ),
+    ]);
+    await Promise.all(
+      epubs.docs.map(async (file) => {
+        await deleteEpubBookFromCloud(uid, file.id);
+        await deleteEpubBook(file.id).catch(() => {});
+      }),
+    );
+    await Promise.all(
+      pdfs.docs.map(async (file) => {
+        await deletePdfBookFromCloud(uid, file.id);
+        await deletePdfBook(file.id).catch(() => {});
+      }),
+    );
+  } catch (err) {
+    console.warn("[user-profile] private file deletion failed", err);
+    throw new Error("Não foi possível remover todos os seus arquivos privados. Tente novamente.");
+  }
+
   async function deleteCollection(path: string) {
     try {
       const snap = await withDeadline(
@@ -287,6 +322,7 @@ export async function deleteUserData(uid: string): Promise<void> {
   await deleteCollection(`users/${uid}/lumi`);
   await deleteCollection(`users/${uid}/goals`);
   await deleteCollection(`users/${uid}/diary`);
+  await deleteCollection(`users/${uid}/preferences`);
 
   // Resenhas publicadas vivem fora do espaço do usuário
   // (books/{livro}/reviews/{uid}); o espelho em reviewIndex permite
