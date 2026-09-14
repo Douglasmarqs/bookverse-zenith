@@ -113,11 +113,31 @@ function summarize(b: GutendexBook): PublicDomainSummary {
   };
 }
 
-function pickTextUrl(formats: Record<string, string>): string | null {
-  const keys = Object.keys(formats).filter((k) => k.startsWith("text/plain"));
-  const byPref =
-    keys.find((k) => k.includes("utf-8")) ?? keys.find((k) => k.includes("us-ascii")) ?? keys[0];
-  return byPref ? formats[byPref] : null;
+function textUrls(formats: Record<string, string>): string[] {
+  return Object.entries(formats)
+    .filter(([key]) => key.startsWith("text/plain"))
+    .sort(([a], [b]) => {
+      const score = (key: string) => (key.includes("utf-8") ? 0 : key.includes("us-ascii") ? 1 : 2);
+      return score(a) - score(b);
+    })
+    .map(([, url]) => url.replace(/^http:/, "https:"))
+    .filter((url, index, all) => all.indexOf(url) === index);
+}
+
+async function downloadPlainText(formats: Record<string, string>): Promise<string> {
+  const urls = textUrls(formats);
+  if (!urls.length) throw new Error("Este título não tem uma versão em texto simples disponível.");
+  let lastError: unknown;
+  for (const url of urls.slice(0, 3)) {
+    try {
+      const response = await fetchWithTimeout(url, 25_000);
+      if (!response.ok) throw new Error(`Project Gutenberg ${response.status}`);
+      return await response.text();
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Falha ao baixar o texto do livro.");
 }
 
 /** Strips the Project Gutenberg legal boilerplate that wraps every text. */
@@ -260,14 +280,7 @@ async function directGetPublicDomainBook(gutenbergId: number): Promise<Book> {
   if (!metaRes.ok) throw new Error("Livro não encontrado no catálogo.");
   const meta = (await metaRes.json()) as GutendexBook;
 
-  const textUrl = pickTextUrl(meta.formats);
-  if (!textUrl) {
-    throw new Error("Este título não tem uma versão em texto simples disponível.");
-  }
-
-  const textRes = await fetchWithTimeout(textUrl, 25000);
-  if (!textRes.ok) throw new Error("Falha ao baixar o texto do livro.");
-  const raw = await textRes.text();
+  const raw = await downloadPlainText(meta.formats);
   const clean = stripBoilerplate(raw);
   const chapters = parseChapters(clean);
 

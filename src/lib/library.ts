@@ -21,7 +21,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { getFirebase } from "./firebase";
-import { awardXp, recordReadingActivity } from "./user-profile";
+import { recordGamificationMilestone, recordReadingActivity } from "./user-profile";
 import { withDeadline, withFallback } from "./async-utils";
 import type { BookMeta } from "./google-books";
 
@@ -44,13 +44,16 @@ export interface LibraryEntry extends BookMeta {
   favorite?: boolean;
   /** 0–5 stars, in whole stars. `undefined`/0 means "not rated yet". */
   rating?: number;
+  /** A completion reward is issued once for this shelf entry. The status
+   * can still be changed later without turning the dropdown into an XP
+   * loop. */
+  completionAwarded?: boolean;
   /** Present when this title can be opened in the in-app reader (sample
    * book or a public-domain Gutenberg title). Absent for catalog-only
    * entries (Google Books / Open Library), which link out to a details
    * page instead. */
   readerId?: string | null;
 }
-
 
 const READ_TIMEOUT_MS = 5000;
 const WRITE_TIMEOUT_MS = 10000;
@@ -134,7 +137,7 @@ export async function addToLibrary(
     WRITE_TIMEOUT_MS,
     "Não foi possível adicionar este livro à biblioteca agora. Tente novamente.",
   );
-  void awardXp(uid, 5);
+  void recordGamificationMilestone("book-added", id);
   void recordReadingActivity(uid, { bookAdded: true });
 }
 
@@ -188,7 +191,7 @@ export async function markAsReading(
       WRITE_TIMEOUT_MS,
       "timeout",
     );
-    void awardXp(uid, 5);
+    void recordGamificationMilestone("book-added", id);
     void recordReadingActivity(uid, { bookAdded: true });
   } catch (err) {
     console.warn("[library] markAsReading failed (non-blocking)", err);
@@ -215,19 +218,23 @@ export async function setLibraryStatus(
   const ref = doc(fb.db, "users", uid, "library", id);
 
   const existing = await withFallback(getDoc(ref), READ_TIMEOUT_MS, null).catch(() => null);
-  const wasCompleted = !!existing && existing.exists() && existing.data().status === "concluido";
+  const existingData = existing?.exists() ? (existing.data() as Partial<LibraryEntry>) : null;
+  const shouldAwardCompletion = status === "concluido" && !existingData?.completionAwarded;
 
   await withDeadline(
-    setDoc(ref, { status }, { merge: true }),
+    setDoc(
+      ref,
+      { status, ...(shouldAwardCompletion ? { completionAwarded: true } : {}) },
+      { merge: true },
+    ),
     WRITE_TIMEOUT_MS,
     "Não foi possível atualizar o status deste livro agora. Tente novamente.",
   );
 
-  // Only award the completion bonus on the actual transition into
-  // "concluido" — otherwise toggling the dropdown back and forth would
-  // farm XP indefinitely.
-  if (status === "concluido" && !wasCompleted) {
-    void awardXp(uid, 50);
+  // An entry gets this bonus once, even if the person later moves it to
+  // another shelf and back. This removes the old status-toggle XP loop.
+  if (shouldAwardCompletion) {
+    void recordGamificationMilestone("book-completed", id);
   }
 }
 
