@@ -28,9 +28,11 @@ import {
 } from "@/lib/epub-store";
 import {
   downloadPdfBookFromCloud,
+  ensurePdfBookText,
   getPdfBook,
   isPdfReaderId,
   savePdfBook,
+  uploadPdfBookToCloud,
   type PdfBook,
 } from "@/lib/pdf-store";
 import {
@@ -59,7 +61,7 @@ import {
 import { ReaderSettingsPanel } from "@/components/reader/settings-panel";
 import { useRequireAuth } from "@/hooks/use-require-auth";
 import { openLumiPanel } from "@/lib/lumi-panel-store";
-import { awardXp, incrementBooksCompleted, recordReadingActivity } from "@/lib/user-profile";
+import { recordGamificationMilestone } from "@/lib/user-profile";
 import { markAsReading, setLibraryStatus, slugFor } from "@/lib/library";
 import { toast } from "sonner";
 import { describeFirestoreError } from "@/lib/async-utils";
@@ -155,7 +157,15 @@ function EpubBookLoader({ uid, localId }: { uid: string; localId: string }) {
       });
       if (cancelled) return;
       if (local) {
-        setBook(local);
+        const upgraded = await ensurePdfBookText(local);
+        if (cancelled) return;
+        setBook(upgraded);
+        if (upgraded !== local) {
+          void savePdfBook(upgraded).catch(() => {});
+          void uploadPdfBookToCloud(uid, upgraded).catch((error) =>
+            console.warn("[pdf] background text-layer sync failed", error),
+          );
+        }
         return;
       }
       // Not on this device/browser — it may have been imported elsewhere
@@ -230,8 +240,15 @@ function PdfBookLoader({ uid, localId }: { uid: string; localId: string }) {
       const cloudBook = await downloadPdfBookFromCloud(uid, localId);
       if (cancelled) return;
       if (cloudBook) {
-        setBook(cloudBook);
-        void savePdfBook(cloudBook).catch(() => {});
+        const upgraded = await ensurePdfBookText(cloudBook);
+        if (cancelled) return;
+        setBook(upgraded);
+        void savePdfBook(upgraded).catch(() => {});
+        if (upgraded !== cloudBook) {
+          void uploadPdfBookToCloud(uid, upgraded).catch((error) =>
+            console.warn("[pdf] background text-layer sync failed", error),
+          );
+        }
         return;
       }
       setError(
@@ -270,6 +287,14 @@ function PdfBookLoader({ uid, localId }: { uid: string; localId: string }) {
 }
 
 function PdfReaderPage({ uid, book }: { uid: string; book: PdfBook }) {
+  if (book.readerBook) {
+    return <ReaderPage uid={uid} book={book.readerBook} />;
+  }
+
+  return <PdfOriginalViewer uid={uid} book={book} />;
+}
+
+function PdfOriginalViewer({ uid, book }: { uid: string; book: PdfBook }) {
   const [url, setUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -466,7 +491,12 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   const [hydrated, setHydrated] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [selectedPassage, setSelectedPassage] = useState<SelectedPassage | null>(null);
+  const [completedChapterIndexes, setCompletedChapterIndexes] = useState<number[]>([]);
+  const [bookCompletionRecorded, setBookCompletionRecorded] = useState(false);
+  const [chapterCompletionOpen, setChapterCompletionOpen] = useState(false);
+  const [completingChapter, setCompletingChapter] = useState(false);
   const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chapterStartedAtRef = useRef(Date.now());
 
   // Paginated mode: content is laid out in CSS columns exactly as wide as
   // the visible container, so each "column" is one full page — navigation
@@ -516,6 +546,12 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     void loadProgressRemote(book.id).then((p) => {
       if (p) {
         setChapterIndex(Math.min(p.chapterIndex, book.chapters.length - 1));
+        setCompletedChapterIndexes(
+          [...new Set((p.completedChapterIndexes ?? []).filter((index) => index >= 0))].sort(
+            (a, b) => a - b,
+          ),
+        );
+        setBookCompletionRecorded(Boolean(p.bookCompletionRecorded));
         pendingRatioRef.current = p.scrollRatio;
         if (s.mode === "scroll") {
           requestAnimationFrame(() => {
@@ -565,9 +601,11 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       ),
       chapterCount: book.chapters.length,
       ...(page ? { pageIndex: page.index, pageCount: page.count } : {}),
+      completedChapterIndexes,
+      bookCompletionRecorded,
       updatedAt: Date.now(),
     }),
-    [book.chapters.length],
+    [book.chapters.length, bookCompletionRecorded, completedChapterIndexes],
   );
 
   const onScroll = useCallback(() => {
@@ -582,18 +620,10 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   const goto = useCallback(
     (i: number, edgeRatio: 0 | 1 = 0) => {
       const clamped = Math.max(0, Math.min(book.chapters.length - 1, i));
-      if (clamped > chapterIndex) {
-        void awardXp(uid, 20);
-        void recordReadingActivity(uid, { chapterCompleted: true });
-        if (clamped === book.chapters.length - 1) {
-          void incrementBooksCompleted(uid);
-          void setLibraryStatus(uid, slugFor(book.title, book.author), "concluido").catch((err) =>
-            console.warn("[reader] failed to mark book as completed in library", err),
-          );
-        }
-      }
       setChapterIndex(clamped);
+      chapterStartedAtRef.current = Date.now();
       setScrollRatio(edgeRatio);
+      setChapterCompletionOpen(false);
       setActiveHighlightId(null);
       setSelectedPassage(null);
       setEditingNoteFor(null);
@@ -616,17 +646,75 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       queueSave(makeProgress(clamped, edgeRatio));
       setTocOpen(false);
     },
-    [
-      book.chapters.length,
-      book.title,
-      book.author,
-      chapterIndex,
-      makeProgress,
-      queueSave,
-      settings.mode,
-      uid,
-    ],
+    [book.chapters.length, makeProgress, queueSave, settings.mode],
   );
+
+  /** A chapter is recorded only after the reader deliberately confirms it.
+   * Chapter indices are persisted with progress, making reloads, back/next
+   * navigation and a second device idempotent instead of XP-generating. */
+  const completeCurrentChapter = useCallback(() => {
+    if (completingChapter) return;
+    const chapterAlreadyCompleted = completedChapterIndexes.includes(chapterIndex);
+    const isLastChapter = chapterIndex === book.chapters.length - 1;
+    const nextCompleted = chapterAlreadyCompleted
+      ? completedChapterIndexes
+      : [...completedChapterIndexes, chapterIndex].sort((a, b) => a - b);
+
+    setCompletingChapter(true);
+    setCompletedChapterIndexes(nextCompleted);
+    const didRecordBook = bookCompletionRecorded || !isLastChapter;
+    if (isLastChapter) setBookCompletionRecorded(true);
+
+    const progress: ReadingProgress = {
+      ...makeProgress(chapterIndex, scrollRatio, { index: pageIndex, count: pageCount }),
+      completedChapterIndexes: nextCompleted,
+      bookCompletionRecorded: isLastChapter ? true : bookCompletionRecorded,
+      updatedAt: Date.now(),
+    };
+    // Completion is an important boundary: write now rather than waiting
+    // for the normal debounce. `saveProgress` remains local-first offline.
+    saveProgress(book.id, progress);
+
+    if (!chapterAlreadyCompleted) {
+      const minutes = Math.max(1, Math.round((Date.now() - chapterStartedAtRef.current) / 60_000));
+      void recordGamificationMilestone("chapter-completed", `${book.id}:${chapterIndex}`, {
+        chapterIndex,
+        chapterCount: book.chapters.length,
+        readingMinutes: minutes,
+        pagesRead: Math.max(1, pageCount),
+      });
+    }
+    if (isLastChapter) {
+      void setLibraryStatus(uid, slugFor(book.title, book.author), "concluido").catch((err) =>
+        console.warn("[reader] failed to mark book as completed in library", err),
+      );
+      if (!didRecordBook)
+        void recordGamificationMilestone("book-completed", slugFor(book.title, book.author));
+      toast.success("Livro concluído. Sua estante foi atualizada.");
+    }
+
+    setCompletingChapter(false);
+    if (isLastChapter) {
+      setChapterCompletionOpen(false);
+      return;
+    }
+    goto(chapterIndex + 1, 0);
+  }, [
+    book.chapters.length,
+    book.id,
+    book.author,
+    book.title,
+    bookCompletionRecorded,
+    chapterIndex,
+    completedChapterIndexes,
+    completingChapter,
+    goto,
+    makeProgress,
+    pageCount,
+    pageIndex,
+    scrollRatio,
+    uid,
+  ]);
 
   // Track the container's visible width — each CSS column is set to
   // exactly this wide, so precisely one page shows in the viewport at a
@@ -727,7 +815,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
         return;
       }
       if (targetPage >= pageCount) {
-        goto(chapterIndex + 1, 0);
+        setChapterCompletionOpen(true);
         return;
       }
       const el = contentRef.current;
@@ -996,7 +1084,6 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
         });
         created += 1;
       }
-      if (created > 0) void awardXp(uid, 2);
       window.getSelection()?.removeAllRanges();
       setSelectedPassage(null);
     } catch (err) {
@@ -1340,12 +1427,14 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                 <ChevronLeft className="h-4 w-4" /> Anterior
               </button>
               <button
-                onClick={() => goto(chapterIndex + 1)}
-                disabled={chapterIndex === book.chapters.length - 1}
+                onClick={() => setChapterCompletionOpen(true)}
                 className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition disabled:opacity-30"
                 style={{ backgroundColor: theme.accent, color: theme.bg }}
               >
-                Próximo <ChevronRight className="h-4 w-4" />
+                {chapterIndex === book.chapters.length - 1
+                  ? "Concluir livro"
+                  : "Concluir e avançar"}{" "}
+                <ChevronRight className="h-4 w-4" />
               </button>
             </nav>
           </article>
@@ -1414,10 +1503,56 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
           </button>
         )}
 
+        {chapterCompletionOpen && (
+          <div
+            data-reader-action="true"
+            className="absolute bottom-5 left-1/2 z-30 w-[min(92vw,27rem)] -translate-x-1/2 rounded-2xl border p-4 shadow-xl backdrop-blur-xl"
+            style={{
+              borderColor: theme.rule,
+              backgroundColor: theme.bg + "FA",
+              fontFamily: "var(--font-sans)",
+            }}
+          >
+            <p className="text-sm font-semibold" style={{ color: theme.fg }}>
+              {chapterIndex === book.chapters.length - 1
+                ? "Você chegou ao final do livro."
+                : "Fim do capítulo."}
+            </p>
+            <p className="mt-1 text-xs leading-relaxed" style={{ color: theme.muted }}>
+              Confirme a conclusão para registrar este capítulo uma única vez e atualizar seu
+              progresso.
+            </p>
+            <div className="mt-3 flex justify-end gap-2">
+              <button
+                data-reader-action="true"
+                onClick={() => setChapterCompletionOpen(false)}
+                disabled={completingChapter}
+                className="rounded-full px-3 py-1.5 text-xs"
+                style={{ color: theme.muted }}
+              >
+                Ainda não
+              </button>
+              <button
+                data-reader-action="true"
+                onClick={completeCurrentChapter}
+                disabled={completingChapter}
+                className="rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
+                style={{ backgroundColor: theme.accent, color: theme.bg }}
+              >
+                {completingChapter
+                  ? "Registrando…"
+                  : chapterIndex === book.chapters.length - 1
+                    ? "Concluir livro"
+                    : "Concluir capítulo"}
+              </button>
+            </div>
+          </div>
+        )}
+
         {(selectedPassage || activeHighlight) && (
           <div
             data-reader-action="true"
-            className="absolute bottom-5 left-1/2 z-30 flex w-[min(94vw,42rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 rounded-2xl border p-2 shadow-xl backdrop-blur-xl"
+            className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[70] mx-auto flex max-h-[min(21rem,calc(100dvh-1.5rem))] w-auto max-w-[42rem] flex-wrap items-center justify-center gap-1.5 overflow-y-auto overscroll-contain rounded-2xl border p-2 shadow-xl backdrop-blur-xl sm:inset-x-auto sm:left-1/2 sm:w-[min(94vw,42rem)] sm:-translate-x-1/2"
             style={{
               borderColor: theme.rule,
               backgroundColor: theme.bg + "F5",
@@ -1481,6 +1616,22 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                   className="inline-flex items-center gap-1 rounded-full px-2 py-1.5 text-xs font-medium transition hover:opacity-70"
                 >
                   <Sparkles className="h-3.5 w-3.5" /> Explicar
+                </button>
+                <button
+                  data-reader-action="true"
+                  onClick={() =>
+                    askLumiAboutPassage("Diga quem é a pessoa ou personagem mencionado")
+                  }
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-1.5 text-xs font-medium transition hover:opacity-70"
+                >
+                  <Sparkles className="h-3.5 w-3.5" /> Quem é?
+                </button>
+                <button
+                  data-reader-action="true"
+                  onClick={() => askLumiAboutPassage("Crie três flashcards curtos para revisar")}
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-1.5 text-xs font-medium transition hover:opacity-70"
+                >
+                  <Sparkles className="h-3.5 w-3.5" /> Flashcards
                 </button>
               </>
             )}
