@@ -18,10 +18,12 @@ import {
 import type { User } from "firebase/auth";
 
 const SUGGESTIONS = [
-  "Resuma o capítulo até aqui",
-  "Explique esse trecho de um jeito simples",
-  "Que livro parecido você recomenda?",
-  "Qual o contexto histórico desta obra?",
+  "Quem é a pessoa ou personagem mencionado aqui?",
+  "Resuma o capítulo até aqui sem revelar o que vem depois",
+  "Faça um resumo do que já li, somente com o contexto disponível",
+  "Crie 3 perguntas para eu revisar este capítulo",
+  "Crie flashcards curtos para revisar este trecho",
+  "Qual é o contexto histórico ou cultural desta obra?",
 ];
 
 function greeting(context: LumiContext | null): LumiMessage {
