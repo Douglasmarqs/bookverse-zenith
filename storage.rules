@@ -26,7 +26,8 @@ service firebase.storage {
         && request.auth.uid == uid
         && request.resource.size < 80 * 1024 * 1024
         && (
-          (fileName == 'book.json' && request.resource.contentType == 'application/json')
+          ((fileName == 'book.json' || fileName == 'reader.json')
+            && request.resource.contentType == 'application/json')
           || (fileName == 'source.pdf' && request.resource.contentType == 'application/pdf')
         );
 
