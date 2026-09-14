@@ -94,7 +94,10 @@ function DescobrirPage() {
       };
     }
 
-    setPublicBooks([]);
+    // Keep the current shelf visible while a fresh discovery theme is loading.
+    // On slow mobile connections the Cloud Function + direct fallback can take
+    // several seconds; clearing here made the whole section appear broken.
+    if (hasSearch) setPublicBooks([]);
     setCatalogBooks([]);
     setPublicState("loading");
     setCatalogState(hasSearch ? "loading" : "idle");
