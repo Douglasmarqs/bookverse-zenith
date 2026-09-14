@@ -16,7 +16,7 @@ import {
 } from "firebase/firestore";
 import { getFirebase } from "./firebase";
 import { withDeadline } from "./async-utils";
-import { awardXp, recordReadingActivity } from "./user-profile";
+import { recordGamificationMilestone, recordReadingActivity } from "./user-profile";
 
 export const DIARY_REACTIONS = [
   { id: "amei", emoji: "😍", label: "Amei" },
@@ -57,7 +57,7 @@ export async function addDiaryEntry(
   if (!entry.bookTitle.trim()) throw new Error("Escolha um livro para registrar no diário.");
   if (!note) throw new Error("Escreva pelo menos uma linha sobre o momento de leitura.");
 
-  await withDeadline(
+  const saved = await withDeadline(
     addDoc(collection(fb.db, "users", uid, "diary"), {
       bookTitle: entry.bookTitle.trim().slice(0, 200),
       bookAuthor: entry.bookAuthor.trim().slice(0, 120),
@@ -69,7 +69,7 @@ export async function addDiaryEntry(
     WRITE_TIMEOUT_MS,
     "Não foi possível salvar no diário agora. Tente novamente.",
   );
-  void awardXp(uid, 10);
+  void recordGamificationMilestone("diary-entry", saved.id);
   void recordReadingActivity(uid, {});
 }
 
