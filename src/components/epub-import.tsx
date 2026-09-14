@@ -44,7 +44,7 @@ export function EpubImport({ className = "" }: { className?: string }) {
     try {
       const isPdf = file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf";
       if (isPdf) {
-        const book = createPdfBook(file);
+        const book = await createPdfBook(file);
         await savePdfBook(book);
         try {
           await uploadPdfBookToCloud(user.uid, book);
