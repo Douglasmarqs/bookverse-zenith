@@ -75,6 +75,31 @@ export function withDeadline<T>(promise: Promise<T>, ms: number, message: string
 export const TIMEOUT_MESSAGE =
   "Isso demorou mais que o esperado. Verifique sua conexão e tente novamente.";
 
+/** Retries only transient Firebase/network failures. Permission and validation
+ * errors fail immediately, while brief mobile connection changes get another
+ * chance without making the user select the file again. */
+export async function retryTransient<T>(operation: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      const code = String((error as { code?: string })?.code ?? "");
+      const transient =
+        !code ||
+        code.includes("unknown") ||
+        code.includes("unavailable") ||
+        code.includes("retry-limit") ||
+        code.includes("network") ||
+        code.includes("deadline");
+      if (!transient || attempt === attempts - 1) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 700 * (attempt + 1)));
+    }
+  }
+  throw lastError;
+}
+
 /**
  * Turns a Firestore/Firebase error into a clear, non-technical Portuguese
  * message. Firestore's own message for a denied write is literally

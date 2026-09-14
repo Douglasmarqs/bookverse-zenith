@@ -23,7 +23,13 @@ import {
   type Auth,
   type User,
 } from "firebase/auth";
-import { getFirestore, type Firestore } from "firebase/firestore";
+import {
+  initializeFirestore,
+  getFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  type Firestore,
+} from "firebase/firestore";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
 
 declare const __FIREBASE_API_KEY__: string;
@@ -93,7 +99,16 @@ export function getFirebase(): {
   if (!_app) {
     _app = getApps()[0] ?? initializeApp(firebaseConfig);
     _auth = getAuth(_app);
-    _db = getFirestore(_app);
+    // Durable multi-tab cache keeps library/progress writes queued through a
+    // temporary mobile connection loss and flushes them when the device is online.
+    try {
+      _db = initializeFirestore(_app, {
+        localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+      });
+    } catch (error) {
+      console.warn("[firebase] persistent cache unavailable; using memory cache", error);
+      _db = getFirestore(_app);
+    }
     _storage = getStorage(_app);
   }
   return { app: _app!, auth: _auth!, db: _db!, storage: _storage! };

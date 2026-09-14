@@ -6,7 +6,7 @@
  * it can be opened on another device.
  */
 import type { Book } from "./sample-book";
-import { withDeadline } from "./async-utils";
+import { retryTransient, withDeadline } from "./async-utils";
 
 const DB_NAME = "bookverse-epub";
 const STORE = "books";
@@ -128,32 +128,36 @@ export async function uploadEpubBookToCloud(uid: string, book: Book, source: Fil
   // Upload the original first. A parsed representation without its source
   // makes recovery impossible if the parser evolves; metadata is only
   // published after both private Storage objects have landed successfully.
-  await uploadBytes(ref(fb.storage, storagePath(uid, book.id, "source.epub")), source, {
-    // Browsers commonly report EPUBs as application/octet-stream (or an
-    // empty type). The object is still known to be an EPUB because parsing
-    // above succeeded; use the canonical type so Storage rules can enforce
-    // the allowed object shape consistently.
-    contentType: "application/epub+zip",
-    customMetadata: {
-      originalName: safeEpubName(source.name),
-      bookId: book.id,
-      kind: "source-epub",
-    },
-  });
-  await uploadBytes(ref(fb.storage, storagePath(uid, book.id, "book.json")), parsed, {
-    contentType: "application/json",
-    customMetadata: { bookId: book.id, kind: "parsed-book" },
-  });
+  await retryTransient(() =>
+    uploadBytes(ref(fb.storage, storagePath(uid, book.id, "source.epub")), source, {
+      // Browsers commonly report EPUBs as application/octet-stream (or an
+      // empty type). Parsing already proved the format; keep one canonical MIME.
+      contentType: "application/epub+zip",
+      customMetadata: {
+        originalName: safeEpubName(source.name),
+        bookId: book.id,
+        kind: "source-epub",
+      },
+    }),
+  );
+  await retryTransient(() =>
+    uploadBytes(ref(fb.storage, storagePath(uid, book.id, "book.json")), parsed, {
+      contentType: "application/json",
+      customMetadata: { bookId: book.id, kind: "parsed-book" },
+    }),
+  );
 
-  await setDoc(doc(fb.db, ...metadataPath(uid, book.id)), {
-    storageVersion: 1,
-    title: book.title,
-    author: book.author,
-    chapterCount: book.chapters.length,
-    sourceName: safeEpubName(source.name),
-    sourceSize: source.size,
-    updatedAt: Date.now(),
-  });
+  await retryTransient(() =>
+    setDoc(doc(fb.db, ...metadataPath(uid, book.id)), {
+      storageVersion: 1,
+      title: book.title,
+      author: book.author,
+      chapterCount: book.chapters.length,
+      sourceName: safeEpubName(source.name),
+      sourceSize: source.size,
+      updatedAt: Date.now(),
+    }),
+  );
 }
 
 async function downloadLegacyEpubBook(uid: string, id: string): Promise<Book | null> {
@@ -190,7 +194,7 @@ export async function downloadEpubBookFromCloud(uid: string, id: string): Promis
     // source files at 60 MB.
     const bytes = await withDeadline(
       getBytes(ref(fb.storage, storagePath(uid, id, "book.json")), 80 * 1024 * 1024),
-      20_000,
+      90_000,
       "timeout",
     );
     const book = JSON.parse(new TextDecoder().decode(bytes)) as Book;
