@@ -5,7 +5,7 @@ import { applyTheme, getStoredTheme, type SiteTheme } from "@/lib/theme";
  * components at once — each mounts with the currently-applied theme and
  * stays in sync if another component changes it. */
 export function useSiteTheme(): [SiteTheme, (t: SiteTheme) => void] {
-  const [theme, setThemeState] = useState<SiteTheme>("dark");
+  const [theme, setThemeState] = useState<SiteTheme>("light");
 
   useEffect(() => {
     setThemeState(getStoredTheme());
