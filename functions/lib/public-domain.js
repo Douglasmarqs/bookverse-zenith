@@ -34,11 +34,35 @@ function summarize(b) {
         subjects: (b.subjects ?? []).slice(0, 4),
     };
 }
-function pickTextUrl(formats) {
-    const keys = Object.keys(formats).filter((k) => k.startsWith("text/plain"));
-    // Prefer utf-8, then ascii, then whatever plain-text variant exists.
-    const byPref = keys.find((k) => k.includes("utf-8")) ?? keys.find((k) => k.includes("us-ascii")) ?? keys[0];
-    return byPref ? formats[byPref] : null;
+function textUrls(formats) {
+    return Object.entries(formats)
+        .filter(([key]) => key.startsWith("text/plain"))
+        .sort(([a], [b]) => {
+        const score = (key) => (key.includes("utf-8") ? 0 : key.includes("us-ascii") ? 1 : 2);
+        return score(a) - score(b);
+    })
+        .map(([, url]) => url.replace(/^http:/, "https:"))
+        .filter((url, index, all) => all.indexOf(url) === index);
+}
+async function downloadPlainText(formats) {
+    const urls = textUrls(formats);
+    if (!urls.length) {
+        throw new https_1.HttpsError("failed-precondition", "Este título não tem uma versão em texto simples disponível.");
+    }
+    let lastError;
+    for (const url of urls.slice(0, 3)) {
+        try {
+            const response = await fetchWithTimeout(url, 25000);
+            if (!response.ok)
+                throw new Error(`Project Gutenberg ${response.status}`);
+            return await response.text();
+        }
+        catch (error) {
+            lastError = error;
+        }
+    }
+    console.error("[public-domain] every plain-text mirror failed", lastError);
+    throw new https_1.HttpsError("unavailable", "Falha temporária ao baixar o texto do livro.");
 }
 /** Strips the Project Gutenberg legal boilerplate that wraps every text. */
 function stripBoilerplate(raw) {
@@ -184,14 +208,7 @@ exports.getPublicDomainBook = (0, https_1.onCall)({ cors: true, timeoutSeconds: 
     if (!metaRes.ok)
         throw new https_1.HttpsError("not-found", "Livro não encontrado no catálogo.");
     const meta = (await metaRes.json());
-    const textUrl = pickTextUrl(meta.formats);
-    if (!textUrl) {
-        throw new https_1.HttpsError("failed-precondition", "Este título não tem uma versão em texto simples disponível.");
-    }
-    const textRes = await fetchWithTimeout(textUrl, 25000);
-    if (!textRes.ok)
-        throw new https_1.HttpsError("internal", "Falha ao baixar o texto do livro.");
-    const raw = await textRes.text();
+    const raw = await downloadPlainText(meta.formats);
     const clean = stripBoilerplate(raw);
     const chapters = parseChapters(clean);
     const book = {
@@ -201,6 +218,12 @@ exports.getPublicDomainBook = (0, https_1.onCall)({ cors: true, timeoutSeconds: 
         cover: meta.formats["image/jpeg"] ?? null,
         chapters,
     };
-    await cacheRef.set(book);
+    // Firestore documents are limited to 1 MiB. Large classics should still
+    // open normally even when their parsed text is too large to cache there.
+    if (Buffer.byteLength(JSON.stringify(book), "utf8") < 850000) {
+        await cacheRef
+            .set(book)
+            .catch((error) => console.warn("[public-domain] cache write skipped", error));
+    }
     return book;
 });
