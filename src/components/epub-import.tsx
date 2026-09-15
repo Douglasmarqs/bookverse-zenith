@@ -50,7 +50,12 @@ export function EpubImport({ className = "" }: { className?: string }) {
           await uploadPdfBookToCloud(user.uid, book);
           await addToLibrary(
             user.uid,
-            { title: book.title, author: book.author, cover: null, readerId: book.id },
+            {
+              title: book.title,
+              author: book.author,
+              cover: book.cover ?? null,
+              readerId: book.id,
+            },
             "lendo",
           );
         } catch (err) {
