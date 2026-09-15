@@ -1,10 +1,32 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowLeft, ChevronLeft, ChevronRight, Download, FileImage, Loader2 } from "lucide-react";
+import {
+  ArrowLeft,
+  BookOpen,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  FileImage,
+  Loader2,
+} from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { PdfBook } from "@/lib/pdf-store";
 import { markAsReading } from "@/lib/library";
-import { loadProgressRemote, saveProgress } from "@/lib/reader-store";
+import {
+  loadProgressRemote,
+  loadSettings,
+  saveProgress,
+  saveSettings,
+  saveSettingsRemote,
+} from "@/lib/reader-store";
+
+const PDF_PAGE_TURN_DURATION_MS = 600;
+
+type PdfPageTurn = {
+  direction: "next" | "previous";
+  width: number;
+  height: number;
+};
 
 type PdfDocument = {
   numPages: number;
@@ -24,30 +46,71 @@ type PdfDocument = {
  * gestures and paper-like page transition stay consistent with EPUBs. */
 export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const pageTurnCanvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const pdfRef = useRef<PdfDocument | null>(null);
   const destroyPdfRef = useRef<(() => Promise<void>) | null>(null);
   const renderCancelRef = useRef<(() => void) | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const pageTurnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isPageTurningRef = useRef(false);
   const [page, setPage] = useState(1);
   const [pageCount, setPageCount] = useState(Math.max(1, book.pageCount));
   const [pdfReady, setPdfReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
-  const [direction, setDirection] = useState<"next" | "previous" | null>(null);
+  const [pageTurn, setPageTurn] = useState<PdfPageTurn | null>(null);
+  const [pageTurnEnabled, setPageTurnEnabled] = useState(() => loadSettings().pageTurn !== false);
   const [url, setUrl] = useState<string | null>(null);
 
   const goTo = useCallback(
     (next: number) => {
       const target = Math.max(1, Math.min(pageCount, next));
-      if (target === page) return;
-      setDirection(target > page ? "next" : "previous");
-      setPage(target);
-      window.setTimeout(() => setDirection(null), 360);
+      if (target === page || isPageTurningRef.current) return;
+
+      const canvas = canvasRef.current;
+      const turnCanvas = pageTurnCanvasRef.current;
+      const turnsOneLeaf = pageTurnEnabled && Math.abs(target - page) === 1 && canvas?.width;
+      if (!turnsOneLeaf || !canvas || !turnCanvas) {
+        setPage(target);
+        return;
+      }
+
+      const bounds = canvas.getBoundingClientRect();
+      try {
+        // Copy pixels directly into a second canvas. This avoids the costly
+        // PNG/JPEG encoding pause caused by canvas.toDataURL() on phones.
+        turnCanvas.width = canvas.width;
+        turnCanvas.height = canvas.height;
+        turnCanvas.getContext("2d", { alpha: false })?.drawImage(canvas, 0, 0);
+        isPageTurningRef.current = true;
+        setPageTurn({
+          direction: target > page ? "next" : "previous",
+          width: bounds.width,
+          height: bounds.height,
+        });
+        requestAnimationFrame(() => setPage(target));
+        if (pageTurnTimerRef.current) clearTimeout(pageTurnTimerRef.current);
+        pageTurnTimerRef.current = setTimeout(() => {
+          isPageTurningRef.current = false;
+          setPageTurn(null);
+        }, PDF_PAGE_TURN_DURATION_MS);
+      } catch {
+        isPageTurningRef.current = false;
+        setPage(target);
+      }
     },
-    [page, pageCount],
+    [page, pageCount, pageTurnEnabled],
   );
+
+  const togglePageTurn = useCallback(() => {
+    const enabled = !pageTurnEnabled;
+    const updated = { ...loadSettings(), pageTurn: enabled, updatedAt: Date.now() };
+    saveSettings(updated);
+    void saveSettingsRemote(uid, updated);
+    setPageTurnEnabled(enabled);
+  }, [pageTurnEnabled, uid]);
 
   useEffect(() => {
     const objectUrl = URL.createObjectURL(book.source);
@@ -58,6 +121,14 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
     });
     return () => URL.revokeObjectURL(objectUrl);
   }, [book, uid]);
+
+  useEffect(
+    () => () => {
+      if (pageTurnTimerRef.current) clearTimeout(pageTurnTimerRef.current);
+      isPageTurningRef.current = false;
+    },
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -165,6 +236,8 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      const tag = (document.activeElement?.tagName ?? "").toLowerCase();
+      if (tag === "input" || tag === "textarea") return;
       if (event.key === "ArrowRight") goTo(page + 1);
       if (event.key === "ArrowLeft") goTo(page - 1);
     }
@@ -188,13 +261,30 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
             <p className="truncate text-[11px] text-slate-500">PDF privado · modo página</p>
           </div>
         </div>
-        <a
-          href={url ?? undefined}
-          download={book.sourceName}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-blue-200 px-3 py-2 text-xs font-medium text-blue-700 transition hover:bg-blue-50"
-        >
-          <Download className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Baixar</span>
-        </a>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={togglePageTurn}
+            aria-pressed={pageTurnEnabled}
+            aria-label={`${pageTurnEnabled ? "Desativar" : "Ativar"} efeito de folha`}
+            title={`${pageTurnEnabled ? "Desativar" : "Ativar"} efeito de folha`}
+            className={`inline-flex h-9 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition sm:px-3 ${
+              pageTurnEnabled
+                ? "border-blue-200 bg-blue-50 text-blue-700"
+                : "border-slate-200 text-slate-500 hover:bg-slate-50"
+            }`}
+          >
+            <BookOpen className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Efeito de folha</span>
+          </button>
+          <a
+            href={url ?? undefined}
+            download={book.sourceName}
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-blue-200 px-2.5 text-xs font-medium text-blue-700 transition hover:bg-blue-50 sm:px-3"
+          >
+            <Download className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Baixar</span>
+          </a>
+        </div>
       </header>
 
       <main
@@ -216,22 +306,29 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
           }
         }}
       >
-        <div
-          className={`absolute inset-0 grid place-items-center p-3 ${
-            direction === "next"
-              ? "animate-in fade-in slide-in-from-right-6 duration-300"
-              : direction === "previous"
-                ? "animate-in fade-in slide-in-from-left-6 duration-300"
-                : ""
-          }`}
-        >
+        <div className="absolute inset-0 grid place-items-center p-3">
           <canvas
             ref={canvasRef}
             className="max-h-full max-w-full bg-white shadow-2xl ring-1 ring-slate-900/10"
           />
         </div>
+        <div
+          aria-hidden="true"
+          className={
+            pageTurn
+              ? `pdf-page-turn reader-page-turn--${pageTurn.direction}`
+              : "pointer-events-none absolute hidden"
+          }
+        >
+          <div
+            className="pdf-page-turn__sheet"
+            style={pageTurn ? { width: pageTurn.width, height: pageTurn.height } : undefined}
+          >
+            <canvas ref={pageTurnCanvasRef} className="block h-full w-full select-none bg-white" />
+          </div>
+        </div>
         {(loading || !pdfReady) && !error && (
-          <div className="pointer-events-none absolute inset-0 grid place-items-center bg-[#edf5ff]/70">
+          <div className="pointer-events-none absolute inset-0 z-[5] grid place-items-center bg-[#edf5ff]/70">
             <div className="rounded-full bg-white/95 px-4 py-2 text-xs text-slate-600 shadow-lg">
               <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin" /> Preparando página…
             </div>
