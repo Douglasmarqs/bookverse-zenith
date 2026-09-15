@@ -23,6 +23,7 @@ import {
   setFavorite,
   setLibraryStatus,
   setRating,
+  updateLibraryCover,
   slugFor,
   subscribeLibrary,
   LIBRARY_STATUSES,
@@ -40,6 +41,7 @@ import {
   createPdfBook,
   deletePdfBook,
   deletePdfBookFromCloud,
+  getPdfCoverFromCloud,
   isPdfReaderId,
   savePdfBook,
   uploadPdfBookToCloud,
@@ -103,8 +105,21 @@ function BibliotecaPage({ uid }: { uid: string }) {
   const [sort, setSort] = useState<SortKey>("recent");
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const coverRecoveryRef = useRef(new Set<string>());
 
   useEffect(() => subscribeLibrary(uid, setEntries), [uid]);
+
+  useEffect(() => {
+    if (!entries) return;
+    for (const entry of entries) {
+      if (entry.cover || !entry.readerId || !isPdfReaderId(entry.readerId)) continue;
+      if (coverRecoveryRef.current.has(entry.readerId)) continue;
+      coverRecoveryRef.current.add(entry.readerId);
+      void getPdfCoverFromCloud(uid, entry.readerId).then((cover) => {
+        if (cover) return updateLibraryCover(uid, entry.id, cover);
+      });
+    }
+  }, [entries, uid]);
 
   // Safety net: if Firestore's realtime listener never calls back at all
   // (fully offline/blocked, no cache), stop showing the spinner forever —
