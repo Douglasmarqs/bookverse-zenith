@@ -22,8 +22,8 @@ import { describeFirestoreError } from "@/lib/async-utils";
 
 /**
  * Drag-and-drop book import surface. EPUBs are parsed into reflowable text;
- * PDFs retain their original layout. Both formats are private, synced and
- * open from the same library on another device.
+ * Text PDFs are converted into reflowable reading pages; scanned PDFs use
+ * BookVerse's page viewer. Both formats are private and account-synced.
  */
 export function EpubImport({ className = "" }: { className?: string }) {
   const user = useAuthUser();
@@ -119,7 +119,8 @@ export function EpubImport({ className = "" }: { className?: string }) {
         {busy ? "Processando seu livro…" : "Arraste um .epub ou .pdf aqui"}
       </p>
       <p className="mt-1.5 text-sm text-muted-foreground">
-        EPUBs e PDFs ficam privados na sua conta e disponíveis também nos seus outros aparelhos.
+        EPUBs e PDFs com texto usam o leitor ajustável. PDFs digitalizados abrem folha por folha.
+        Tudo fica privado e sincronizado na sua conta.
       </p>
       <button
         type="button"
