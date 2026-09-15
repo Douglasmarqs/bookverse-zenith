@@ -35,12 +35,25 @@ export interface Bookmark {
   createdAt: number;
 }
 
+export interface PdfRegionHighlight {
+  id: string;
+  page: number;
+  /** Normalized coordinates (0..1), so marks follow the page on every screen size. */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color: HighlightColor;
+  createdAt: number;
+}
+
 export interface BookAnnotations {
   highlights: Highlight[];
   bookmarks: Bookmark[];
+  pdfRegions: PdfRegionHighlight[];
 }
 
-const EMPTY: BookAnnotations = { highlights: [], bookmarks: [] };
+const EMPTY: BookAnnotations = { highlights: [], bookmarks: [], pdfRegions: [] };
 const READ_TIMEOUT_MS = 5000;
 const WRITE_TIMEOUT_MS = 10000;
 
@@ -70,7 +83,11 @@ export function subscribeAnnotations(
     r,
     (snap) => {
       const data = snap.data() as Partial<BookAnnotations> | undefined;
-      cb({ highlights: data?.highlights ?? [], bookmarks: data?.bookmarks ?? [] });
+      cb({
+        highlights: data?.highlights ?? [],
+        bookmarks: data?.bookmarks ?? [],
+        pdfRegions: data?.pdfRegions ?? [],
+      });
     },
     (err) => {
       console.warn("[annotations] subscribe failed", err);
@@ -84,7 +101,44 @@ async function readCurrent(uid: string, bookId: string): Promise<BookAnnotations
   if (!r) return EMPTY;
   const snap = await withFallback(getDoc(r), READ_TIMEOUT_MS, null).catch(() => null);
   const data = snap?.data() as Partial<BookAnnotations> | undefined;
-  return { highlights: data?.highlights ?? [], bookmarks: data?.bookmarks ?? [] };
+  return {
+    highlights: data?.highlights ?? [],
+    bookmarks: data?.bookmarks ?? [],
+    pdfRegions: data?.pdfRegions ?? [],
+  };
+}
+
+export async function addPdfRegionHighlight(
+  uid: string,
+  bookId: string,
+  entry: Omit<PdfRegionHighlight, "id" | "createdAt">,
+): Promise<PdfRegionHighlight> {
+  const r = ref(uid, bookId);
+  if (!r) throw new Error("O login não está disponível neste ambiente agora.");
+  const region: PdfRegionHighlight = { ...entry, id: newId(), createdAt: Date.now() };
+  const current = await readCurrent(uid, bookId);
+  await withDeadline(
+    setDoc(r, { pdfRegions: [...current.pdfRegions, region] }, { merge: true }),
+    WRITE_TIMEOUT_MS,
+    "Não foi possível salvar esta marcação agora. Tente novamente.",
+  );
+  return region;
+}
+
+export async function removePdfRegionHighlight(
+  uid: string,
+  bookId: string,
+  regionId: string,
+): Promise<void> {
+  const r = ref(uid, bookId);
+  if (!r) throw new Error("O login não está disponível neste ambiente agora.");
+  const current = await readCurrent(uid, bookId);
+  const pdfRegions = current.pdfRegions.filter((region) => region.id !== regionId);
+  await withDeadline(
+    setDoc(r, { pdfRegions }, { merge: true }),
+    WRITE_TIMEOUT_MS,
+    "Não foi possível remover esta marcação agora. Tente novamente.",
+  );
 }
 
 export async function addHighlight(

@@ -208,6 +208,18 @@ export async function removeFromLibrary(uid: string, id: string): Promise<void> 
   );
 }
 
+export async function updateLibraryCover(uid: string, id: string, cover: string): Promise<void> {
+  const fb = getFirebase();
+  if (!fb) return;
+  const safe = safeCover(cover);
+  if (!safe) return;
+  await withDeadline(
+    setDoc(doc(fb.db, "users", uid, "library", id), { cover: safe }, { merge: true }),
+    WRITE_TIMEOUT_MS,
+    "Não foi possível atualizar a capa agora.",
+  );
+}
+
 export async function setLibraryStatus(
   uid: string,
   id: string,

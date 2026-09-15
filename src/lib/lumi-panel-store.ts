@@ -18,6 +18,8 @@ export interface LumiContext {
   /** A reader action can supply a focused question so Lumi responds without
    * making the person copy/paste the selected passage into the composer. */
   initialPrompt?: string;
+  /** Current scanned PDF page, attached only after an explicit Lumi action. */
+  pageImageDataUrl?: string;
 }
 
 interface LumiPanelState {

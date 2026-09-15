@@ -431,6 +431,27 @@ export async function downloadPdfBookFromCloud(uid: string, id: string): Promise
   }
 }
 
+/** Reads only the tiny Firestore metadata document. Used by library shelves
+ * to recover PDF covers on a new phone without downloading the full PDF. */
+export async function getPdfCoverFromCloud(uid: string, id: string): Promise<string | null> {
+  const { getFirebase } = await import("./firebase");
+  const firebase = getFirebase();
+  if (!firebase) return null;
+  try {
+    const { doc, getDoc } = await import("firebase/firestore");
+    const snapshot = await withDeadline(
+      getDoc(doc(firebase.db, ...metadataPath(uid, id))),
+      10_000,
+      "timeout",
+    );
+    const cover = snapshot.exists() ? (snapshot.data().cover as unknown) : null;
+    return typeof cover === "string" && cover.length > 0 ? cover : null;
+  } catch (error) {
+    console.warn("[pdf] cover metadata unavailable", error);
+    return null;
+  }
+}
+
 export async function deletePdfBookFromCloud(uid: string, id: string): Promise<void> {
   const { getFirebase } = await import("./firebase");
   const firebase = getFirebase();
