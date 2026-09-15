@@ -22,6 +22,8 @@ export interface PdfBook {
   readerBook: Book | null;
   pageCount: number;
   textLayerStatus: "ready" | "unavailable";
+  /** Lets older imports be upgraded when text extraction improves. */
+  textExtractionVersion?: number;
   createdAt: number;
 }
 
@@ -30,6 +32,7 @@ type PdfMetadata = Omit<PdfBook, "source" | "readerBook"> & {
 };
 
 const memoryBooks = new Map<string, PdfBook>();
+const TEXT_EXTRACTION_VERSION = 2;
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -137,7 +140,10 @@ async function extractPdfText(
     }
 
     const pageCount = pdf.numPages;
-    await pdf.destroy();
+    // PDF.js v6 owns teardown on the loading task. Calling destroy on the
+    // document proxy throws after a successful extraction and used to make
+    // the whole PDF incorrectly fall back to the native viewer.
+    await task.destroy();
     if (!chapters.length) return { readerBook: null, pageCount };
     return {
       readerBook: { id, title, author: "Documento pessoal", cover: null, chapters },
@@ -170,18 +176,20 @@ export async function createPdfBook(file: File): Promise<PdfBook> {
     readerBook: extracted.readerBook,
     pageCount: extracted.pageCount,
     textLayerStatus: extracted.readerBook ? "ready" : "unavailable",
+    textExtractionVersion: TEXT_EXTRACTION_VERSION,
     createdAt: Date.now(),
   };
 }
 
 export async function ensurePdfBookText(book: PdfBook): Promise<PdfBook> {
-  if (book.readerBook || book.textLayerStatus === "unavailable") return book;
+  if (book.readerBook || (book.textExtractionVersion ?? 0) >= TEXT_EXTRACTION_VERSION) return book;
   const extracted = await extractPdfText(book.source, book.id, book.title);
   return {
     ...book,
     readerBook: extracted.readerBook,
     pageCount: extracted.pageCount,
     textLayerStatus: extracted.readerBook ? "ready" : "unavailable",
+    textExtractionVersion: TEXT_EXTRACTION_VERSION,
   };
 }
 
@@ -243,6 +251,7 @@ export async function uploadPdfBookToCloud(uid: string, book: PdfBook): Promise<
     pageCount: book.pageCount,
     hasTextLayer: Boolean(book.readerBook),
     textLayerStatus: book.textLayerStatus,
+    textExtractionVersion: book.textExtractionVersion ?? TEXT_EXTRACTION_VERSION,
     createdAt: book.createdAt,
   };
 
@@ -332,6 +341,7 @@ export async function downloadPdfBookFromCloud(uid: string, id: string): Promise
       pageCount: metadata.pageCount ?? 0,
       readerBook,
       textLayerStatus: readerBook ? "ready" : (metadata.textLayerStatus ?? "unavailable"),
+      textExtractionVersion: metadata.textExtractionVersion ?? 0,
       source: new Blob([source], { type: "application/pdf" }),
     };
     memoryBooks.set(id, book);
