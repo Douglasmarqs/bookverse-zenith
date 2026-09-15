@@ -45,6 +45,7 @@ const GROQ_API_KEY = (0, params_1.defineSecret)("GROQ_API_KEY");
 // current list at https://console.groq.com/docs/models and update this
 // string — everything else in this function stays the same.
 const MODEL_NAME = "openai/gpt-oss-120b";
+const VISION_MODEL_NAME = "qwen/qwen3.6-27b";
 const MAX_MESSAGES = 20;
 const MAX_MESSAGE_LENGTH = 4000;
 const MAX_OUTPUT_TOKENS = 600;
@@ -94,10 +95,29 @@ exports.askLumi = (0, https_1.onCall)({ secrets: [GROQ_API_KEY], cors: true, max
         // array with role "system" | "user" | "assistant" — LumiMessage's
         // roles already line up 1:1, no remapping needed like Gemini's
         // separate history/model split required.
+        const pageImage = context?.pageImageDataUrl;
+        const hasPageImage = typeof pageImage === "string" &&
+            /^data:image\/(?:jpeg|png);base64,/.test(pageImage) &&
+            pageImage.length <= 4000000;
+        const visionContext = hasPageImage
+            ? [
+                {
+                    role: "user",
+                    content: [
+                        {
+                            type: "text",
+                            text: "Esta é a página atual do PDF. Leia o conteúdo visível para responder às perguntas do leitor. Não antecipe páginas seguintes.",
+                        },
+                        { type: "image_url", image_url: { url: pageImage } },
+                    ],
+                },
+            ]
+            : [];
         const chatCompletion = await groq.chat.completions.create({
-            model: MODEL_NAME,
+            model: hasPageImage ? VISION_MODEL_NAME : MODEL_NAME,
             messages: [
                 { role: "system", content: buildSystemPrompt(context) },
+                ...visionContext,
                 ...messages.map((m) => ({ role: m.role, content: m.text })),
             ],
             max_completion_tokens: MAX_OUTPUT_TOKENS,
