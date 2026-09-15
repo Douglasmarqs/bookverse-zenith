@@ -6,12 +6,24 @@ import {
   ChevronRight,
   Download,
   FileImage,
+  Highlighter,
+  Languages,
   Loader2,
+  Sparkles,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import type { PdfBook } from "@/lib/pdf-store";
 import { markAsReading } from "@/lib/library";
+import {
+  addPdfRegionHighlight,
+  removePdfRegionHighlight,
+  subscribeAnnotations,
+  type BookAnnotations,
+  type PdfRegionHighlight,
+} from "@/lib/annotations";
+import { openLumiPanel } from "@/lib/lumi-panel-store";
 import {
   loadProgressRemote,
   loadSettings,
@@ -21,12 +33,15 @@ import {
 } from "@/lib/reader-store";
 
 const PDF_PAGE_TURN_DURATION_MS = 600;
+const EMPTY_ANNOTATIONS: BookAnnotations = { highlights: [], bookmarks: [], pdfRegions: [] };
 
 type PdfPageTurn = {
   direction: "next" | "previous";
   width: number;
   height: number;
 };
+
+type RegionDraft = { startX: number; startY: number; x: number; y: number };
 
 type PdfDocument = {
   numPages: number;
@@ -63,6 +78,84 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
   const [pageTurn, setPageTurn] = useState<PdfPageTurn | null>(null);
   const [pageTurnEnabled, setPageTurnEnabled] = useState(() => loadSettings().pageTurn !== false);
   const [url, setUrl] = useState<string | null>(null);
+  const [annotations, setAnnotations] = useState<BookAnnotations>(EMPTY_ANNOTATIONS);
+  const [marking, setMarking] = useState(false);
+  const [regionDraft, setRegionDraft] = useState<RegionDraft | null>(null);
+
+  const pageRegions = annotations.pdfRegions.filter((region) => region.page === page);
+
+  const pageImageForLumi = useCallback(() => {
+    const source = canvasRef.current;
+    if (!source || !source.width || !source.height) return null;
+    const maxLongSide = 1400;
+    const scale = Math.min(1, maxLongSide / Math.max(source.width, source.height));
+    const output = document.createElement("canvas");
+    output.width = Math.max(1, Math.round(source.width * scale));
+    output.height = Math.max(1, Math.round(source.height * scale));
+    const context = output.getContext("2d", { alpha: false });
+    if (!context) return null;
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, output.width, output.height);
+    context.drawImage(source, 0, 0, output.width, output.height);
+    return output.toDataURL("image/jpeg", 0.78);
+  }, []);
+
+  const openPageWithLumi = useCallback(
+    (initialPrompt?: string) => {
+      const pageImageDataUrl = pageImageForLumi();
+      if (!pageImageDataUrl) {
+        toast.error("A página ainda está sendo preparada. Tente novamente em instantes.");
+        return;
+      }
+      openLumiPanel({
+        bookTitle: book.title,
+        bookAuthor: book.author,
+        chapterTitle: `Página ${page}`,
+        positionLabel: `Página ${page} de ${pageCount}`,
+        pageImageDataUrl,
+        initialPrompt,
+      });
+    },
+    [book.author, book.title, page, pageCount, pageImageForLumi],
+  );
+
+  const normalizedPoint = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    return {
+      x: Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)),
+      y: Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height)),
+    };
+  }, []);
+
+  async function saveRegion(draft: RegionDraft) {
+    const x = Math.min(draft.startX, draft.x);
+    const y = Math.min(draft.startY, draft.y);
+    const width = Math.abs(draft.x - draft.startX);
+    const height = Math.abs(draft.y - draft.startY);
+    if (width < 0.025 || height < 0.012) return;
+    try {
+      await addPdfRegionHighlight(uid, book.id, {
+        page,
+        x,
+        y,
+        width,
+        height,
+        color: "gold",
+      });
+      toast.success("Trecho marcado e sincronizado.");
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Não foi possível salvar a marcação.");
+    }
+  }
+
+  async function removeRegion(region: PdfRegionHighlight) {
+    try {
+      await removePdfRegionHighlight(uid, book.id, region.id);
+      toast.success("Marcação removida.");
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Não foi possível remover a marcação.");
+    }
+  }
 
   const goTo = useCallback(
     (next: number) => {
@@ -125,6 +218,8 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
     });
     return () => URL.revokeObjectURL(objectUrl);
   }, [book, uid]);
+
+  useEffect(() => subscribeAnnotations(uid, book.id, setAnnotations), [book.id, uid]);
 
   useEffect(
     () => () => {
@@ -268,6 +363,45 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
         <div className="flex shrink-0 items-center gap-1">
           <button
             type="button"
+            onClick={() => {
+              setMarking((value) => !value);
+              setRegionDraft(null);
+            }}
+            aria-pressed={marking}
+            aria-label={marking ? "Sair do modo marcação" : "Marcar trecho da página"}
+            title={marking ? "Arraste sobre o trecho" : "Marcar trecho"}
+            className={`grid h-9 w-9 place-items-center rounded-full border transition ${
+              marking
+                ? "border-amber-300 bg-amber-100 text-amber-800"
+                : "border-slate-200 text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            <Highlighter className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              openPageWithLumi(
+                "Traduza para português do Brasil todo o texto legível desta página, preservando parágrafos, sentido e nomes próprios. Se já estiver em português, informe isso.",
+              )
+            }
+            aria-label="Traduzir esta página com a Lumi"
+            title="Traduzir página"
+            className="grid h-9 w-9 place-items-center rounded-full border border-slate-200 text-slate-600 transition hover:bg-blue-50 hover:text-blue-700"
+          >
+            <Languages className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => openPageWithLumi()}
+            aria-label="Perguntar à Lumi sobre esta página"
+            title="Perguntar à Lumi"
+            className="grid h-9 w-9 place-items-center rounded-full border border-slate-200 text-slate-600 transition hover:bg-blue-50 hover:text-blue-700"
+          >
+            <Sparkles className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
             onClick={togglePageTurn}
             aria-pressed={pageTurnEnabled}
             aria-label={`${pageTurnEnabled ? "Desativar" : "Ativar"} efeito de folha`}
@@ -311,10 +445,72 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
         }}
       >
         <div className="absolute inset-0 grid place-items-center p-3">
-          <canvas
-            ref={canvasRef}
-            className="max-h-full max-w-full bg-white shadow-2xl ring-1 ring-slate-900/10"
-          />
+          <div className="relative max-h-full max-w-full shadow-2xl ring-1 ring-slate-900/10">
+            <canvas ref={canvasRef} className="block max-h-full max-w-full bg-white" />
+            <div
+              className={`absolute inset-0 ${marking ? "cursor-crosshair touch-none" : "pointer-events-none"}`}
+              onPointerDown={(event) => {
+                if (!marking) return;
+                event.currentTarget.setPointerCapture(event.pointerId);
+                const point = normalizedPoint(event);
+                setRegionDraft({ startX: point.x, startY: point.y, ...point });
+              }}
+              onPointerMove={(event) => {
+                if (!marking || !regionDraft) return;
+                const point = normalizedPoint(event);
+                setRegionDraft((draft) => (draft ? { ...draft, ...point } : null));
+              }}
+              onPointerUp={(event) => {
+                if (!marking || !regionDraft) return;
+                const point = normalizedPoint(event);
+                const completed = { ...regionDraft, ...point };
+                setRegionDraft(null);
+                void saveRegion(completed);
+              }}
+            >
+              {marking &&
+                pageRegions.map((region) => (
+                  <div
+                    key={region.id}
+                    className="pointer-events-none absolute border-l-4 border-amber-500 bg-amber-300/35 mix-blend-multiply"
+                    style={{
+                      left: `${region.x * 100}%`,
+                      top: `${region.y * 100}%`,
+                      width: `${region.width * 100}%`,
+                      height: `${region.height * 100}%`,
+                    }}
+                  />
+                ))}
+              {regionDraft && (
+                <div
+                  className="absolute border-l-4 border-amber-500 bg-amber-300/35"
+                  style={{
+                    left: `${Math.min(regionDraft.startX, regionDraft.x) * 100}%`,
+                    top: `${Math.min(regionDraft.startY, regionDraft.y) * 100}%`,
+                    width: `${Math.abs(regionDraft.x - regionDraft.startX) * 100}%`,
+                    height: `${Math.abs(regionDraft.y - regionDraft.startY) * 100}%`,
+                  }}
+                />
+              )}
+            </div>
+            {!marking &&
+              pageRegions.map((region) => (
+                <button
+                  key={`remove-${region.id}`}
+                  type="button"
+                  aria-label="Remover esta marcação"
+                  title="Toque para remover"
+                  onClick={() => void removeRegion(region)}
+                  className="absolute border-l-4 border-amber-500 bg-amber-300/35 mix-blend-multiply"
+                  style={{
+                    left: `${region.x * 100}%`,
+                    top: `${region.y * 100}%`,
+                    width: `${region.width * 100}%`,
+                    height: `${region.height * 100}%`,
+                  }}
+                />
+              ))}
+          </div>
         </div>
         <div
           aria-hidden="true"
@@ -347,6 +543,13 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
                 O arquivo original continua disponível para download.
               </p>
             </div>
+          </div>
+        )}
+        {marking && !error && (
+          <div className="pointer-events-none absolute inset-x-3 bottom-3 z-10 flex justify-center">
+            <p className="rounded-full bg-slate-950/90 px-4 py-2 text-xs font-medium text-white shadow-lg">
+              Arraste sobre o trecho que deseja marcar
+            </p>
           </div>
         )}
         <button
