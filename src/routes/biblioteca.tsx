@@ -168,7 +168,12 @@ function BibliotecaPage({ uid }: { uid: string }) {
           await uploadPdfBookToCloud(uid, book);
           await addToLibrary(
             uid,
-            { title: book.title, author: book.author, cover: null, readerId: book.id },
+            {
+              title: book.title,
+              author: book.author,
+              cover: book.cover ?? null,
+              readerId: book.id,
+            },
             "quero-ler",
           );
         } catch (err) {
