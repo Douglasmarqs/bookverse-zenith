@@ -409,7 +409,7 @@ const THEME_STYLES = {
 } as const;
 
 const PAGE_GESTURE_HINT_KEY = "bookverse:reader-page-gesture-tip";
-const PAGE_TURN_DURATION_MS = 640;
+const PAGE_TURN_DURATION_MS = 600;
 type PageTurnDirection = "next" | "previous";
 
 type PageTurn = {
@@ -603,7 +603,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     [book.chapters.length, makeProgress, queueSave, settings.mode],
   );
 
-  /** A chapter is recorded only after the reader deliberately confirms it.
+  /** Reaching the end records the chapter once and advances immediately.
    * Chapter indices are persisted with progress, making reloads, back/next
    * navigation and a second device idempotent instead of XP-generating. */
   const completeCurrentChapter = useCallback(() => {
@@ -769,7 +769,8 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
         return;
       }
       if (targetPage >= pageCount) {
-        setChapterCompletionOpen(true);
+        if (chapterIndex === book.chapters.length - 1) setChapterCompletionOpen(true);
+        else completeCurrentChapter();
         return;
       }
       const el = contentRef.current;
@@ -800,7 +801,18 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       if (turningOneLeaf) requestAnimationFrame(revealDestination);
       else revealDestination();
     },
-    [chapterIndex, pageCount, pageWidthPx, pageIndex, goto, makeProgress, queueSave, startPageTurn],
+    [
+      book.chapters.length,
+      chapterIndex,
+      completeCurrentChapter,
+      goto,
+      makeProgress,
+      pageCount,
+      pageIndex,
+      pageWidthPx,
+      queueSave,
+      startPageTurn,
+    ],
   );
 
   const dismissPageGestureHint = useCallback(() => {
@@ -1398,13 +1410,14 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                 <ChevronLeft className="h-4 w-4" /> Anterior
               </button>
               <button
-                onClick={() => setChapterCompletionOpen(true)}
+                onClick={() => {
+                  if (chapterIndex === book.chapters.length - 1) setChapterCompletionOpen(true);
+                  else completeCurrentChapter();
+                }}
                 className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition disabled:opacity-30"
                 style={{ backgroundColor: theme.accent, color: theme.bg }}
               >
-                {chapterIndex === book.chapters.length - 1
-                  ? "Concluir livro"
-                  : "Concluir e avançar"}{" "}
+                {chapterIndex === book.chapters.length - 1 ? "Concluir livro" : "Próximo capítulo"}{" "}
                 <ChevronRight className="h-4 w-4" />
               </button>
             </nav>
@@ -1485,13 +1498,10 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
             }}
           >
             <p className="text-sm font-semibold" style={{ color: theme.fg }}>
-              {chapterIndex === book.chapters.length - 1
-                ? "Você chegou ao final do livro."
-                : "Fim do capítulo."}
+              Você chegou ao final do livro.
             </p>
             <p className="mt-1 text-xs leading-relaxed" style={{ color: theme.muted }}>
-              Confirme a conclusão para registrar este capítulo uma única vez e atualizar seu
-              progresso.
+              Confirme apenas uma vez para marcar o livro como concluído e atualizar sua estante.
             </p>
             <div className="mt-3 flex justify-end gap-2">
               <button
@@ -1510,11 +1520,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                 className="rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
                 style={{ backgroundColor: theme.accent, color: theme.bg }}
               >
-                {completingChapter
-                  ? "Registrando…"
-                  : chapterIndex === book.chapters.length - 1
-                    ? "Concluir livro"
-                    : "Concluir capítulo"}
+                {completingChapter ? "Registrando…" : "Concluir livro"}
               </button>
             </div>
           </div>
