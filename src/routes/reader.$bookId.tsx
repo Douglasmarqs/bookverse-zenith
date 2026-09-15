@@ -15,7 +15,7 @@ import {
   X as XIcon,
   Trash2,
   Share2,
-  FileText,
+  Languages,
 } from "lucide-react";
 
 import { getSampleBook, type Book } from "@/lib/sample-book";
@@ -66,6 +66,7 @@ import { markAsReading, setLibraryStatus, slugFor } from "@/lib/library";
 import { toast } from "sonner";
 import { describeFirestoreError } from "@/lib/async-utils";
 import { ReaderPageSkeleton } from "@/components/reader-page-skeleton";
+import { PdfPageViewer } from "@/components/reader/pdf-page-viewer";
 
 export const Route = createFileRoute("/reader/$bookId")({
   head: () => ({
@@ -157,15 +158,7 @@ function EpubBookLoader({ uid, localId }: { uid: string; localId: string }) {
       });
       if (cancelled) return;
       if (local) {
-        const upgraded = await ensurePdfBookText(local);
-        if (cancelled) return;
-        setBook(upgraded);
-        if (upgraded !== local) {
-          void savePdfBook(upgraded).catch(() => {});
-          void uploadPdfBookToCloud(uid, upgraded).catch((error) =>
-            console.warn("[pdf] background text-layer sync failed", error),
-          );
-        }
+        setBook(local);
         return;
       }
       // Not on this device/browser — it may have been imported elsewhere
@@ -233,7 +226,15 @@ function PdfBookLoader({ uid, localId }: { uid: string; localId: string }) {
       });
       if (cancelled) return;
       if (local) {
-        setBook(local);
+        const upgraded = await ensurePdfBookText(local);
+        if (cancelled) return;
+        setBook(upgraded);
+        if (upgraded !== local) {
+          void savePdfBook(upgraded).catch(() => {});
+          void uploadPdfBookToCloud(uid, upgraded).catch((error) =>
+            console.warn("[pdf] background text-layer sync failed", error),
+          );
+        }
         return;
       }
       setStage("cloud");
@@ -295,54 +296,7 @@ function PdfReaderPage({ uid, book }: { uid: string; book: PdfBook }) {
 }
 
 function PdfOriginalViewer({ uid, book }: { uid: string; book: PdfBook }) {
-  const [url, setUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    const objectUrl = URL.createObjectURL(book.source);
-    setUrl(objectUrl);
-    void markAsReading(uid, { title: book.title, author: book.author, cover: null }, book.id);
-    return () => URL.revokeObjectURL(objectUrl);
-  }, [book.author, book.id, book.source, book.title, uid]);
-
-  return (
-    <div className="fixed inset-0 z-30 flex flex-col bg-[#edf5ff] text-slate-950">
-      <header className="flex items-center justify-between gap-3 border-b border-blue-100 bg-white/95 px-4 py-3 shadow-sm backdrop-blur md:px-6">
-        <div className="flex min-w-0 items-center gap-2">
-          <Link
-            to="/biblioteca"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-full transition hover:bg-blue-50"
-            aria-label="Voltar à biblioteca"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-          <div className="min-w-0">
-            <p className="truncate font-display text-sm font-medium">{book.title}</p>
-            <p className="truncate text-[11px] text-slate-500">PDF privado · {book.sourceName}</p>
-          </div>
-        </div>
-        <a
-          href={url ?? undefined}
-          download={book.sourceName}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-blue-200 px-3 py-2 text-xs font-medium text-blue-700 transition hover:bg-blue-50"
-        >
-          <FileText className="h-3.5 w-3.5" /> Baixar
-        </a>
-      </header>
-      <main className="min-h-0 flex-1 p-2 sm:p-4">
-        {url ? (
-          <iframe
-            title={`Leitura de ${book.title}`}
-            src={`${url}#view=FitH`}
-            className="h-full w-full rounded-xl border border-blue-100 bg-white shadow-sm"
-          />
-        ) : (
-          <div className="grid h-full place-items-center text-sm text-slate-500">
-            Abrindo seu PDF…
-          </div>
-        )}
-      </main>
-    </div>
-  );
+  return <PdfPageViewer uid={uid} book={book} />;
 }
 
 function GutenbergBookLoader({ uid, gutenbergId }: { uid: string; gutenbergId: number }) {
@@ -1243,6 +1197,23 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                 bookTitle: book.title,
                 bookAuthor: book.author,
                 chapterTitle: chapter.title,
+                chapterExcerpt: chapter.paragraphs.slice(0, 6).join(" ").slice(0, 1500),
+                positionLabel: `Capítulo ${chapterIndex + 1} de ${book.chapters.length}`,
+                initialPrompt:
+                  "Traduza o trecho de referência para português do Brasil, preservando sentido, parágrafos e nomes próprios. Se ele já estiver em português, apenas informe isso.",
+              })
+            }
+            label="Traduzir trecho do capítulo com a Lumi"
+          >
+            <Languages className="h-4 w-4" />
+          </IconBtn>
+          <IconBtn
+            theme={theme}
+            onClick={() =>
+              openLumiPanel({
+                bookTitle: book.title,
+                bookAuthor: book.author,
+                chapterTitle: chapter.title,
                 chapterExcerpt: chapter.paragraphs.slice(0, 3).join(" "),
                 positionLabel: `Capítulo ${chapterIndex + 1} de ${book.chapters.length}`,
               })
@@ -1491,7 +1462,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
           <button
             type="button"
             onClick={dismissPageGestureHint}
-            className="absolute bottom-5 left-1/2 z-20 -translate-x-1/2 rounded-full border px-4 py-2 text-xs shadow-lg backdrop-blur-md transition hover:opacity-80"
+            className="fixed bottom-[max(4.75rem,calc(env(safe-area-inset-bottom)+4.75rem))] left-1/2 z-[60] max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-full border px-4 py-2 text-center text-xs shadow-lg backdrop-blur-md transition hover:opacity-80"
             style={{
               borderColor: theme.rule,
               color: theme.fg,
@@ -1506,7 +1477,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
         {chapterCompletionOpen && (
           <div
             data-reader-action="true"
-            className="absolute bottom-5 left-1/2 z-30 w-[min(92vw,27rem)] -translate-x-1/2 rounded-2xl border p-4 shadow-xl backdrop-blur-xl"
+            className="fixed bottom-[max(4.75rem,calc(env(safe-area-inset-bottom)+4.75rem))] left-1/2 z-[65] max-h-[calc(100dvh-6rem)] w-[min(92vw,27rem)] -translate-x-1/2 overflow-y-auto rounded-2xl border p-4 shadow-xl backdrop-blur-xl"
             style={{
               borderColor: theme.rule,
               backgroundColor: theme.bg + "FA",
@@ -1552,7 +1523,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
         {(selectedPassage || activeHighlight) && (
           <div
             data-reader-action="true"
-            className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[70] mx-auto flex max-h-[min(21rem,calc(100dvh-1.5rem))] w-auto max-w-[42rem] flex-wrap items-center justify-center gap-1.5 overflow-y-auto overscroll-contain rounded-2xl border p-2 shadow-xl backdrop-blur-xl sm:inset-x-auto sm:left-1/2 sm:w-[min(94vw,42rem)] sm:-translate-x-1/2"
+            className="fixed inset-x-3 bottom-[max(4.5rem,calc(env(safe-area-inset-bottom)+4.5rem))] z-[70] mx-auto grid max-h-[calc(100dvh-6rem)] w-auto max-w-[46rem] grid-cols-[auto_repeat(4,1.75rem)_auto] items-center justify-center gap-1.5 overflow-y-auto overscroll-contain rounded-2xl border p-2 shadow-xl backdrop-blur-xl sm:inset-x-auto sm:left-1/2 sm:flex sm:w-[min(94vw,46rem)] sm:-translate-x-1/2 sm:flex-wrap"
             style={{
               borderColor: theme.rule,
               backgroundColor: theme.bg + "F5",
@@ -1616,6 +1587,13 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                   className="inline-flex items-center gap-1 rounded-full px-2 py-1.5 text-xs font-medium transition hover:opacity-70"
                 >
                   <Sparkles className="h-3.5 w-3.5" /> Explicar
+                </button>
+                <button
+                  data-reader-action="true"
+                  onClick={() => askLumiAboutPassage("Traduza para português do Brasil")}
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-1.5 text-xs font-medium transition hover:opacity-70"
+                >
+                  <Languages className="h-3.5 w-3.5" /> Traduzir
                 </button>
                 <button
                   data-reader-action="true"
