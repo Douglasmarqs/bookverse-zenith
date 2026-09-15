@@ -115,7 +115,11 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
   useEffect(() => {
     const objectUrl = URL.createObjectURL(book.source);
     setUrl(objectUrl);
-    void markAsReading(uid, { title: book.title, author: book.author, cover: null }, book.id);
+    void markAsReading(
+      uid,
+      { title: book.title, author: book.author, cover: book.cover ?? null },
+      book.id,
+    );
     void loadProgressRemote(book.id).then((progress) => {
       if (progress?.pageIndex !== undefined) setPage(Math.max(1, progress.pageIndex + 1));
     });
