@@ -15,6 +15,8 @@ export interface PdfBook {
   id: string;
   title: string;
   author: string;
+  /** Optimized JPEG preview rendered from the original first PDF page. */
+  cover?: string | null;
   sourceName: string;
   sourceSize: number;
   source: Blob;
@@ -24,6 +26,8 @@ export interface PdfBook {
   textLayerStatus: "ready" | "unavailable";
   /** Lets older imports be upgraded when text extraction improves. */
   textExtractionVersion?: number;
+  /** Lets existing imports receive a cover without being re-imported. */
+  coverExtractionVersion?: number;
   createdAt: number;
 }
 
@@ -33,6 +37,17 @@ type PdfMetadata = Omit<PdfBook, "source" | "readerBook"> & {
 
 const memoryBooks = new Map<string, PdfBook>();
 const TEXT_EXTRACTION_VERSION = 2;
+const COVER_EXTRACTION_VERSION = 1;
+const COVER_LONG_SIDE_PX = 480;
+
+type PdfRenderPage = {
+  getViewport: (options: { scale: number }) => { width: number; height: number };
+  render: (options: {
+    canvas: HTMLCanvasElement;
+    canvasContext: CanvasRenderingContext2D;
+    viewport: { width: number; height: number };
+  }) => { promise: Promise<void> };
+};
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -90,6 +105,51 @@ function linesToParagraphs(lines: string[]): string[] {
   return paragraphs;
 }
 
+async function renderPdfCover(page: PdfRenderPage): Promise<string | null> {
+  if (typeof document === "undefined") return null;
+  try {
+    const initial = page.getViewport({ scale: 1 });
+    const scale = COVER_LONG_SIDE_PX / Math.max(initial.width, initial.height);
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(viewport.width));
+    canvas.height = Math.max(1, Math.round(viewport.height));
+    const context = canvas.getContext("2d", { alpha: false });
+    if (!context) return null;
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvas, canvasContext: context, viewport }).promise;
+    return canvas.toDataURL("image/jpeg", 0.82);
+  } catch (error) {
+    console.warn("[pdf] cover extraction unavailable", error);
+    return null;
+  }
+}
+
+async function extractPdfCover(file: Blob): Promise<string | null> {
+  try {
+    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    if (!pdfjs.GlobalWorkerOptions.workerSrc) {
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+        "pdfjs-dist/legacy/build/pdf.worker.min.mjs",
+        import.meta.url,
+      ).toString();
+    }
+    const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
+    try {
+      const pdf = await task.promise;
+      if (pdf.numPages < 1) return null;
+      const cover = await renderPdfCover((await pdf.getPage(1)) as unknown as PdfRenderPage);
+      return cover;
+    } finally {
+      await task.destroy();
+    }
+  } catch (error) {
+    console.warn("[pdf] standalone cover extraction unavailable", error);
+    return null;
+  }
+}
+
 async function extractPdfText(
   file: Blob,
   id: string,
@@ -97,6 +157,7 @@ async function extractPdfText(
 ): Promise<{
   readerBook: Book | null;
   pageCount: number;
+  cover: string | null;
 }> {
   try {
     const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
@@ -109,6 +170,10 @@ async function extractPdfText(
     const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
     const pdf = await task.promise;
     const chapters: Book["chapters"] = [];
+    const cover =
+      pdf.numPages > 0
+        ? await renderPdfCover((await pdf.getPage(1)) as unknown as PdfRenderPage)
+        : null;
 
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
       const page = await pdf.getPage(pageNumber);
@@ -144,14 +209,15 @@ async function extractPdfText(
     // document proxy throws after a successful extraction and used to make
     // the whole PDF incorrectly fall back to the native viewer.
     await task.destroy();
-    if (!chapters.length) return { readerBook: null, pageCount };
+    if (!chapters.length) return { readerBook: null, pageCount, cover };
     return {
-      readerBook: { id, title, author: "Documento pessoal", cover: null, chapters },
+      readerBook: { id, title, author: "Documento pessoal", cover, chapters },
       pageCount,
+      cover,
     };
   } catch (error) {
     console.warn("[pdf] text extraction unavailable; using original-layout viewer", error);
-    return { readerBook: null, pageCount: 0 };
+    return { readerBook: null, pageCount: 0, cover: null };
   }
 }
 
@@ -170,6 +236,7 @@ export async function createPdfBook(file: File): Promise<PdfBook> {
     id,
     title,
     author: "Documento pessoal",
+    cover: extracted.cover,
     sourceName: safePdfName(file.name),
     sourceSize: file.size,
     source: file,
@@ -177,19 +244,27 @@ export async function createPdfBook(file: File): Promise<PdfBook> {
     pageCount: extracted.pageCount,
     textLayerStatus: extracted.readerBook ? "ready" : "unavailable",
     textExtractionVersion: TEXT_EXTRACTION_VERSION,
+    coverExtractionVersion: COVER_EXTRACTION_VERSION,
     createdAt: Date.now(),
   };
 }
 
 export async function ensurePdfBookText(book: PdfBook): Promise<PdfBook> {
-  if (book.readerBook || (book.textExtractionVersion ?? 0) >= TEXT_EXTRACTION_VERSION) return book;
-  const extracted = await extractPdfText(book.source, book.id, book.title);
+  const needsText = !book.readerBook && (book.textExtractionVersion ?? 0) < TEXT_EXTRACTION_VERSION;
+  const needsCover = !book.cover && (book.coverExtractionVersion ?? 0) < COVER_EXTRACTION_VERSION;
+  if (!needsText && !needsCover) return book;
+
+  const extracted = needsText ? await extractPdfText(book.source, book.id, book.title) : null;
+  const cover = extracted?.cover ?? (needsCover ? await extractPdfCover(book.source) : book.cover);
+  const readerBook = extracted?.readerBook ?? book.readerBook;
   return {
     ...book,
-    readerBook: extracted.readerBook,
-    pageCount: extracted.pageCount,
-    textLayerStatus: extracted.readerBook ? "ready" : "unavailable",
+    cover: cover ?? null,
+    readerBook: readerBook ? { ...readerBook, cover: cover ?? readerBook.cover } : null,
+    pageCount: extracted?.pageCount ?? book.pageCount,
+    textLayerStatus: readerBook ? "ready" : "unavailable",
     textExtractionVersion: TEXT_EXTRACTION_VERSION,
+    coverExtractionVersion: COVER_EXTRACTION_VERSION,
   };
 }
 
@@ -246,12 +321,14 @@ export async function uploadPdfBookToCloud(uid: string, book: PdfBook): Promise<
     id: book.id,
     title: book.title,
     author: book.author,
+    cover: book.cover ?? null,
     sourceName: book.sourceName,
     sourceSize: book.sourceSize,
     pageCount: book.pageCount,
     hasTextLayer: Boolean(book.readerBook),
     textLayerStatus: book.textLayerStatus,
     textExtractionVersion: book.textExtractionVersion ?? TEXT_EXTRACTION_VERSION,
+    coverExtractionVersion: book.coverExtractionVersion ?? COVER_EXTRACTION_VERSION,
     createdAt: book.createdAt,
   };
 
@@ -305,7 +382,7 @@ export async function downloadPdfBookFromCloud(uid: string, id: string): Promise
     const [metaSnapshot, json] = await Promise.all([
       getDoc(doc(firebase.db, ...metadataPath(uid, id))),
       withDeadline(
-        getBytes(ref(firebase.storage, storagePath(uid, id, "book.json")), 256 * 1024),
+        getBytes(ref(firebase.storage, storagePath(uid, id, "book.json")), 768 * 1024),
         20_000,
         "timeout",
       ),
@@ -335,6 +412,7 @@ export async function downloadPdfBookFromCloud(uid: string, id: string): Promise
       id: metadata.id,
       title: metadata.title,
       author: metadata.author,
+      cover: metadata.cover ?? null,
       sourceName: metadata.sourceName,
       sourceSize: metadata.sourceSize,
       createdAt: metadata.createdAt,
@@ -342,6 +420,7 @@ export async function downloadPdfBookFromCloud(uid: string, id: string): Promise
       readerBook,
       textLayerStatus: readerBook ? "ready" : (metadata.textLayerStatus ?? "unavailable"),
       textExtractionVersion: metadata.textExtractionVersion ?? 0,
+      coverExtractionVersion: metadata.coverExtractionVersion ?? 0,
       source: new Blob([source], { type: "application/pdf" }),
     };
     memoryBooks.set(id, book);
