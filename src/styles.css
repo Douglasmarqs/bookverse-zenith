@@ -481,7 +481,7 @@
   -webkit-backface-visibility: hidden;
   transform-style: preserve-3d;
   contain: layout paint;
-  will-change: transform, opacity, filter, box-shadow;
+  will-change: transform, opacity;
   translate: 0 0;
 }
 
@@ -512,58 +512,123 @@
 
 .reader-page-turn--next .reader-page-turn__sheet {
   transform-origin: left center;
-  animation: reader-page-turn-next 640ms cubic-bezier(0.16, 0.82, 0.2, 1) both;
+  animation: reader-page-turn-next 600ms cubic-bezier(0.22, 0.72, 0.18, 1) both;
   box-shadow: 14px 0 22px -15px rgb(0 0 0 / 0.72);
 }
 
 .reader-page-turn--next .reader-page-turn__sheet::after {
   background: linear-gradient(90deg, rgb(0 0 0 / 0.32), transparent 50%, rgb(255 255 255 / 0.1));
-  animation: reader-page-turn-next-light 640ms ease-out both;
+  animation: reader-page-turn-next-light 600ms ease-out both;
 }
 
 .reader-page-turn--next .reader-page-turn__sheet::before {
-  animation: reader-page-turn-next-depth 640ms ease-out both;
+  animation: reader-page-turn-next-depth 600ms ease-out both;
 }
 
 .reader-page-turn--previous .reader-page-turn__sheet {
   transform-origin: right center;
-  animation: reader-page-turn-previous 640ms cubic-bezier(0.16, 0.82, 0.2, 1) both;
+  animation: reader-page-turn-previous 600ms cubic-bezier(0.22, 0.72, 0.18, 1) both;
   box-shadow: -14px 0 22px -15px rgb(0 0 0 / 0.72);
 }
 
 .reader-page-turn--previous .reader-page-turn__sheet::after {
   background: linear-gradient(270deg, rgb(0 0 0 / 0.32), transparent 50%, rgb(255 255 255 / 0.1));
-  animation: reader-page-turn-previous-light 640ms ease-out both;
+  animation: reader-page-turn-previous-light 600ms ease-out both;
 }
 
 .reader-page-turn--previous .reader-page-turn__sheet::before {
-  animation: reader-page-turn-previous-depth 640ms ease-out both;
+  animation: reader-page-turn-previous-depth 600ms ease-out both;
+}
+
+/* Scanned PDFs use the same GPU-friendly leaf animation around the exact
+   canvas page that was visible. The next canvas renders underneath while
+   this snapshot folds away, preventing the loading flash seen previously. */
+.pdf-page-turn {
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  display: grid;
+  overflow: hidden;
+  place-items: center;
+  padding: 0.75rem;
+  pointer-events: none;
+  perspective: 1800px;
+  perspective-origin: 50% 50%;
+  isolation: isolate;
+}
+
+.pdf-page-turn__sheet {
+  position: relative;
+  max-width: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transform-style: preserve-3d;
+  contain: layout paint;
+  will-change: transform, opacity;
+  box-shadow: 0 24px 60px -28px rgb(15 23 42 / 0.7);
+}
+
+.pdf-page-turn__sheet::before,
+.pdf-page-turn__sheet::after {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  content: "";
+  pointer-events: none;
+  opacity: 0;
+}
+
+.reader-page-turn--next .pdf-page-turn__sheet {
+  transform-origin: left center;
+  animation: reader-page-turn-next 600ms cubic-bezier(0.22, 0.72, 0.18, 1) both;
+}
+
+.reader-page-turn--previous .pdf-page-turn__sheet {
+  transform-origin: right center;
+  animation: reader-page-turn-previous 600ms cubic-bezier(0.22, 0.72, 0.18, 1) both;
+}
+
+.reader-page-turn--next .pdf-page-turn__sheet::after,
+.reader-page-turn--previous .pdf-page-turn__sheet::after {
+  background: linear-gradient(
+    90deg,
+    rgb(15 23 42 / 0.34),
+    transparent 52%,
+    rgb(255 255 255 / 0.16)
+  );
+  animation: reader-page-turn-next-light 600ms ease-out both;
+}
+
+.reader-page-turn--previous .pdf-page-turn__sheet::after {
+  background: linear-gradient(
+    270deg,
+    rgb(15 23 42 / 0.34),
+    transparent 52%,
+    rgb(255 255 255 / 0.16)
+  );
 }
 
 @keyframes reader-page-turn-next {
   0% {
     opacity: 1;
-    filter: brightness(1);
     transform: rotateY(0deg);
   }
   18% {
     opacity: 1;
-    filter: brightness(0.96);
     transform: rotateY(-14deg) translateZ(1px);
   }
   52% {
     opacity: 0.98;
-    filter: brightness(0.76);
     transform: rotateY(-86deg) translateZ(2px);
   }
   82% {
     opacity: 0.5;
-    filter: brightness(0.62);
     transform: rotateY(-152deg);
   }
   100% {
     opacity: 0;
-    filter: brightness(0.58);
     transform: rotateY(-180deg);
   }
 }
@@ -571,27 +636,22 @@
 @keyframes reader-page-turn-previous {
   0% {
     opacity: 1;
-    filter: brightness(1);
     transform: rotateY(0deg);
   }
   18% {
     opacity: 1;
-    filter: brightness(0.96);
     transform: rotateY(14deg) translateZ(1px);
   }
   52% {
     opacity: 0.98;
-    filter: brightness(0.76);
     transform: rotateY(86deg) translateZ(2px);
   }
   82% {
     opacity: 0.5;
-    filter: brightness(0.62);
     transform: rotateY(152deg);
   }
   100% {
     opacity: 0;
-    filter: brightness(0.58);
     transform: rotateY(180deg);
   }
 }
