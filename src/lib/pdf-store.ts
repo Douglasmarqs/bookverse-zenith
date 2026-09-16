@@ -378,17 +378,16 @@ export async function downloadPdfBookFromCloud(uid: string, id: string): Promise
 
   try {
     const { getBytes, ref } = await import("firebase/storage");
-    const { doc, getDoc } = await import("firebase/firestore");
-    const [metaSnapshot, json] = await Promise.all([
-      getDoc(doc(firebase.db, ...metadataPath(uid, id))),
-      withDeadline(
-        getBytes(ref(firebase.storage, storagePath(uid, id, "book.json")), 768 * 1024),
-        20_000,
-        "timeout",
-      ),
-    ]);
+    // Storage is the source of truth. Do not reject an otherwise complete
+    // private file merely because its tiny Firestore index is delayed or was
+    // written by an older mobile connection.
+    const json = await withDeadline(
+      getBytes(ref(firebase.storage, storagePath(uid, id, "book.json")), 768 * 1024),
+      20_000,
+      "timeout",
+    );
     const metadata = JSON.parse(new TextDecoder().decode(json)) as PdfMetadata;
-    if (!metaSnapshot.exists() || metadata.id !== id) return null;
+    if (metadata.id !== id) return null;
     const [source, readerBook] = await Promise.all([
       withDeadline(
         getBytes(ref(firebase.storage, storagePath(uid, id, "source.pdf")), 64 * 1024 * 1024),

@@ -201,6 +201,26 @@ export async function downloadEpubBookFromCloud(uid: string, id: string): Promis
     memoryBooks.set(id, book);
     return book;
   } catch (storageError) {
+    // A few older/mobile imports reached Storage with the original EPUB but
+    // lost the derived JSON during an interrupted upload. Rebuild the cache
+    // from the durable source instead of asking the reader to import again.
+    try {
+      const { getBytes, ref } = await import("firebase/storage");
+      const source = await withDeadline(
+        getBytes(ref(fb.storage, storagePath(uid, id, "source.epub")), 64 * 1024 * 1024),
+        90_000,
+        "timeout",
+      );
+      const { parseEpubFile } = await import("./epub-parser");
+      const rebuilt = await parseEpubFile(
+        new File([source], "livro-recuperado.epub", { type: "application/epub+zip" }),
+      );
+      const book = { ...rebuilt, id };
+      memoryBooks.set(id, book);
+      return book;
+    } catch (sourceError) {
+      console.warn("[epub] source recovery failed", sourceError);
+    }
     try {
       const legacy = await downloadLegacyEpubBook(uid, id);
       if (legacy) return legacy;

@@ -7,6 +7,9 @@
 import { useEffect, useState } from "react";
 
 export interface LumiContext {
+  /** Keeps unrelated reader actions in independent conversations. */
+  topic?:
+    "general" | "question" | "summary" | "translation" | "explanation" | "character" | "flashcards";
   bookTitle?: string;
   bookAuthor?: string;
   chapterTitle?: string;
