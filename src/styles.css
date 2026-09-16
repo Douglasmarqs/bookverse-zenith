@@ -512,32 +512,32 @@
 
 .reader-page-turn--next .reader-page-turn__sheet {
   transform-origin: left center;
-  animation: reader-page-turn-next 600ms cubic-bezier(0.22, 0.72, 0.18, 1) both;
+  animation: reader-page-turn-next 680ms cubic-bezier(0.2, 0.78, 0.16, 1) both;
   box-shadow: 14px 0 22px -15px rgb(0 0 0 / 0.72);
 }
 
 .reader-page-turn--next .reader-page-turn__sheet::after {
   background: linear-gradient(90deg, rgb(0 0 0 / 0.32), transparent 50%, rgb(255 255 255 / 0.1));
-  animation: reader-page-turn-next-light 600ms ease-out both;
+  animation: reader-page-turn-next-light 680ms ease-out both;
 }
 
 .reader-page-turn--next .reader-page-turn__sheet::before {
-  animation: reader-page-turn-next-depth 600ms ease-out both;
+  animation: reader-page-turn-next-depth 680ms ease-out both;
 }
 
 .reader-page-turn--previous .reader-page-turn__sheet {
   transform-origin: right center;
-  animation: reader-page-turn-previous 600ms cubic-bezier(0.22, 0.72, 0.18, 1) both;
+  animation: reader-page-turn-previous 680ms cubic-bezier(0.2, 0.78, 0.16, 1) both;
   box-shadow: -14px 0 22px -15px rgb(0 0 0 / 0.72);
 }
 
 .reader-page-turn--previous .reader-page-turn__sheet::after {
   background: linear-gradient(270deg, rgb(0 0 0 / 0.32), transparent 50%, rgb(255 255 255 / 0.1));
-  animation: reader-page-turn-previous-light 600ms ease-out both;
+  animation: reader-page-turn-previous-light 680ms ease-out both;
 }
 
 .reader-page-turn--previous .reader-page-turn__sheet::before {
-  animation: reader-page-turn-previous-depth 600ms ease-out both;
+  animation: reader-page-turn-previous-depth 680ms ease-out both;
 }
 
 /* Scanned PDFs use the same GPU-friendly leaf animation around the exact
@@ -582,12 +582,12 @@
 
 .reader-page-turn--next .pdf-page-turn__sheet {
   transform-origin: left center;
-  animation: reader-page-turn-next 600ms cubic-bezier(0.22, 0.72, 0.18, 1) both;
+  animation: reader-page-turn-next 680ms cubic-bezier(0.2, 0.78, 0.16, 1) both;
 }
 
 .reader-page-turn--previous .pdf-page-turn__sheet {
   transform-origin: right center;
-  animation: reader-page-turn-previous 600ms cubic-bezier(0.22, 0.72, 0.18, 1) both;
+  animation: reader-page-turn-previous 680ms cubic-bezier(0.2, 0.78, 0.16, 1) both;
 }
 
 .reader-page-turn--next .pdf-page-turn__sheet::after,
@@ -598,7 +598,7 @@
     transparent 52%,
     rgb(255 255 255 / 0.16)
   );
-  animation: reader-page-turn-next-light 600ms ease-out both;
+  animation: reader-page-turn-next-light 680ms ease-out both;
 }
 
 .reader-page-turn--previous .pdf-page-turn__sheet::after {
@@ -721,5 +721,16 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  /* The reader's explicit “Efeito de folha” switch is the final authority.
+     People who prefer no motion can turn it off in the reader itself. */
+  .reader-page-turn__sheet,
+  .reader-page-turn__sheet::before,
+  .reader-page-turn__sheet::after,
+  .pdf-page-turn__sheet,
+  .pdf-page-turn__sheet::before,
+  .pdf-page-turn__sheet::after {
+    animation-duration: 680ms !important;
   }
 }
