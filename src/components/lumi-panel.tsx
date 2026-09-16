@@ -17,13 +17,16 @@ import {
 } from "@/lib/lumi-history";
 import type { User } from "firebase/auth";
 
-const SUGGESTIONS = [
-  "Quem é a pessoa ou personagem mencionado aqui?",
-  "Resuma o capítulo até aqui sem revelar o que vem depois",
-  "Faça um resumo do que já li, somente com o contexto disponível",
-  "Crie 3 perguntas para eu revisar este capítulo",
-  "Crie flashcards curtos para revisar este trecho",
-  "Qual é o contexto histórico ou cultural desta obra?",
+const SUGGESTIONS: Array<{ text: string; topic: NonNullable<LumiContext["topic"]> }> = [
+  { text: "Quem é a pessoa ou personagem mencionado aqui?", topic: "character" },
+  { text: "Resuma o capítulo até aqui sem revelar o que vem depois", topic: "summary" },
+  {
+    text: "Faça um resumo do que já li, somente com o contexto disponível",
+    topic: "summary",
+  },
+  { text: "Crie 3 perguntas para eu revisar este capítulo", topic: "question" },
+  { text: "Crie flashcards curtos para revisar este trecho", topic: "flashcards" },
+  { text: "Qual é o contexto histórico ou cultural desta obra?", topic: "explanation" },
 ];
 
 function greeting(context: LumiContext | null): LumiMessage {
@@ -45,7 +48,7 @@ export function LumiPanel() {
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const autoPromptRef = useRef<string | null>(null);
-  const contextKey = contextKeyFor(context?.bookTitle);
+  const contextKey = contextKeyFor(context?.bookTitle, context?.topic);
   const canPersist = !!user && !user.isAnonymous;
 
   useEffect(() => subscribeAuth(setUser), []);
@@ -145,6 +148,9 @@ export function LumiPanel() {
                 ? `${context.positionLabel ? `${context.positionLabel} · ` : ""}${context.bookTitle}`
                 : "IA literária"}
             </p>
+            <p className="text-[10px] text-muted-foreground/75">
+              Conversa separada por assunto · expira em 24 h
+            </p>
           </div>
           <button
             onClick={handleClear}
@@ -203,13 +209,21 @@ export function LumiPanel() {
 
         {messages.length <= 1 && (
           <div className="flex flex-wrap gap-2 px-5 pb-3">
-            {SUGGESTIONS.map((s) => (
+            {SUGGESTIONS.map((suggestion) => (
               <button
-                key={s}
-                onClick={() => send(s)}
+                key={suggestion.text}
+                onClick={() => {
+                  if (context?.topic === suggestion.topic) void send(suggestion.text);
+                  else
+                    openLumiPanel({
+                      ...(context ?? {}),
+                      topic: suggestion.topic,
+                      initialPrompt: suggestion.text,
+                    });
+                }}
                 className="rounded-full border border-border/60 px-3 py-1.5 text-xs text-foreground/80 hover:border-gold/40 hover:text-gold"
               >
-                {s}
+                {suggestion.text}
               </button>
             ))}
           </div>
