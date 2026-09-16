@@ -409,7 +409,7 @@ const THEME_STYLES = {
 } as const;
 
 const PAGE_GESTURE_HINT_KEY = "bookverse:reader-page-gesture-tip";
-const PAGE_TURN_DURATION_MS = 600;
+const PAGE_TURN_DURATION_MS = 680;
 type PageTurnDirection = "next" | "previous";
 
 type PageTurn = {
@@ -463,6 +463,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   const pendingRatioRef = useRef<number | null>(null);
   const isProgrammaticScroll = useRef(false);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const suppressPageNavigationUntilRef = useRef(0);
 
   const contentRef = useRef<HTMLDivElement>(null);
   const articleRef = useRef<HTMLElement>(null);
@@ -763,6 +764,13 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
 
   const goToPage = useCallback(
     (targetPage: number) => {
+      const selection = window.getSelection();
+      if (
+        Date.now() < suppressPageNavigationUntilRef.current ||
+        (selection && !selection.isCollapsed)
+      ) {
+        return;
+      }
       if (isPageTurningRef.current) return;
       if (targetPage < 0) {
         goto(chapterIndex - 1, 1);
@@ -832,6 +840,11 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       touchStartRef.current = null;
       return;
     }
+    if (!window.getSelection()?.isCollapsed) {
+      suppressPageNavigationUntilRef.current = Date.now() + 700;
+      touchStartRef.current = null;
+      return;
+    }
     const touch = event.touches[0];
     touchStartRef.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
   }, []);
@@ -847,6 +860,16 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       const touch = event.changedTouches[0];
       if (!start || !touch) return;
 
+      const selection = window.getSelection();
+      if (
+        Date.now() < suppressPageNavigationUntilRef.current ||
+        selectedPassage ||
+        (selection && !selection.isCollapsed)
+      ) {
+        suppressPageNavigationUntilRef.current = Date.now() + 700;
+        return;
+      }
+
       const dx = touch.clientX - start.x;
       const dy = touch.clientY - start.y;
       // Ignore taps, text-selection gestures, and mostly vertical motions.
@@ -858,7 +881,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       // right advances; dragging it back to the left returns one page.
       goToPage(pageIndex + (dx > 0 ? 1 : -1));
     },
-    [dismissPageGestureHint, goToPage, pageIndex, revealControls],
+    [dismissPageGestureHint, goToPage, pageIndex, revealControls, selectedPassage],
   );
 
   useEffect(() => {
@@ -977,6 +1000,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       };
       const text = selection.toString().replace(/\s+/g, " ").trim();
       if (text.length < 2) return;
+      suppressPageNavigationUntilRef.current = Date.now() + 900;
 
       const startOffset = offsetIn(startParagraph, range.startContainer, range.startOffset);
       const endOffset = offsetIn(endParagraph, range.endContainer, range.endOffset);
@@ -998,7 +1022,11 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     [chapter.paragraphs],
   );
 
-  function askLumiAboutPassage(action: string, passage = selectedPassage) {
+  function askLumiAboutPassage(
+    action: string,
+    topic: "translation" | "explanation" | "character" | "flashcards",
+    passage = selectedPassage,
+  ) {
     if (!passage) return;
     openLumiPanel({
       bookTitle: book.title,
@@ -1006,6 +1034,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       chapterTitle: chapter.title,
       chapterExcerpt: passage.context,
       selectedText: passage.text,
+      topic,
       positionLabel: `Capítulo ${chapterIndex + 1} de ${book.chapters.length}`,
       initialPrompt: `${action} o trecho selecionado, considerando o contexto da leitura.`,
     });
@@ -1211,6 +1240,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                 chapterTitle: chapter.title,
                 chapterExcerpt: chapter.paragraphs.slice(0, 6).join(" ").slice(0, 1500),
                 positionLabel: `Capítulo ${chapterIndex + 1} de ${book.chapters.length}`,
+                topic: "translation",
                 initialPrompt:
                   "Traduza o trecho de referência para português do Brasil, preservando sentido, parágrafos e nomes próprios. Se ele já estiver em português, apenas informe isso.",
               })
@@ -1228,6 +1258,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                 chapterTitle: chapter.title,
                 chapterExcerpt: chapter.paragraphs.slice(0, 3).join(" "),
                 positionLabel: `Capítulo ${chapterIndex + 1} de ${book.chapters.length}`,
+                topic: "question",
               })
             }
             label="Perguntar à Lumi"
@@ -1457,12 +1488,14 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
         {settings.mode === "paginated" && (
           <>
             <button
+              data-reader-action="true"
               onClick={() => goToPage(pageIndex - 1)}
               disabled={pageIndex === 0 && chapterIndex === 0}
               aria-label="Página anterior"
               className="absolute inset-y-0 left-0 w-[15%] min-w-10 cursor-pointer disabled:cursor-default"
             />
             <button
+              data-reader-action="true"
               onClick={() => goToPage(pageIndex + 1)}
               disabled={pageIndex === pageCount - 1 && chapterIndex === book.chapters.length - 1}
               aria-label="Próxima página"
@@ -1589,14 +1622,18 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                 </span>
                 <button
                   data-reader-action="true"
-                  onClick={() => askLumiAboutPassage("Explique em linguagem simples")}
+                  onClick={() =>
+                    askLumiAboutPassage("Explique em linguagem simples", "explanation")
+                  }
                   className="inline-flex items-center gap-1 rounded-full px-2 py-1.5 text-xs font-medium transition hover:opacity-70"
                 >
                   <Sparkles className="h-3.5 w-3.5" /> Explicar
                 </button>
                 <button
                   data-reader-action="true"
-                  onClick={() => askLumiAboutPassage("Traduza para português do Brasil")}
+                  onClick={() =>
+                    askLumiAboutPassage("Traduza para português do Brasil", "translation")
+                  }
                   className="inline-flex items-center gap-1 rounded-full px-2 py-1.5 text-xs font-medium transition hover:opacity-70"
                 >
                   <Languages className="h-3.5 w-3.5" /> Traduzir
@@ -1604,7 +1641,10 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                 <button
                   data-reader-action="true"
                   onClick={() =>
-                    askLumiAboutPassage("Diga quem é a pessoa ou personagem mencionado")
+                    askLumiAboutPassage(
+                      "Diga quem é a pessoa ou personagem mencionado",
+                      "character",
+                    )
                   }
                   className="inline-flex items-center gap-1 rounded-full px-2 py-1.5 text-xs font-medium transition hover:opacity-70"
                 >
@@ -1612,7 +1652,9 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                 </button>
                 <button
                   data-reader-action="true"
-                  onClick={() => askLumiAboutPassage("Crie três flashcards curtos para revisar")}
+                  onClick={() =>
+                    askLumiAboutPassage("Crie três flashcards curtos para revisar", "flashcards")
+                  }
                   className="inline-flex items-center gap-1 rounded-full px-2 py-1.5 text-xs font-medium transition hover:opacity-70"
                 >
                   <Sparkles className="h-3.5 w-3.5" /> Flashcards
