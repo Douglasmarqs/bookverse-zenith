@@ -9,6 +9,7 @@ import {
   Highlighter,
   Languages,
   Loader2,
+  Settings2,
   Sparkles,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -24,6 +25,12 @@ import {
   type PdfRegionHighlight,
 } from "@/lib/annotations";
 import { openLumiPanel } from "@/lib/lumi-panel-store";
+import { PdfDisplaySettingsPanel } from "@/components/reader/pdf-display-settings";
+import {
+  loadPdfDisplaySettings,
+  savePdfDisplaySettings,
+  type PdfDisplaySettings,
+} from "@/lib/pdf-display-settings";
 import {
   loadProgressRemote,
   loadSettings,
@@ -32,7 +39,7 @@ import {
   saveSettingsRemote,
 } from "@/lib/reader-store";
 
-const PDF_PAGE_TURN_DURATION_MS = 600;
+const PDF_PAGE_TURN_DURATION_MS = 680;
 const EMPTY_ANNOTATIONS: BookAnnotations = { highlights: [], bookmarks: [], pdfRegions: [] };
 
 type PdfPageTurn = {
@@ -81,6 +88,10 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
   const [annotations, setAnnotations] = useState<BookAnnotations>(EMPTY_ANNOTATIONS);
   const [marking, setMarking] = useState(false);
   const [regionDraft, setRegionDraft] = useState<RegionDraft | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [displaySettings, setDisplaySettings] = useState<PdfDisplaySettings>(() =>
+    loadPdfDisplaySettings(),
+  );
 
   const pageRegions = annotations.pdfRegions.filter((region) => region.page === page);
 
@@ -101,7 +112,7 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
   }, []);
 
   const openPageWithLumi = useCallback(
-    (initialPrompt?: string) => {
+    (topic: "question" | "translation" | "summary", initialPrompt?: string) => {
       const pageImageDataUrl = pageImageForLumi();
       if (!pageImageDataUrl) {
         toast.error("A página ainda está sendo preparada. Tente novamente em instantes.");
@@ -113,6 +124,7 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
         chapterTitle: `Página ${page}`,
         positionLabel: `Página ${page} de ${pageCount}`,
         pageImageDataUrl,
+        topic,
         initialPrompt,
       });
     },
@@ -205,6 +217,14 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
     setPageTurnEnabled(enabled);
   }, [pageTurnEnabled, uid]);
 
+  const updateDisplaySettings = useCallback((patch: Partial<PdfDisplaySettings>) => {
+    setDisplaySettings((current) => {
+      const next = { ...current, ...patch };
+      savePdfDisplaySettings(next);
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
     const objectUrl = URL.createObjectURL(book.source);
     setUrl(objectUrl);
@@ -289,9 +309,10 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
       renderCancelRef.current?.();
       const pdfPage = await pdf!.getPage(page);
       const initial = pdfPage.getViewport({ scale: 1 });
-      const availableWidth = Math.max(80, size.width - 24);
-      const availableHeight = Math.max(80, size.height - 24);
-      const cssScale = Math.min(availableWidth / initial.width, availableHeight / initial.height);
+      const availableWidth = Math.max(80, size.width - displaySettings.pagePadding * 2);
+      const availableHeight = Math.max(80, size.height - displaySettings.pagePadding * 2);
+      const fitScale = Math.min(availableWidth / initial.width, availableHeight / initial.height);
+      const cssScale = fitScale * displaySettings.zoom;
       const viewport = pdfPage.getViewport({ scale: cssScale });
       const outputScale = Math.min(window.devicePixelRatio || 1, 2);
       const context = canvas!.getContext("2d", { alpha: false });
@@ -331,7 +352,7 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
       cancelled = true;
       renderCancelRef.current?.();
     };
-  }, [book.id, page, pageCount, pdfReady, size]);
+  }, [book.id, displaySettings.pagePadding, displaySettings.zoom, page, pageCount, pdfReady, size]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -382,6 +403,7 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
             type="button"
             onClick={() =>
               openPageWithLumi(
+                "translation",
                 "Traduza para português do Brasil todo o texto legível desta página, preservando parágrafos, sentido e nomes próprios. Se já estiver em português, informe isso.",
               )
             }
@@ -393,12 +415,21 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
           </button>
           <button
             type="button"
-            onClick={() => openPageWithLumi()}
+            onClick={() => openPageWithLumi("question")}
             aria-label="Perguntar à Lumi sobre esta página"
             title="Perguntar à Lumi"
             className="grid h-9 w-9 place-items-center rounded-full border border-slate-200 text-slate-600 transition hover:bg-blue-50 hover:text-blue-700"
           >
             <Sparkles className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            aria-label="Ajustes do PDF"
+            title="Ajustes do PDF"
+            className="grid h-9 w-9 place-items-center rounded-full border border-slate-200 text-slate-600 transition hover:bg-blue-50 hover:text-blue-700"
+          >
+            <Settings2 className="h-4 w-4" />
           </button>
           <button
             type="button"
@@ -429,10 +460,18 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
         ref={stageRef}
         className="relative min-h-0 flex-1 touch-pan-y overflow-hidden bg-[radial-gradient(circle_at_50%_20%,#ffffff_0%,#edf5ff_70%)]"
         onTouchStart={(event) => {
+          if (marking || settingsOpen) {
+            touchStartRef.current = null;
+            return;
+          }
           const touch = event.touches[0];
           touchStartRef.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
         }}
         onTouchEnd={(event) => {
+          if (marking || settingsOpen) {
+            touchStartRef.current = null;
+            return;
+          }
           const start = touchStartRef.current;
           touchStartRef.current = null;
           const touch = event.changedTouches[0];
@@ -444,35 +483,73 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
           }
         }}
       >
-        <div className="absolute inset-0 grid place-items-center p-3">
-          <div className="relative max-h-full max-w-full shadow-2xl ring-1 ring-slate-900/10">
-            <canvas ref={canvasRef} className="block max-h-full max-w-full bg-white" />
+        <div
+          className="absolute inset-0 overflow-auto"
+          style={{ padding: `${displaySettings.pagePadding}px` }}
+        >
+          <div className="grid min-h-full min-w-full place-items-center">
             <div
-              className={`absolute inset-0 ${marking ? "cursor-crosshair touch-none" : "pointer-events-none"}`}
-              onPointerDown={(event) => {
-                if (!marking) return;
-                event.currentTarget.setPointerCapture(event.pointerId);
-                const point = normalizedPoint(event);
-                setRegionDraft({ startX: point.x, startY: point.y, ...point });
-              }}
-              onPointerMove={(event) => {
-                if (!marking || !regionDraft) return;
-                const point = normalizedPoint(event);
-                setRegionDraft((draft) => (draft ? { ...draft, ...point } : null));
-              }}
-              onPointerUp={(event) => {
-                if (!marking || !regionDraft) return;
-                const point = normalizedPoint(event);
-                const completed = { ...regionDraft, ...point };
-                setRegionDraft(null);
-                void saveRegion(completed);
+              className="relative shrink-0 shadow-2xl ring-1 ring-slate-900/10"
+              style={{
+                filter: `brightness(${displaySettings.brightness}) contrast(${displaySettings.contrast})`,
               }}
             >
-              {marking &&
-                pageRegions.map((region) => (
+              <canvas ref={canvasRef} className="block bg-white" />
+              <div
+                className={`absolute inset-0 ${marking ? "cursor-crosshair touch-none" : "pointer-events-none"}`}
+                onPointerDown={(event) => {
+                  if (!marking) return;
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  const point = normalizedPoint(event);
+                  setRegionDraft({ startX: point.x, startY: point.y, ...point });
+                }}
+                onPointerMove={(event) => {
+                  if (!marking || !regionDraft) return;
+                  const point = normalizedPoint(event);
+                  setRegionDraft((draft) => (draft ? { ...draft, ...point } : null));
+                }}
+                onPointerUp={(event) => {
+                  if (!marking || !regionDraft) return;
+                  const point = normalizedPoint(event);
+                  const completed = { ...regionDraft, ...point };
+                  setRegionDraft(null);
+                  void saveRegion(completed);
+                }}
+              >
+                {marking &&
+                  pageRegions.map((region) => (
+                    <div
+                      key={region.id}
+                      className="pointer-events-none absolute border-l-4 border-amber-500 bg-amber-300/35 mix-blend-multiply"
+                      style={{
+                        left: `${region.x * 100}%`,
+                        top: `${region.y * 100}%`,
+                        width: `${region.width * 100}%`,
+                        height: `${region.height * 100}%`,
+                      }}
+                    />
+                  ))}
+                {regionDraft && (
                   <div
-                    key={region.id}
-                    className="pointer-events-none absolute border-l-4 border-amber-500 bg-amber-300/35 mix-blend-multiply"
+                    className="absolute border-l-4 border-amber-500 bg-amber-300/35"
+                    style={{
+                      left: `${Math.min(regionDraft.startX, regionDraft.x) * 100}%`,
+                      top: `${Math.min(regionDraft.startY, regionDraft.y) * 100}%`,
+                      width: `${Math.abs(regionDraft.x - regionDraft.startX) * 100}%`,
+                      height: `${Math.abs(regionDraft.y - regionDraft.startY) * 100}%`,
+                    }}
+                  />
+                )}
+              </div>
+              {!marking &&
+                pageRegions.map((region) => (
+                  <button
+                    key={`remove-${region.id}`}
+                    type="button"
+                    aria-label="Remover esta marcação"
+                    title="Toque para remover"
+                    onClick={() => void removeRegion(region)}
+                    className="absolute border-l-4 border-amber-500 bg-amber-300/35 mix-blend-multiply"
                     style={{
                       left: `${region.x * 100}%`,
                       top: `${region.y * 100}%`,
@@ -481,35 +558,7 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
                     }}
                   />
                 ))}
-              {regionDraft && (
-                <div
-                  className="absolute border-l-4 border-amber-500 bg-amber-300/35"
-                  style={{
-                    left: `${Math.min(regionDraft.startX, regionDraft.x) * 100}%`,
-                    top: `${Math.min(regionDraft.startY, regionDraft.y) * 100}%`,
-                    width: `${Math.abs(regionDraft.x - regionDraft.startX) * 100}%`,
-                    height: `${Math.abs(regionDraft.y - regionDraft.startY) * 100}%`,
-                  }}
-                />
-              )}
             </div>
-            {!marking &&
-              pageRegions.map((region) => (
-                <button
-                  key={`remove-${region.id}`}
-                  type="button"
-                  aria-label="Remover esta marcação"
-                  title="Toque para remover"
-                  onClick={() => void removeRegion(region)}
-                  className="absolute border-l-4 border-amber-500 bg-amber-300/35 mix-blend-multiply"
-                  style={{
-                    left: `${region.x * 100}%`,
-                    top: `${region.y * 100}%`,
-                    width: `${region.width * 100}%`,
-                    height: `${region.height * 100}%`,
-                  }}
-                />
-              ))}
           </div>
         </div>
         <div
@@ -522,7 +571,15 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
         >
           <div
             className="pdf-page-turn__sheet"
-            style={pageTurn ? { width: pageTurn.width, height: pageTurn.height } : undefined}
+            style={
+              pageTurn
+                ? {
+                    width: pageTurn.width,
+                    height: pageTurn.height,
+                    filter: `brightness(${displaySettings.brightness}) contrast(${displaySettings.contrast})`,
+                  }
+                : undefined
+            }
           >
             <canvas ref={pageTurnCanvasRef} className="block h-full w-full select-none bg-white" />
           </div>
@@ -554,7 +611,7 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
         )}
         <button
           onClick={() => goTo(page - 1)}
-          disabled={page <= 1}
+          disabled={page <= 1 || marking || settingsOpen}
           aria-label="Página anterior"
           className="absolute inset-y-0 left-0 grid w-14 place-items-center text-slate-700 opacity-0 transition hover:bg-white/20 hover:opacity-100 disabled:pointer-events-none sm:w-24"
         >
@@ -562,7 +619,7 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
         </button>
         <button
           onClick={() => goTo(page + 1)}
-          disabled={page >= pageCount}
+          disabled={page >= pageCount || marking || settingsOpen}
           aria-label="Próxima página"
           className="absolute inset-y-0 right-0 grid w-14 place-items-center text-slate-700 opacity-0 transition hover:bg-white/20 hover:opacity-100 disabled:pointer-events-none sm:w-24"
         >
@@ -587,6 +644,14 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
           </span>
         </div>
       </footer>
+      <PdfDisplaySettingsPanel
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        settings={displaySettings}
+        onChange={updateDisplaySettings}
+        pageTurnEnabled={pageTurnEnabled}
+        onTogglePageTurn={togglePageTurn}
+      />
     </div>
   );
 }
