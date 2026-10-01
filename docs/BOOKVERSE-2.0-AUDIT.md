@@ -27,16 +27,19 @@ As regras atuais de Firestore e Storage protegem biblioteca, progresso, preferê
 4. **Cache offline.** O service worker agora guarda apenas arquivos de build imutáveis e páginas públicas. Arquivos privados, respostas de API e módulos do ambiente de desenvolvimento não entram no cache. No ambiente de desenvolvimento, o worker antigo é desregistrado para evitar páginas e módulos de versões diferentes.
 5. **Catálogo.** Uma prateleira chamada “Bestsellers” usava somente o assunto `bestsellers` da Open Library, sem dados de venda. Ela foi substituída por tendências mensais da fonte e retira títulos já exibidos na semana. Respostas malformadas da Open Library são normalizadas com validação básica.
 6. **Qualidade de build.** Foram corrigidos erros TypeScript preexistentes. O lint foi separado da formatação automática e volta a executar; restam avisos de Fast Refresh em componentes UI existentes.
+7. **Continuação — PDF por página.** Adicionados ajuste à largura e à página, validação de preferências antigas e limites de canvas (8 milhões de pixels, até 4096 px por dimensão). Cada renderização usa um canvas temporário próprio; apenas a página atual concluída é exibida. Progresso só é gravado após hidratação e renderização, com preservação dos marcadores de conclusão. A sessão do leitor reinicia ao trocar livro ou conta. Navegação por gesto não disputa a rolagem horizontal no zoom; os botões ficam visíveis no rodapé. O cabeçalho usa duas linhas em telas pequenas. A animação respeita redução de movimento.
+8. **Ajustes acessíveis e armazenamento indisponível.** O painel PDF usa diálogo modal, título/descrição, ciclo de Tab, Escape e retorno de foco. Controles fechados deixam de participar da navegação. Conflitos fecham os ajustes e bloqueiam navegação até a escolha. Preferências PDF e do leitor toleram armazenamento bloqueado ou cheio; isso mantém a interface utilizável, mas não garante persistência local quando o navegador a impede.
 
 ## Verificação realizada
 
-- `npm test`: 11 testes passaram (reconciliação de progresso, recuperação legada, validação de arquivo, normalização do catálogo e política do service worker).
+- `npm test`: 17 testes passaram (reconciliação de progresso, recuperação legada, validação de arquivo, normalização do catálogo, política do service worker, preferências PDF, limites de canvas e cálculo de ajuste).
 - `npx tsc --noEmit`: passou.
 - `npm run lint`: passou com 6 avisos preexistentes de Fast Refresh e nenhum erro.
 - `npm run build`: passou após as mudanças de código desta rodada.
 - Navegador local: Home examinada em 320, 360, 375, 390, 412, 768, 1024, 1440 e 1920 px; Catálogo em 320, 390, 768, 1024 e 1440 px. Nas larguras examinadas não houve scroll horizontal da página. Login, Descobrir e Catálogo renderizaram. Uma sessão limpa do navegador abriu o Catálogo sem erro de hidratação após a correção do worker.
+- PDF local: componente real com PDF de teste gerado de três páginas, em harness fora das rotas de produção e ignorado pelo Git. Larguras 320, 360, 375, 390, 412, 768, 844 (landscape), 1024, 1440 e 1920 px sem overflow horizontal da página; ajuste à largura conferido também com barra de rolagem vertical. Zoom 200% mantém a borda inicial acessível e permite rolagem interna. Trocas rápidas, cor da página renderizada, posição local após recarga, preferências após recarga, Escape, retorno/ciclo de foco e armazenamento negado foram verificados sem erros de execução. Evento local de conflito verificou bloqueio de navegação e aplicação da posição escolhida; não representa um teste de comunicação com Firestore.
 
-**Limite da verificação:** o clone local não tem a chave Firebase do deploy. Login, Firestore, Storage, sincronização entre dois dispositivos e leitura privada não puderam ser validados de ponta a ponta no navegador. Os testes unitários não substituem ensaios com o emulador Firebase nem a matriz de arquivos EPUB/PDF solicitada.
+**Limite da verificação:** o clone local não tem a chave Firebase do deploy. Login, Firestore, Storage, sincronização entre dois dispositivos e importação privada não puderam ser validados de ponta a ponta no navegador. O teste local do componente PDF não verifica upload, autenticação ou persistência remota. Os testes não substituem ensaios com o emulador Firebase nem a matriz de arquivos EPUB/PDF solicitada.
 
 ## Próxima sequência de execução
 
@@ -44,7 +47,7 @@ As regras atuais de Firestore e Storage protegem biblioteca, progresso, preferê
 
 - Configurar ambiente de teste Firebase e executar fluxo autenticado em dois navegadores/dispositivos; verificar conflito, escolha, fila offline e regras de segurança.
 - Montar corpus de EPUB 2/3, imagens, sumário, RTL e layout fixo; medir a precisão da restauração. Migrar do índice de parágrafo para âncora textual mais precisa ou CFI quando o motor suportar.
-- Separar o PDF original do modo de texto extraído sem perder busca/seleção. Adicionar ajuste à largura/página, miniaturas e duas páginas em tablets quando apropriado.
+- Separar o PDF original do modo de texto extraído sem perder busca/seleção. Ajuste à largura/página foi adicionado ao leitor por imagem; faltam miniaturas, duas páginas em tablets quando apropriado e recuperação da posição de rolagem dentro de uma página ampliada.
 - Corrigir a descoberta de clássicos: a busca genérica `classic literature` retorna livros **sobre** clássicos. Selecionar obras por IDs/edições verificadas e mostrar indisponibilidade real.
 - Testar estados de erro/offline e acessibilidade do leitor em mobile, tablet, landscape e teclado. Medir bundles grandes de PDF.js, Firestore e JSZip e carregar somente nas rotas necessárias.
 

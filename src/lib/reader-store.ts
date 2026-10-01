@@ -118,26 +118,36 @@ function safeParse<T>(raw: string | null, fallback: T): T {
 
 export function loadSettings(): ReaderSettings {
   if (typeof window === "undefined") return DEFAULT_SETTINGS;
-  const loaded = safeParse(localStorage.getItem(SETTINGS_KEY), DEFAULT_SETTINGS);
-  // Paginated reading became the default mode after some devices had
-  // already saved an explicit "scroll" from the old default — and an
-  // explicitly-saved value always wins over a new default, so without
-  // this those devices would silently be stuck on "scroll" forever. Runs
-  // once per device/browser; a person who deliberately switches back to
-  // Rolagem afterward has that respected normally from then on.
-  if (!localStorage.getItem(PAGINATED_MIGRATION_KEY)) {
-    localStorage.setItem(PAGINATED_MIGRATION_KEY, "1");
-    if (loaded.mode === "scroll") {
-      loaded.mode = "paginated";
-      saveSettings(loaded);
+  let loaded = { ...DEFAULT_SETTINGS };
+  try {
+    loaded = safeParse(localStorage.getItem(SETTINGS_KEY), DEFAULT_SETTINGS);
+    // Paginated reading became the default mode after some devices had
+    // already saved an explicit "scroll" from the old default — and an
+    // explicitly-saved value always wins over a new default, so without
+    // this those devices would silently be stuck on "scroll" forever. Runs
+    // once per device/browser; a person who deliberately switches back to
+    // Rolagem afterward has that respected normally from then on.
+    if (!localStorage.getItem(PAGINATED_MIGRATION_KEY)) {
+      localStorage.setItem(PAGINATED_MIGRATION_KEY, "1");
+      if (loaded.mode === "scroll") {
+        loaded.mode = "paginated";
+        saveSettings(loaded);
+      }
     }
+  } catch {
+    // Browsers may deny storage or allow reads while the write quota is full.
+    // Keep any preferences already loaded and allow reading in memory.
   }
   return loaded;
 }
 
 export function saveSettings(s: ReaderSettings): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+  } catch {
+    // The UI keeps these preferences in memory; remote sync can still succeed.
+  }
 }
 
 /** Loads the newest known preference set for the signed-in reader. Local
