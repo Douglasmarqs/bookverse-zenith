@@ -5,9 +5,24 @@
  * Progress is stored at `users/{uid}/progress/{bookId}`.
  */
 
-import { collection, doc, getDoc, onSnapshot, setDoc, type Unsubscribe } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDoc,
+  onSnapshot,
+  runTransaction,
+  setDoc,
+  type Unsubscribe,
+} from "firebase/firestore";
 import { ensureUser, getFirebase } from "./firebase";
 import { withDeadline, withFallback } from "./async-utils";
+import {
+  differentReadingPosition,
+  legacyRecovery,
+  mergeCompletionMarkers,
+  reconcileProgress,
+  type ProgressConflict,
+} from "./progress-reconcile";
 
 export type ReaderTheme = "light" | "paper" | "sepia" | "dark" | "amoled";
 export type ReaderFont = "serif" | "sans";
@@ -36,6 +51,9 @@ export interface ReaderSettings {
 export interface ReadingProgress {
   chapterIndex: number;
   scrollRatio: number;
+  /** Stable position within the normalized chapter text. Virtual page numbers
+   * change with font, orientation and viewport size. */
+  paragraphIndex?: number;
   /** Overall location in the book. Kept alongside the chapter position so
    * dashboards can render honest progress without loading the book source. */
   overallRatio?: number;
@@ -70,10 +88,24 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
 };
 
 const SETTINGS_KEY = "bookverse:reader:settings";
-const PENDING_PROGRESS_KEY = "bookverse:reader:pending-progress:v1";
+const PENDING_PROGRESS_KEY = (uid: string) => `bookverse:reader:pending-progress:v2:${uid}`;
 // One-time migration flag — see loadSettings() below.
 const PAGINATED_MIGRATION_KEY = "bookverse:reader:settings:paginated-default-v1";
-const progressKey = (bookId: string) => `bookverse:reader:progress:${bookId}`;
+const progressKey = (bookId: string, uid?: string) =>
+  uid ? `bookverse:reader:progress:${uid}:${bookId}` : `bookverse:reader:progress:${bookId}`;
+const remoteRevision = new Map<string, number>();
+const reportedConflict = new Map<string, number>();
+const revisionKey = (uid: string, bookId: string) => `${uid}:${bookId}`;
+const clientId =
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random()}`;
+
+export const PROGRESS_CONFLICT_EVENT = "bookverse:progress-conflict";
+export type { ProgressConflict };
+export interface ProgressConflictEvent extends ProgressConflict {
+  bookId: string;
+}
 
 function safeParse<T>(raw: string | null, fallback: T): T {
   if (!raw) return fallback;
@@ -155,14 +187,25 @@ export async function saveSettingsRemote(uid: string, settings: ReaderSettings):
   }
 }
 
-export function loadProgressLocal(bookId: string): ReadingProgress | null {
+export function loadProgressLocal(bookId: string, uid?: string): ReadingProgress | null {
   if (typeof window === "undefined") return null;
-  const raw = localStorage.getItem(progressKey(bookId));
-  if (!raw) return null;
+  // Legacy positions have no owner metadata. Never attach one to an account:
+  // a shared browser could otherwise show another reader's private position.
   try {
+    const raw = localStorage.getItem(progressKey(bookId, uid));
+    if (!raw) return null;
     return JSON.parse(raw) as ReadingProgress;
   } catch {
     return null;
+  }
+}
+
+function persistProgressLocal(bookId: string, uid: string, progress: ReadingProgress): void {
+  try {
+    localStorage.setItem(progressKey(bookId, uid), JSON.stringify(progress));
+  } catch (error) {
+    // Storage may be unavailable or full. The remote write can still succeed.
+    console.warn("[reader] local progress storage unavailable", error);
   }
 }
 
@@ -190,48 +233,88 @@ export function subscribeReadingProgress(
   );
 }
 
-/**
- * Loads progress with a Firestore fallback. Returns the newest of remote/local
- * (by `updatedAt`) and reconciles both caches.
- */
-export async function loadProgressRemote(bookId: string): Promise<ReadingProgress | null> {
-  const local = loadProgressLocal(bookId);
+/** Loads both positions without silently replacing either when devices differ. */
+export async function loadProgressForReader(
+  bookId: string,
+  uid: string,
+): Promise<{ progress: ReadingProgress | null; conflict: ProgressConflict | null }> {
+  const local = loadProgressLocal(bookId, uid);
+  const legacy = local ? null : loadProgressLocal(bookId);
   const fb = getFirebase();
-  if (!fb) return local;
+  if (!fb) return { progress: local, conflict: null };
   try {
-    const user = await withFallback(ensureUser(), 5000, null);
-    if (!user) return local;
-    const ref = doc(fb.db, "users", user.uid, "progress", bookId);
+    const ref = doc(fb.db, "users", uid, "progress", bookId);
     const snap = await withFallback(getDoc(ref), 5000, null);
+    if (!snap) return { progress: local, conflict: null };
     const remote = snap?.exists() ? (snap.data() as ReadingProgress) : null;
-    if (remote && (!local || remote.updatedAt > local.updatedAt)) {
-      localStorage.setItem(progressKey(bookId), JSON.stringify(remote));
-      return remote;
+    remoteRevision.set(revisionKey(uid, bookId), remote?.updatedAt ?? 0);
+    if (legacy) {
+      // The old key does not identify its owner. Offer recovery explicitly;
+      // never copy its position into a newly signed-in account on its own.
+      return legacyRecovery(legacy, remote);
     }
-    if (local && (!remote || local.updatedAt > (remote?.updatedAt ?? 0))) {
-      // Push newer local up to remote — best effort, don't block on it.
-      void withDeadline(setDoc(ref, local, { merge: true }), 8000, "timeout").catch((err) =>
-        console.warn("[reader] push local progress failed", err),
-      );
+    const result = reconcileProgress(local, remote);
+    if (result.progress && !result.conflict && typeof window !== "undefined") {
+      persistProgressLocal(bookId, uid, result.progress);
     }
-    return local ?? remote;
+    return result;
   } catch (err) {
     console.warn("[reader] loadProgressRemote failed", err);
-    return local;
+    return { progress: local, conflict: null };
   }
 }
 
-export function saveProgress(bookId: string, p: ReadingProgress): void {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(progressKey(bookId), JSON.stringify(p));
-  queuePendingProgress(bookId, p);
-  void writeRemote(bookId, p);
+/** Compatibility helper for noninteractive consumers. Reader screens use the
+ * conflict-aware result above so the reader can choose the correct position. */
+export async function loadProgressRemote(bookId: string): Promise<ReadingProgress | null> {
+  const user = await withFallback(ensureUser(), 5000, null);
+  if (!user) return loadProgressLocal(bookId);
+  return (await loadProgressForReader(bookId, user.uid)).progress;
 }
 
-function pendingProgress(): Record<string, ReadingProgress> {
+export function acceptRemoteProgress(
+  bookId: string,
+  uid: string,
+  remote: ReadingProgress,
+  local: ReadingProgress,
+  legacy = false,
+): ReadingProgress {
+  const selected = legacy ? remote : mergeCompletionMarkers(remote, local);
+  if (typeof window === "undefined") return selected;
+  persistProgressLocal(bookId, uid, selected);
+  remoteRevision.set(revisionKey(uid, bookId), remote.updatedAt);
+  reportedConflict.delete(revisionKey(uid, bookId));
+  clearPendingProgress(uid, bookId);
+  return selected;
+}
+
+export function acceptLocalProgress(
+  bookId: string,
+  uid: string,
+  local: ReadingProgress,
+  remote: ReadingProgress,
+): ReadingProgress {
+  remoteRevision.set(revisionKey(uid, bookId), remote.updatedAt);
+  reportedConflict.delete(revisionKey(uid, bookId));
+  const selected = {
+    ...mergeCompletionMarkers(local, remote),
+    updatedAt: Math.max(Date.now(), remote.updatedAt + 1),
+  };
+  saveProgress(bookId, selected, uid);
+  return selected;
+}
+
+export function saveProgress(bookId: string, p: ReadingProgress, uid: string): void {
+  if (typeof window === "undefined") return;
+  persistProgressLocal(bookId, uid, p);
+  queuePendingProgress(uid, bookId, p);
+  void writeRemote(uid, bookId, p);
+}
+
+function pendingProgress(uid: string): Record<string, ReadingProgress> {
   if (typeof window === "undefined") return {};
   try {
-    return JSON.parse(localStorage.getItem(PENDING_PROGRESS_KEY) ?? "{}") as Record<
+    return JSON.parse(localStorage.getItem(PENDING_PROGRESS_KEY(uid)) ?? "{}") as Record<
       string,
       ReadingProgress
     >;
@@ -240,43 +323,85 @@ function pendingProgress(): Record<string, ReadingProgress> {
   }
 }
 
-function queuePendingProgress(bookId: string, progress: ReadingProgress) {
+function queuePendingProgress(uid: string, bookId: string, progress: ReadingProgress) {
   if (typeof window === "undefined") return;
   try {
-    const queued = pendingProgress();
+    const queued = pendingProgress(uid);
     queued[bookId] = progress;
-    localStorage.setItem(PENDING_PROGRESS_KEY, JSON.stringify(queued));
+    localStorage.setItem(PENDING_PROGRESS_KEY(uid), JSON.stringify(queued));
   } catch {
     // local progress still exists under its own compact key.
   }
 }
 
-function clearPendingProgress(bookId: string, updatedAt: number) {
+function clearPendingProgress(uid: string, bookId: string, updatedAt?: number) {
   if (typeof window === "undefined") return;
   try {
-    const queued = pendingProgress();
-    if (queued[bookId]?.updatedAt === updatedAt) {
+    const queued = pendingProgress(uid);
+    if (updatedAt === undefined || queued[bookId]?.updatedAt === updatedAt) {
       delete queued[bookId];
-      localStorage.setItem(PENDING_PROGRESS_KEY, JSON.stringify(queued));
+      localStorage.setItem(PENDING_PROGRESS_KEY(uid), JSON.stringify(queued));
     }
   } catch {
     // A stale queue is safe: the newest timestamp wins on the next sync.
   }
 }
 
-async function writeRemote(bookId: string, p: ReadingProgress): Promise<void> {
+async function writeRemote(uid: string, bookId: string, p: ReadingProgress): Promise<void> {
   const fb = getFirebase();
   if (!fb) return;
   try {
     const user = await withFallback(ensureUser(), 5000, null);
-    if (!user) return;
-    const ref = doc(fb.db, "users", user.uid, "progress", bookId);
-    await withDeadline(
-      setDoc(ref, { ...p, bookId, uid: user.uid, syncedAt: Date.now() }, { merge: true }),
+    if (!user || user.uid !== uid) return;
+    const ref = doc(fb.db, "users", uid, "progress", bookId);
+    const key = revisionKey(uid, bookId);
+    const expectedRevision = remoteRevision.get(key);
+    const result = await withDeadline(
+      runTransaction(fb.db, async (transaction) => {
+        const snap = await transaction.get(ref);
+        const remote = snap.exists()
+          ? (snap.data() as ReadingProgress & { clientId?: string })
+          : null;
+        // Two writes from this tab can finish out of order. The older one
+        // must not move the cloud position backward after the newer one lands.
+        if (remote?.clientId === clientId && remote.updatedAt > p.updatedAt) {
+          return { conflict: null, saved: remote };
+        }
+        const changedSinceRead =
+          remote &&
+          remote.clientId !== clientId &&
+          (expectedRevision === undefined || remote.updatedAt !== expectedRevision);
+        if (changedSinceRead && differentReadingPosition(p, remote)) {
+          return { conflict: remote, saved: null };
+        }
+        const saved = remote ? mergeCompletionMarkers(p, remote) : p;
+        saved.updatedAt = Math.max(saved.updatedAt, remote?.updatedAt ?? 0);
+        transaction.set(
+          ref,
+          { ...saved, bookId, uid, clientId, syncedAt: Date.now() },
+          { merge: true },
+        );
+        return { conflict: null, saved };
+      }),
       8000,
       "timeout",
     );
-    clearPendingProgress(bookId, p.updatedAt);
+    if (result.conflict) {
+      if (
+        reportedConflict.get(key) !== result.conflict.updatedAt &&
+        typeof window !== "undefined"
+      ) {
+        reportedConflict.set(key, result.conflict.updatedAt);
+        window.dispatchEvent(
+          new CustomEvent<ProgressConflictEvent>(PROGRESS_CONFLICT_EVENT, {
+            detail: { bookId, local: p, remote: result.conflict },
+          }),
+        );
+      }
+      return;
+    }
+    remoteRevision.set(key, result.saved?.updatedAt ?? p.updatedAt);
+    clearPendingProgress(uid, bookId, p.updatedAt);
   } catch (err) {
     console.warn("[reader] writeRemote failed", err);
   }
@@ -287,8 +412,15 @@ async function writeRemote(bookId: string, p: ReadingProgress): Promise<void> {
  * position stored by another device. */
 export function flushPendingProgress(): void {
   if (typeof window === "undefined" || !navigator.onLine) return;
-  const queued = pendingProgress();
-  Object.entries(queued).forEach(([bookId, progress]) => void writeRemote(bookId, progress));
+  void ensureUser()
+    .then((user) => {
+      if (!user) return;
+      const queued = pendingProgress(user.uid);
+      Object.entries(queued).forEach(
+        ([bookId, progress]) => void writeRemote(user.uid, bookId, progress),
+      );
+    })
+    .catch((error) => console.warn("[reader] pending progress sync failed", error));
 }
 
 if (typeof window !== "undefined") {

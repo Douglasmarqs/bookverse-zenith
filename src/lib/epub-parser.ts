@@ -13,10 +13,25 @@
 import JSZip from "jszip";
 import type { Book, Chapter, ChapterBlock } from "./sample-book";
 import { newEpubId } from "./epub-store";
+import { isEmbeddedRasterImageReference } from "./file-validation";
 
 const MAX_FILE_SIZE = 60 * 1024 * 1024; // 60MB — generous for a text-only book
+const MAX_ARCHIVE_ENTRIES = 5000;
+const MAX_DECLARED_UNCOMPRESSED_BYTES = 160 * 1024 * 1024;
+const MAX_TEXT_RESOURCE_CHARS = 4_000_000;
+const MAX_TOTAL_CHAPTER_CHARS = 30_000_000;
+const MAX_IMAGE_BASE64_CHARS = 12_000_000;
 
 export class EpubParseError extends Error {}
+class EpubResourceLimitError extends EpubParseError {}
+
+/** JSZip reads this from the ZIP directory, though its TypeScript interface
+ * keeps `_data` private. Extraction limits below still apply if absent. */
+function declaredSize(file: JSZip.JSZipObject): number | null {
+  const size = (file as JSZip.JSZipObject & { _data?: { uncompressedSize?: unknown } })._data
+    ?.uncompressedSize;
+  return typeof size === "number" && Number.isFinite(size) && size >= 0 ? size : null;
+}
 
 function parseXml(text: string): Document {
   const doc = new DOMParser().parseFromString(text, "application/xml");
@@ -43,7 +58,14 @@ function joinPath(dir: string, relative: string): string {
 async function readText(zip: JSZip, path: string): Promise<string> {
   const file = zip.file(path) ?? zip.file(decodeURIComponent(path));
   if (!file) throw new EpubParseError(`Arquivo "${path}" não encontrado dentro do EPUB.`);
-  return file.async("string");
+  if ((declaredSize(file) ?? 0) > MAX_TEXT_RESOURCE_CHARS * 4) {
+    throw new EpubResourceLimitError("Um recurso de texto do EPUB excede o limite de importação.");
+  }
+  const text = await file.async("string");
+  if (text.length > MAX_TEXT_RESOURCE_CHARS) {
+    throw new EpubResourceLimitError("Um recurso de texto do EPUB excede o limite de importação.");
+  }
+  return text;
 }
 
 function textOf(el: Element | null): string {
@@ -83,8 +105,9 @@ async function resolveImageSrc(
   rawSrc: string,
   cache: Map<string, string | null>,
 ): Promise<string | null> {
-  const clean = rawSrc.split("#")[0]?.trim();
-  if (!clean || clean.startsWith("data:") || /^https?:\/\//i.test(clean)) return clean || null;
+  if (!isEmbeddedRasterImageReference(rawSrc)) return null;
+  const clean = rawSrc.split(/[?#]/, 1)[0]?.trim();
+  if (!clean) return null;
 
   const path = joinPath(chapterDir, decodeURIComponent(clean));
   const cached = cache.get(path);
@@ -96,7 +119,15 @@ async function resolveImageSrc(
       cache.set(path, null);
       return null;
     }
+    if ((declaredSize(file) ?? 0) > MAX_IMAGE_BASE64_CHARS) {
+      cache.set(path, null);
+      return null;
+    }
     const base64 = await file.async("base64");
+    if (base64.length > MAX_IMAGE_BASE64_CHARS) {
+      cache.set(path, null);
+      return null;
+    }
     const raw = `data:${guessMimeType(path)};base64,${base64}`;
     // 900px on the long side is plenty for how wide the reader column
     // gets, and keeps an illustrated book's total IndexedDB footprint
@@ -211,8 +242,6 @@ function guessMimeType(href: string): string {
       return "image/png";
     case "gif":
       return "image/gif";
-    case "svg":
-      return "image/svg+xml";
     case "webp":
       return "image/webp";
     default:
@@ -237,7 +266,11 @@ function guessMimeType(href: string): string {
  * without this a heavily-illustrated book could bloat IndexedDB storage
  * and make the reader noticeably slower to scroll.
  */
-async function downscaleImage(dataUrl: string, maxDim: number, quality: number): Promise<string> {
+async function downscaleImage(
+  dataUrl: string,
+  maxDim: number,
+  quality: number,
+): Promise<string | null> {
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
       const el = new Image();
@@ -254,18 +287,16 @@ async function downscaleImage(dataUrl: string, maxDim: number, quality: number):
     canvas.width = w;
     canvas.height = h;
     const ctx = canvas.getContext("2d");
-    if (!ctx) return dataUrl;
+    if (!ctx) return null;
     ctx.drawImage(img, 0, 0, w, h);
     return canvas.toDataURL("image/jpeg", quality);
   } catch {
-    // If anything about decoding/resizing fails, fall back to the
-    // original — better a possibly-large image than none at all, and
-    // IndexedDB (unlike Firestore) has no strict per-document size cap.
-    return dataUrl;
+    // Do not persist the original, potentially very large or malformed data.
+    return null;
   }
 }
 
-async function downscaleCover(dataUrl: string): Promise<string> {
+async function downscaleCover(dataUrl: string): Promise<string | null> {
   return downscaleImage(dataUrl, 480, 0.82);
 }
 
@@ -282,6 +313,20 @@ export async function parseEpubFile(file: File): Promise<Book> {
     zip = await JSZip.loadAsync(file);
   } catch {
     throw new EpubParseError("Não foi possível abrir este arquivo — ele parece estar corrompido.");
+  }
+  if (Object.keys(zip.files).length > MAX_ARCHIVE_ENTRIES) {
+    throw new EpubResourceLimitError(
+      "Este EPUB contém arquivos demais para uma importação segura.",
+    );
+  }
+  const declaredBytes = Object.values(zip.files).reduce(
+    (total, entry) => total + (declaredSize(entry) ?? 0),
+    0,
+  );
+  if (declaredBytes > MAX_DECLARED_UNCOMPRESSED_BYTES) {
+    throw new EpubResourceLimitError(
+      "O conteúdo expandido deste EPUB excede o limite de importação.",
+    );
   }
 
   // 1. Find the OPF package file via META-INF/container.xml
@@ -340,11 +385,17 @@ export async function parseEpubFile(file: File): Promise<Book> {
     : coverMetaId
       ? manifest.get(coverMetaId)
       : undefined;
-  if (coverEntry) {
+  if (coverEntry && isEmbeddedRasterImageReference(coverEntry.href)) {
     try {
       const coverFile = zip.file(coverEntry.href);
       if (coverFile) {
+        if ((declaredSize(coverFile) ?? 0) > MAX_IMAGE_BASE64_CHARS) {
+          throw new EpubResourceLimitError("A capa deste EPUB é grande demais.");
+        }
         const base64 = await coverFile.async("base64");
+        if (base64.length > MAX_IMAGE_BASE64_CHARS) {
+          throw new EpubResourceLimitError("A capa deste EPUB é grande demais.");
+        }
         const raw = `data:${guessMimeType(coverEntry.href)};base64,${base64}`;
         cover = await downscaleCover(raw);
       }
@@ -366,6 +417,7 @@ export async function parseEpubFile(file: File): Promise<Book> {
   let index = 0;
   const imageCache = new Map<string, string | null>();
   const imageBudget = { remaining: MAX_IMAGES_PER_BOOK };
+  let totalChapterChars = 0;
   for (const idref of spineRefs) {
     const item = manifest.get(idref);
     if (!item) continue;
@@ -373,7 +425,13 @@ export async function parseEpubFile(file: File): Promise<Book> {
     if (item.mediaType && !/html|xml/.test(item.mediaType)) continue;
     try {
       const html = await readText(zip, item.href);
-      const chapterDir = item.href.includes("/") ? item.href.slice(0, item.href.lastIndexOf("/") + 1) : "";
+      totalChapterChars += html.length;
+      if (totalChapterChars > MAX_TOTAL_CHAPTER_CHARS) {
+        throw new EpubResourceLimitError("O texto deste EPUB excede o limite de importação.");
+      }
+      const chapterDir = item.href.includes("/")
+        ? item.href.slice(0, item.href.lastIndexOf("/") + 1)
+        : "";
       const chapter = await extractChapter(html, index, zip, chapterDir, imageCache, imageBudget);
       const hasImages = chapter.blocks?.some((b) => b.type === "image") ?? false;
       if (chapter.paragraphs.length > 0 || hasImages) {
@@ -381,6 +439,7 @@ export async function parseEpubFile(file: File): Promise<Book> {
         index += 1;
       }
     } catch (err) {
+      if (err instanceof EpubResourceLimitError) throw err;
       console.warn(`[epub] skipping unreadable spine item ${item.href}`, err);
     }
   }

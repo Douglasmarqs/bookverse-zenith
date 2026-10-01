@@ -127,7 +127,7 @@ export function invalidateOpenLibraryCache(): void {
  * to openlibrary.org must fail within a few seconds, never hang the tab. */
 const FETCH_TIMEOUT_MS = 8000;
 
-async function cachedFetchJson(url: string): Promise<any | null> {
+async function cachedFetchJson(url: string): Promise<unknown | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
@@ -140,6 +140,37 @@ async function cachedFetchJson(url: string): Promise<any | null> {
   } finally {
     clearTimeout(timer);
   }
+}
+
+type CatalogRow = Record<string, unknown> & { title: string; key: string };
+
+function catalogRows(data: unknown, field: "works" | "docs"): CatalogRow[] {
+  if (!data || typeof data !== "object") return [];
+  const rows = (data as Record<string, unknown>)[field];
+  if (!Array.isArray(rows)) return [];
+  return rows.filter(
+    (row): row is CatalogRow =>
+      row !== null &&
+      typeof row === "object" &&
+      typeof row.title === "string" &&
+      typeof row.key === "string",
+  );
+}
+
+function namesFrom(input: unknown, nested = false): string {
+  if (!Array.isArray(input)) return "Autor desconhecido";
+  const names = input
+    .map((item) => (nested && item && typeof item === "object" ? item.name : item))
+    .filter((name): name is string => typeof name === "string" && name.trim().length > 0);
+  return names.join(", ") || "Autor desconhecido";
+}
+
+function coverFrom(input: unknown): string | null {
+  return typeof input === "number" && Number.isFinite(input) && input > 0 ? COVER(input) : null;
+}
+
+function publishYearFrom(input: unknown): number | undefined {
+  return typeof input === "number" && Number.isInteger(input) ? input : undefined;
 }
 
 export interface CacheOpts {
@@ -243,16 +274,13 @@ export async function booksBySubject(
         `https://openlibrary.org/subjects/${encodeURIComponent(subject)}.json?limit=${limit}`,
       );
       if (!data) return [];
-      const works = (data.works ?? []) as any[];
-      return works
-        .filter((w) => w.title && w.key)
-        .map((w) => ({
-          title: w.title as string,
-          author: (w.authors?.map((a: any) => a.name).join(", ") as string) ?? "Autor desconhecido",
-          cover: w.cover_id ? COVER(w.cover_id) : null,
-          workKey: w.key as string,
-          firstPublishYear: w.first_publish_year,
-        }));
+      return catalogRows(data, "works").map((w) => ({
+        title: w.title,
+        author: namesFrom(w.authors, true),
+        cover: coverFrom(w.cover_id),
+        workKey: w.key,
+        firstPublishYear: publishYearFrom(w.first_publish_year),
+      }));
     },
     opts,
   );
@@ -272,16 +300,13 @@ export async function trendingBooks(
         `https://openlibrary.org/trending/${window}.json?limit=${limit}`,
       );
       if (!data) return [];
-      const works = (data.works ?? []) as any[];
-      return works
-        .filter((w) => w.title && w.key)
-        .map((w) => ({
-          title: w.title as string,
-          author: (w.author_name?.join(", ") as string) ?? "Autor desconhecido",
-          cover: w.cover_i ? COVER(w.cover_i) : null,
-          workKey: w.key as string,
-          firstPublishYear: w.first_publish_year,
-        }));
+      return catalogRows(data, "works").map((w) => ({
+        title: w.title,
+        author: namesFrom(w.author_name),
+        cover: coverFrom(w.cover_i),
+        workKey: w.key,
+        firstPublishYear: publishYearFrom(w.first_publish_year),
+      }));
     },
     opts,
   );
@@ -303,16 +328,13 @@ export async function searchOpenLibrary(
         `https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=${limit}&fields=key,title,author_name,cover_i,first_publish_year`,
       );
       if (!data) return [];
-      const docs = (data.docs ?? []) as any[];
-      return docs
-        .filter((d) => d.title && d.key)
-        .map((d) => ({
-          title: d.title as string,
-          author: (d.author_name?.join(", ") as string) ?? "Autor desconhecido",
-          cover: d.cover_i ? COVER(d.cover_i) : null,
-          workKey: d.key as string,
-          firstPublishYear: d.first_publish_year,
-        }));
+      return catalogRows(data, "docs").map((d) => ({
+        title: d.title,
+        author: namesFrom(d.author_name),
+        cover: coverFrom(d.cover_i),
+        workKey: d.key,
+        firstPublishYear: publishYearFrom(d.first_publish_year),
+      }));
     },
     opts,
   );

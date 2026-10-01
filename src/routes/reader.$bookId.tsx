@@ -36,7 +36,11 @@ import {
   type PdfBook,
 } from "@/lib/pdf-store";
 import {
-  loadProgressRemote,
+  PROGRESS_CONFLICT_EVENT,
+  acceptLocalProgress,
+  acceptRemoteProgress,
+  loadProgressForReader,
+  loadProgressLocal,
   loadSettings,
   loadSettingsRemote,
   saveProgress,
@@ -45,6 +49,8 @@ import {
   DEFAULT_SETTINGS,
   type ReaderSettings,
   type ReadingProgress,
+  type ProgressConflict,
+  type ProgressConflictEvent,
 } from "@/lib/reader-store";
 import {
   subscribeAnnotations,
@@ -67,6 +73,7 @@ import { toast } from "sonner";
 import { describeFirestoreError } from "@/lib/async-utils";
 import { ReaderPageSkeleton } from "@/components/reader-page-skeleton";
 import { PdfPageViewer } from "@/components/reader/pdf-page-viewer";
+import { ProgressConflictDialog } from "@/components/reader/progress-conflict-dialog";
 
 export const Route = createFileRoute("/reader/$bookId")({
   head: () => ({
@@ -176,7 +183,11 @@ function EpubBookLoader({ uid, localId }: { uid: string; localId: string }) {
       );
     }
 
-    void load();
+    void load().catch((err) => {
+      if (cancelled) return;
+      console.warn("[reader] EPUB load failed", err);
+      setError(describeFirestoreError(err, "Não foi possível abrir este EPUB agora."));
+    });
     return () => {
       cancelled = true;
     };
@@ -257,7 +268,11 @@ function PdfBookLoader({ uid, localId }: { uid: string; localId: string }) {
       );
     }
 
-    void load();
+    void load().catch((err) => {
+      if (cancelled) return;
+      console.warn("[reader] PDF load failed", err);
+      setError(describeFirestoreError(err, "Não foi possível abrir este PDF agora."));
+    });
     return () => {
       cancelled = true;
     };
@@ -437,12 +452,15 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   const [annotations, setAnnotations] = useState<BookAnnotations>({
     highlights: [],
     bookmarks: [],
+    pdfRegions: [],
   });
   const [activeHighlightId, setActiveHighlightId] = useState<string | null>(null);
   const [editingNoteFor, setEditingNoteFor] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
   const [saved, setSaved] = useState(true);
   const [hydrated, setHydrated] = useState(false);
+  const [syncConflict, setSyncConflict] = useState<ProgressConflict | null>(null);
+  const syncConflictRef = useRef<ProgressConflict | null>(null);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [selectedPassage, setSelectedPassage] = useState<SelectedPassage | null>(null);
   const [completedChapterIndexes, setCompletedChapterIndexes] = useState<number[]>([]);
@@ -457,10 +475,14 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   // moves horizontally by exactly one measured page width at a time.
   const [pageIndex, setPageIndex] = useState(0);
   const [pageCount, setPageCount] = useState(1);
+  const [restoreEpoch, setRestoreEpoch] = useState(0);
   const [pageWidthPx, setPageWidthPx] = useState(0);
+  const pageWidthRef = useRef(0);
   const [showPageGestureHint, setShowPageGestureHint] = useState(false);
   const [pageTurn, setPageTurn] = useState<PageTurn | null>(null);
   const pendingRatioRef = useRef<number | null>(null);
+  const pendingAnchorRef = useRef<number | null>(null);
+  const currentAnchorRef = useRef<number | null>(null);
   const isProgrammaticScroll = useRef(false);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const suppressPageNavigationUntilRef = useRef(0);
@@ -493,34 +515,99 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
 
   useEffect(() => subscribeAnnotations(uid, book.id, setAnnotations), [uid, book.id]);
 
+  const visibleParagraphIndex = useCallback((): number | null => {
+    const viewport = contentRef.current;
+    if (!viewport) return null;
+    const bounds = viewport.getBoundingClientRect();
+    const paragraphs = viewport.querySelectorAll<HTMLElement>("[data-paragraph-index]");
+    for (const paragraph of paragraphs) {
+      const visible = Array.from(paragraph.getClientRects()).some((rect) =>
+        settings.mode === "paginated"
+          ? rect.right > bounds.left + 8 &&
+            rect.left < bounds.right - 8 &&
+            rect.bottom > bounds.top &&
+            rect.top < bounds.bottom
+          : rect.bottom > bounds.top + 8 && rect.top < bounds.bottom,
+      );
+      if (visible) return Number(paragraph.dataset.paragraphIndex);
+    }
+    return null;
+  }, [settings.mode]);
+
+  const applyProgress = useCallback(
+    (p: ReadingProgress) => {
+      setChapterIndex(Math.max(0, Math.min(p.chapterIndex, book.chapters.length - 1)));
+      setScrollRatio(p.scrollRatio);
+      setCompletedChapterIndexes(
+        [...new Set((p.completedChapterIndexes ?? []).filter((index) => index >= 0))].sort(
+          (a, b) => a - b,
+        ),
+      );
+      setBookCompletionRecorded(Boolean(p.bookCompletionRecorded));
+      pendingRatioRef.current = p.scrollRatio;
+      pendingAnchorRef.current = p.paragraphIndex ?? null;
+      currentAnchorRef.current = p.paragraphIndex ?? null;
+      setRestoreEpoch((epoch) => epoch + 1);
+      // The layout effect below restores the anchor or ratio after the chapter
+      // DOM has updated, including when the chosen position changes chapters.
+    },
+    [book.chapters.length],
+  );
+
   // Hydrate settings + progress after mount (avoid SSR mismatch).
   useEffect(() => {
+    let cancelled = false;
     const s = loadSettings();
     setSettings(s);
     void loadSettingsRemote(uid, s).then((remote) => setSettings(remote));
-    void loadProgressRemote(book.id).then((p) => {
-      if (p) {
-        setChapterIndex(Math.min(p.chapterIndex, book.chapters.length - 1));
-        setCompletedChapterIndexes(
-          [...new Set((p.completedChapterIndexes ?? []).filter((index) => index >= 0))].sort(
-            (a, b) => a - b,
-          ),
-        );
-        setBookCompletionRecorded(Boolean(p.bookCompletionRecorded));
-        pendingRatioRef.current = p.scrollRatio;
-        if (s.mode === "scroll") {
-          requestAnimationFrame(() => {
-            const el = contentRef.current;
-            if (el) el.scrollTop = p.scrollRatio * (el.scrollHeight - el.clientHeight);
-            pendingRatioRef.current = null;
-          });
-        }
-        // Paginated mode: left for the page-measurement effect below to
-        // consume once it knows how many pages this chapter actually has.
-      }
+    void loadProgressForReader(book.id, uid).then(({ progress, conflict }) => {
+      if (cancelled) return;
+      syncConflictRef.current = conflict;
+      setSyncConflict(conflict);
+      if (progress) applyProgress(progress);
       setHydrated(true);
     });
-  }, [book.id, book.chapters.length, uid]);
+    return () => {
+      cancelled = true;
+    };
+  }, [applyProgress, book.id, uid]);
+
+  useEffect(() => {
+    const onConflict = (event: Event) => {
+      const detail = (event as CustomEvent<ProgressConflictEvent>).detail;
+      if (detail.bookId !== book.id) return;
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      syncConflictRef.current = detail;
+      setSyncConflict(detail);
+    };
+    window.addEventListener(PROGRESS_CONFLICT_EVENT, onConflict);
+    return () => window.removeEventListener(PROGRESS_CONFLICT_EVENT, onConflict);
+  }, [book.id]);
+
+  const chooseProgress = useCallback(
+    (source: "local" | "remote") => {
+      if (!syncConflict) return;
+      let selected =
+        source === "remote"
+          ? syncConflict.remote
+          : (loadProgressLocal(book.id, uid) ?? syncConflict.local);
+      if (source === "remote") {
+        selected = acceptRemoteProgress(
+          book.id,
+          uid,
+          selected,
+          syncConflict.local,
+          syncConflict.legacy,
+        );
+      } else {
+        selected = acceptLocalProgress(book.id, uid, selected, syncConflict.remote);
+      }
+      applyProgress(selected);
+      syncConflictRef.current = null;
+      setSyncConflict(null);
+    },
+    [applyProgress, book.id, syncConflict, uid],
+  );
 
   // Persist settings.
   useEffect(() => {
@@ -532,14 +619,32 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   // Debounced progress save.
   const queueSave = useCallback(
     (progress: ReadingProgress) => {
+      if (!hydrated || syncConflictRef.current) return;
       setSaved(false);
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(() => {
-        saveProgress(book.id, progress);
+        if (syncConflictRef.current) return;
+        const paragraphIndex = visibleParagraphIndex();
+        if (paragraphIndex !== null) currentAnchorRef.current = paragraphIndex;
+        saveProgress(
+          book.id,
+          {
+            ...progress,
+            paragraphIndex: paragraphIndex ?? progress.paragraphIndex,
+          },
+          uid,
+        );
         setSaved(true);
       }, 600);
     },
-    [book.id],
+    [book.id, hydrated, uid, visibleParagraphIndex],
+  );
+
+  useEffect(
+    () => () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    },
+    [],
   );
 
   const makeProgress = useCallback(
@@ -577,6 +682,8 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       const clamped = Math.max(0, Math.min(book.chapters.length - 1, i));
       setChapterIndex(clamped);
       chapterStartedAtRef.current = Date.now();
+      pendingAnchorRef.current = null;
+      currentAnchorRef.current = null;
       setScrollRatio(edgeRatio);
       setChapterCompletionOpen(false);
       setActiveHighlightId(null);
@@ -598,6 +705,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
             });
         });
       }
+      setRestoreEpoch((epoch) => epoch + 1);
       queueSave(makeProgress(clamped, edgeRatio));
       setTocOpen(false);
     },
@@ -608,7 +716,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
    * Chapter indices are persisted with progress, making reloads, back/next
    * navigation and a second device idempotent instead of XP-generating. */
   const completeCurrentChapter = useCallback(() => {
-    if (completingChapter) return;
+    if (completingChapter || syncConflictRef.current) return;
     const chapterAlreadyCompleted = completedChapterIndexes.includes(chapterIndex);
     const isLastChapter = chapterIndex === book.chapters.length - 1;
     const nextCompleted = chapterAlreadyCompleted
@@ -622,13 +730,14 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
 
     const progress: ReadingProgress = {
       ...makeProgress(chapterIndex, scrollRatio, { index: pageIndex, count: pageCount }),
+      paragraphIndex: currentAnchorRef.current ?? undefined,
       completedChapterIndexes: nextCompleted,
       bookCompletionRecorded: isLastChapter ? true : bookCompletionRecorded,
       updatedAt: Date.now(),
     };
     // Completion is an important boundary: write now rather than waiting
     // for the normal debounce. `saveProgress` remains local-first offline.
-    saveProgress(book.id, progress);
+    saveProgress(book.id, progress, uid);
 
     if (!chapterAlreadyCompleted) {
       const minutes = Math.max(1, Math.round((Date.now() - chapterStartedAtRef.current) / 60_000));
@@ -680,7 +789,14 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     if (settings.mode !== "paginated") return;
     const el = contentRef.current;
     if (!el) return;
-    const update = () => setPageWidthPx(el.clientWidth);
+    const update = () => {
+      const width = el.clientWidth;
+      if (width !== pageWidthRef.current && currentAnchorRef.current !== null) {
+        pendingAnchorRef.current = currentAnchorRef.current;
+      }
+      pageWidthRef.current = width;
+      setPageWidthPx(width);
+    };
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
@@ -709,11 +825,25 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       const count = Math.max(1, remainder > 0.12 ? wholePages + 1 : Math.max(wholePages, 1));
       setPageCount(count);
       const pendingRatio = pendingRatioRef.current;
+      const anchorIndex = pendingAnchorRef.current;
+      const anchor =
+        anchorIndex === null
+          ? null
+          : el.querySelector<HTMLElement>(`[data-paragraph-index="${anchorIndex}"]`);
+      const anchorOffset = anchor
+        ? anchor.getBoundingClientRect().left - el.getBoundingClientRect().left + el.scrollLeft
+        : null;
       const target =
-        pendingRatio !== null
-          ? Math.round(pendingRatio * (count - 1))
-          : Math.min(pageIndex, count - 1);
+        anchorOffset !== null
+          ? Math.max(
+              0,
+              Math.min(count - 1, Math.floor((anchorOffset + pageWidthPx * 0.05) / pageWidthPx)),
+            )
+          : pendingRatio !== null
+            ? Math.round(pendingRatio * (count - 1))
+            : Math.min(pageIndex, count - 1);
       pendingRatioRef.current = null;
+      pendingAnchorRef.current = null;
       el.scrollTo({ left: target * pageWidthPx, behavior: "instant" as ScrollBehavior });
       setPageIndex(target);
     });
@@ -725,6 +855,49 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     settings.mode,
     pageWidthPx,
     chapterIndex,
+    restoreEpoch,
+    settings.fontSize,
+    settings.lineHeight,
+    settings.margin,
+    settings.maxWidth,
+    settings.font,
+  ]);
+
+  // The same text anchor also survives switching to scrolling and changing
+  // type settings in that mode; pixel scrollTop is not a stable position.
+  useEffect(() => {
+    if (
+      !hydrated ||
+      settings.mode !== "scroll" ||
+      (pendingAnchorRef.current === null && pendingRatioRef.current === null)
+    )
+      return;
+    const raf = requestAnimationFrame(() => {
+      const el = contentRef.current;
+      const anchorIndex = pendingAnchorRef.current;
+      const anchor =
+        anchorIndex === null
+          ? null
+          : el?.querySelector<HTMLElement>(`[data-paragraph-index="${anchorIndex}"]`);
+      if (el && anchor) {
+        const top =
+          anchor.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop;
+        el.scrollTo({ top, behavior: "instant" as ScrollBehavior });
+      } else if (el && pendingRatioRef.current !== null) {
+        el.scrollTo({
+          top: pendingRatioRef.current * (el.scrollHeight - el.clientHeight),
+          behavior: "instant" as ScrollBehavior,
+        });
+      }
+      pendingAnchorRef.current = null;
+      pendingRatioRef.current = null;
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [
+    hydrated,
+    chapterIndex,
+    restoreEpoch,
+    settings.mode,
     settings.fontSize,
     settings.lineHeight,
     settings.margin,
@@ -910,11 +1083,12 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
         el.scrollTo({ left: nearest * pageWidthPx, behavior: "smooth" });
       }
       setPageIndex(nearest);
+      currentAnchorRef.current = visibleParagraphIndex();
       const r = pageCount > 1 ? nearest / (pageCount - 1) : 0;
       setScrollRatio(r);
       queueSave(makeProgress(chapterIndex, r, { index: nearest, count: pageCount }));
     }, 120);
-  }, [pageWidthPx, pageCount, chapterIndex, makeProgress, queueSave]);
+  }, [pageWidthPx, pageCount, chapterIndex, makeProgress, queueSave, visibleParagraphIndex]);
 
   // Keyboard page-turning on desktop — ignored while typing in a note or
   // any other input so arrow keys still work normally there.
@@ -1190,6 +1364,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       onPointerDown={revealControls}
       onPointerUp={captureTextSelection}
     >
+      <ProgressConflictDialog conflict={syncConflict} onChoose={chooseProgress} />
       {/* Top bar */}
       <header
         className={`absolute inset-x-0 top-0 z-30 flex items-center justify-between gap-3 border-b px-4 py-3 transition-all duration-300 md:px-6 ${
@@ -1714,7 +1889,10 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
         open={panelOpen}
         onClose={() => setPanelOpen(false)}
         settings={settings}
-        onChange={(patch) => setSettings((s) => ({ ...s, ...patch, updatedAt: Date.now() }))}
+        onChange={(patch) => {
+          pendingAnchorRef.current = currentAnchorRef.current ?? visibleParagraphIndex();
+          setSettings((s) => ({ ...s, ...patch, updatedAt: Date.now() }));
+        }}
         theme={theme}
       />
 

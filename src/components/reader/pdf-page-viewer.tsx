@@ -26,17 +26,24 @@ import {
 } from "@/lib/annotations";
 import { openLumiPanel } from "@/lib/lumi-panel-store";
 import { PdfDisplaySettingsPanel } from "@/components/reader/pdf-display-settings";
+import { ProgressConflictDialog } from "@/components/reader/progress-conflict-dialog";
 import {
   loadPdfDisplaySettings,
   savePdfDisplaySettings,
   type PdfDisplaySettings,
 } from "@/lib/pdf-display-settings";
 import {
-  loadProgressRemote,
+  PROGRESS_CONFLICT_EVENT,
+  acceptLocalProgress,
+  acceptRemoteProgress,
+  loadProgressForReader,
+  loadProgressLocal,
   loadSettings,
   saveProgress,
   saveSettings,
   saveSettingsRemote,
+  type ProgressConflict,
+  type ProgressConflictEvent,
 } from "@/lib/reader-store";
 
 const PDF_PAGE_TURN_DURATION_MS = 680;
@@ -77,6 +84,8 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
   const pageTurnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isPageTurningRef = useRef(false);
   const [page, setPage] = useState(1);
+  const [progressLoaded, setProgressLoaded] = useState(false);
+  const [syncConflict, setSyncConflict] = useState<ProgressConflict | null>(null);
   const [pageCount, setPageCount] = useState(Math.max(1, book.pageCount));
   const [pdfReady, setPdfReady] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -233,11 +242,51 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
       { title: book.title, author: book.author, cover: book.cover ?? null },
       book.id,
     );
-    void loadProgressRemote(book.id).then((progress) => {
+    let cancelled = false;
+    void loadProgressForReader(book.id, uid).then(({ progress, conflict }) => {
+      if (cancelled) return;
       if (progress?.pageIndex !== undefined) setPage(Math.max(1, progress.pageIndex + 1));
+      setSyncConflict(conflict);
+      setProgressLoaded(true);
     });
-    return () => URL.revokeObjectURL(objectUrl);
+    return () => {
+      cancelled = true;
+      URL.revokeObjectURL(objectUrl);
+    };
   }, [book, uid]);
+
+  useEffect(() => {
+    const onConflict = (event: Event) => {
+      const detail = (event as CustomEvent<ProgressConflictEvent>).detail;
+      if (detail.bookId === book.id) setSyncConflict(detail);
+    };
+    window.addEventListener(PROGRESS_CONFLICT_EVENT, onConflict);
+    return () => window.removeEventListener(PROGRESS_CONFLICT_EVENT, onConflict);
+  }, [book.id]);
+
+  const chooseProgress = useCallback(
+    (source: "local" | "remote") => {
+      if (!syncConflict) return;
+      let selected =
+        source === "remote"
+          ? syncConflict.remote
+          : (loadProgressLocal(book.id, uid) ?? syncConflict.local);
+      if (source === "remote") {
+        selected = acceptRemoteProgress(
+          book.id,
+          uid,
+          selected,
+          syncConflict.local,
+          syncConflict.legacy,
+        );
+      } else {
+        selected = acceptLocalProgress(book.id, uid, selected, syncConflict.remote);
+      }
+      setPage(Math.max(1, (selected.pageIndex ?? selected.chapterIndex) + 1));
+      setSyncConflict(null);
+    },
+    [book.id, syncConflict, uid],
+  );
 
   useEffect(() => subscribeAnnotations(uid, book.id, setAnnotations), [book.id, uid]);
 
@@ -339,20 +388,28 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
       console.error("[pdf-reader] page render failed", cause);
       if (!cancelled) setError("Não foi possível mostrar esta página.");
     });
-    saveProgress(book.id, {
-      chapterIndex: page - 1,
-      chapterCount: pageCount,
-      pageIndex: page - 1,
-      pageCount,
-      scrollRatio: 0,
-      overallRatio: pageCount > 1 ? (page - 1) / (pageCount - 1) : 0,
-      updatedAt: Date.now(),
-    });
     return () => {
       cancelled = true;
       renderCancelRef.current?.();
     };
   }, [book.id, displaySettings.pagePadding, displaySettings.zoom, page, pageCount, pdfReady, size]);
+
+  useEffect(() => {
+    if (!progressLoaded || syncConflict) return;
+    saveProgress(
+      book.id,
+      {
+        chapterIndex: page - 1,
+        chapterCount: pageCount,
+        pageIndex: page - 1,
+        pageCount,
+        scrollRatio: 0,
+        overallRatio: pageCount > 1 ? (page - 1) / (pageCount - 1) : 0,
+        updatedAt: Date.now(),
+      },
+      uid,
+    );
+  }, [book.id, page, pageCount, progressLoaded, syncConflict, uid]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -367,6 +424,7 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
 
   return (
     <div className="fixed inset-0 z-30 flex min-h-0 flex-col overflow-hidden bg-[#edf5ff] text-slate-950">
+      <ProgressConflictDialog conflict={syncConflict} onChoose={chooseProgress} />
       <header className="z-20 flex shrink-0 items-center justify-between gap-2 border-b border-blue-100 bg-white/95 px-2 py-2 shadow-sm backdrop-blur sm:px-5">
         <div className="flex min-w-0 items-center gap-1 sm:gap-2">
           <Link

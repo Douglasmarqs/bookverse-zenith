@@ -4,6 +4,7 @@
  * account-only Firebase Storage area used by the EPUB importer.
  */
 import { retryTransient, withDeadline } from "./async-utils";
+import { hasPdfHeader } from "./file-validation";
 import type { Book } from "./sample-book";
 
 const DB_NAME = "bookverse-pdf";
@@ -229,9 +230,17 @@ export async function createPdfBook(file: File): Promise<PdfBook> {
   if (file.size > 60 * 1024 * 1024) {
     throw new Error("O PDF precisa ter no máximo 60 MB.");
   }
+  if (!hasPdfHeader(new Uint8Array(await file.slice(0, 1024).arrayBuffer()))) {
+    throw new Error("Este arquivo não contém um PDF válido.");
+  }
   const id = newPdfId();
   const title = file.name.replace(/\.pdf$/i, "").trim() || "Documento PDF";
   const extracted = await extractPdfText(file, id, title);
+  if (extracted.pageCount < 1) {
+    throw new Error(
+      "Não foi possível ler as páginas deste PDF. Verifique se ele está íntegro e sem senha.",
+    );
+  }
   return {
     id,
     title,
