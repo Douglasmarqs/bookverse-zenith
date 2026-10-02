@@ -1,5 +1,6 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import * as ReaderDialog from "@radix-ui/react-dialog";
 import {
   ArrowLeft,
   ChevronLeft,
@@ -18,7 +19,8 @@ import {
   Languages,
 } from "lucide-react";
 
-import { getSampleBook, type Book } from "@/lib/sample-book";
+import type { Book, InternalBookLink } from "@/lib/reading-book";
+import { legacyDemoTitle } from "@/lib/legacy-demo";
 import { getPublicDomainBook, parseGutenbergReaderId } from "@/lib/public-domain";
 import {
   downloadEpubBookFromCloud,
@@ -36,7 +38,11 @@ import {
   type PdfBook,
 } from "@/lib/pdf-store";
 import {
-  loadProgressRemote,
+  PROGRESS_CONFLICT_EVENT,
+  acceptLocalProgress,
+  acceptRemoteProgress,
+  loadProgressForReader,
+  loadProgressLocal,
   loadSettings,
   loadSettingsRemote,
   saveProgress,
@@ -45,6 +51,8 @@ import {
   DEFAULT_SETTINGS,
   type ReaderSettings,
   type ReadingProgress,
+  type ProgressConflict,
+  type ProgressConflictEvent,
 } from "@/lib/reader-store";
 import {
   subscribeAnnotations,
@@ -67,6 +75,7 @@ import { toast } from "sonner";
 import { describeFirestoreError } from "@/lib/async-utils";
 import { ReaderPageSkeleton } from "@/components/reader-page-skeleton";
 import { PdfPageViewer } from "@/components/reader/pdf-page-viewer";
+import { ProgressConflictDialog } from "@/components/reader/progress-conflict-dialog";
 
 export const Route = createFileRoute("/reader/$bookId")({
   head: () => ({
@@ -82,12 +91,12 @@ export const Route = createFileRoute("/reader/$bookId")({
   loader: ({
     params,
   }):
-    | { source: "sample"; book: Book }
+    | { source: "legacy-demo"; title: string }
     | { source: "gutenberg"; gutenbergId: number }
     | { source: "epub"; localId: string }
     | { source: "pdf"; localId: string } => {
-    const sample = getSampleBook(params.bookId);
-    if (sample) return { source: "sample", book: sample };
+    const legacyTitle = legacyDemoTitle(params.bookId);
+    if (legacyTitle) return { source: "legacy-demo", title: legacyTitle };
     const gutenbergId = parseGutenbergReaderId(params.bookId);
     if (gutenbergId !== null) return { source: "gutenberg", gutenbergId };
     if (isEpubReaderId(params.bookId)) return { source: "epub", localId: params.bookId };
@@ -128,14 +137,51 @@ function GuardedReaderPage() {
     );
   }
 
-  if (loaderData.source === "sample") {
-    return <ReaderPage uid={user.uid} book={loaderData.book} />;
+  if (loaderData.source === "legacy-demo") {
+    return (
+      <section className="mx-auto max-w-lg px-6 py-20 text-center">
+        <p className="text-sm text-muted-foreground">Exemplo de uma versão anterior</p>
+        <h1 className="mt-3 font-display text-3xl">{loaderData.title}</h1>
+        <p className="mt-5 leading-relaxed text-muted-foreground">
+          Este exemplo usava texto de demonstração, que não correspondia ao conteúdo da obra. Ele
+          foi retirado da leitura. Seus registros na biblioteca, anotações e progresso continuam
+          preservados.
+        </p>
+        <p className="mt-3 text-sm text-muted-foreground">
+          Você pode importar seu arquivo EPUB ou PDF pela biblioteca, ou descobrir títulos
+          disponíveis no catálogo.
+        </p>
+        <div className="mt-7 flex flex-wrap justify-center gap-3">
+          <Link
+            to="/biblioteca"
+            className="rounded-full bg-primary px-5 py-3 text-primary-foreground"
+          >
+            Minha biblioteca
+          </Link>
+          <Link to="/catalogo" className="rounded-full border px-5 py-3">
+            Explorar catálogo
+          </Link>
+        </div>
+      </section>
+    );
   }
   if (loaderData.source === "epub") {
-    return <EpubBookLoader uid={user.uid} localId={loaderData.localId} />;
+    return (
+      <EpubBookLoader
+        key={`${user.uid}:${loaderData.localId}`}
+        uid={user.uid}
+        localId={loaderData.localId}
+      />
+    );
   }
   if (loaderData.source === "pdf") {
-    return <PdfBookLoader uid={user.uid} localId={loaderData.localId} />;
+    return (
+      <PdfBookLoader
+        key={`${user.uid}:${loaderData.localId}`}
+        uid={user.uid}
+        localId={loaderData.localId}
+      />
+    );
   }
   return <GutenbergBookLoader uid={user.uid} gutenbergId={loaderData.gutenbergId} />;
 }
@@ -152,7 +198,7 @@ function EpubBookLoader({ uid, localId }: { uid: string; localId: string }) {
     setStage("local");
 
     async function load() {
-      const local = await getEpubBook(localId).catch((err) => {
+      const local = await getEpubBook(uid, localId).catch((err) => {
         console.warn("[reader] failed to read local epub store", err);
         return null;
       });
@@ -168,15 +214,19 @@ function EpubBookLoader({ uid, localId }: { uid: string; localId: string }) {
       if (cancelled) return;
       if (cloudBook) {
         setBook(cloudBook);
-        void saveEpubBook(cloudBook).catch(() => {});
+        void saveEpubBook(uid, cloudBook).catch(() => {});
         return;
       }
       setError(
-        "Este EPUB não foi encontrado neste navegador nem na nuvem. Importe-o novamente em Minha biblioteca.",
+        "Não foi possível acessar este EPUB nesta conta. Conecte-se à internet para recuperar sua cópia ou validar uma importação antiga. Se necessário, importe o arquivo pela biblioteca.",
       );
     }
 
-    void load();
+    void load().catch((err) => {
+      if (cancelled) return;
+      console.warn("[reader] EPUB load failed", err);
+      setError(describeFirestoreError(err, "Não foi possível abrir este EPUB agora."));
+    });
     return () => {
       cancelled = true;
     };
@@ -220,7 +270,7 @@ function PdfBookLoader({ uid, localId }: { uid: string; localId: string }) {
     setStage("local");
 
     async function load() {
-      const local = await getPdfBook(localId).catch((err) => {
+      const local = await getPdfBook(uid, localId).catch((err) => {
         console.warn("[reader] failed to read local pdf store", err);
         return null;
       });
@@ -230,7 +280,7 @@ function PdfBookLoader({ uid, localId }: { uid: string; localId: string }) {
         if (cancelled) return;
         setBook(upgraded);
         if (upgraded !== local) {
-          void savePdfBook(upgraded).catch(() => {});
+          void savePdfBook(uid, upgraded).catch(() => {});
           void uploadPdfBookToCloud(uid, upgraded).catch((error) =>
             console.warn("[pdf] background text-layer sync failed", error),
           );
@@ -244,7 +294,7 @@ function PdfBookLoader({ uid, localId }: { uid: string; localId: string }) {
         const upgraded = await ensurePdfBookText(cloudBook);
         if (cancelled) return;
         setBook(upgraded);
-        void savePdfBook(upgraded).catch(() => {});
+        void savePdfBook(uid, upgraded).catch(() => {});
         if (upgraded !== cloudBook) {
           void uploadPdfBookToCloud(uid, upgraded).catch((error) =>
             console.warn("[pdf] background text-layer sync failed", error),
@@ -253,11 +303,15 @@ function PdfBookLoader({ uid, localId }: { uid: string; localId: string }) {
         return;
       }
       setError(
-        "Este PDF não foi encontrado neste navegador nem na sua cópia privada. Importe-o novamente em Minha biblioteca.",
+        "Não foi possível acessar este PDF nesta conta. Conecte-se à internet para recuperar sua cópia ou validar uma importação antiga. Se necessário, importe o arquivo pela biblioteca.",
       );
     }
 
-    void load();
+    void load().catch((err) => {
+      if (cancelled) return;
+      console.warn("[reader] PDF load failed", err);
+      setError(describeFirestoreError(err, "Não foi possível abrir este PDF agora."));
+    });
     return () => {
       cancelled = true;
     };
@@ -437,12 +491,15 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   const [annotations, setAnnotations] = useState<BookAnnotations>({
     highlights: [],
     bookmarks: [],
+    pdfRegions: [],
   });
   const [activeHighlightId, setActiveHighlightId] = useState<string | null>(null);
   const [editingNoteFor, setEditingNoteFor] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
   const [saved, setSaved] = useState(true);
   const [hydrated, setHydrated] = useState(false);
+  const [syncConflict, setSyncConflict] = useState<ProgressConflict | null>(null);
+  const syncConflictRef = useRef<ProgressConflict | null>(null);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [selectedPassage, setSelectedPassage] = useState<SelectedPassage | null>(null);
   const [completedChapterIndexes, setCompletedChapterIndexes] = useState<number[]>([]);
@@ -457,10 +514,14 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   // moves horizontally by exactly one measured page width at a time.
   const [pageIndex, setPageIndex] = useState(0);
   const [pageCount, setPageCount] = useState(1);
+  const [restoreEpoch, setRestoreEpoch] = useState(0);
   const [pageWidthPx, setPageWidthPx] = useState(0);
+  const pageWidthRef = useRef(0);
   const [showPageGestureHint, setShowPageGestureHint] = useState(false);
   const [pageTurn, setPageTurn] = useState<PageTurn | null>(null);
   const pendingRatioRef = useRef<number | null>(null);
+  const pendingAnchorRef = useRef<number | null>(null);
+  const currentAnchorRef = useRef<number | null>(null);
   const isProgrammaticScroll = useRef(false);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const suppressPageNavigationUntilRef = useRef(0);
@@ -475,7 +536,9 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   const revealControls = useCallback(() => {
     setControlsVisible(true);
     if (controlsTimer.current) clearTimeout(controlsTimer.current);
-    controlsTimer.current = setTimeout(() => setControlsVisible(false), 3600);
+    controlsTimer.current = setTimeout(() => {
+      if (!document.activeElement?.closest("[data-reader-controls]")) setControlsVisible(false);
+    }, 3600);
   }, []);
 
   useEffect(() => {
@@ -493,34 +556,99 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
 
   useEffect(() => subscribeAnnotations(uid, book.id, setAnnotations), [uid, book.id]);
 
+  const visibleParagraphIndex = useCallback((): number | null => {
+    const viewport = contentRef.current;
+    if (!viewport) return null;
+    const bounds = viewport.getBoundingClientRect();
+    const paragraphs = viewport.querySelectorAll<HTMLElement>("[data-paragraph-index]");
+    for (const paragraph of paragraphs) {
+      const visible = Array.from(paragraph.getClientRects()).some((rect) =>
+        settings.mode === "paginated"
+          ? rect.right > bounds.left + 8 &&
+            rect.left < bounds.right - 8 &&
+            rect.bottom > bounds.top &&
+            rect.top < bounds.bottom
+          : rect.bottom > bounds.top + 8 && rect.top < bounds.bottom,
+      );
+      if (visible) return Number(paragraph.dataset.paragraphIndex);
+    }
+    return null;
+  }, [settings.mode]);
+
+  const applyProgress = useCallback(
+    (p: ReadingProgress) => {
+      setChapterIndex(Math.max(0, Math.min(p.chapterIndex, book.chapters.length - 1)));
+      setScrollRatio(p.scrollRatio);
+      setCompletedChapterIndexes(
+        [...new Set((p.completedChapterIndexes ?? []).filter((index) => index >= 0))].sort(
+          (a, b) => a - b,
+        ),
+      );
+      setBookCompletionRecorded(Boolean(p.bookCompletionRecorded));
+      pendingRatioRef.current = p.scrollRatio;
+      pendingAnchorRef.current = p.paragraphIndex ?? null;
+      currentAnchorRef.current = p.paragraphIndex ?? null;
+      setRestoreEpoch((epoch) => epoch + 1);
+      // The layout effect below restores the anchor or ratio after the chapter
+      // DOM has updated, including when the chosen position changes chapters.
+    },
+    [book.chapters.length],
+  );
+
   // Hydrate settings + progress after mount (avoid SSR mismatch).
   useEffect(() => {
+    let cancelled = false;
     const s = loadSettings();
     setSettings(s);
     void loadSettingsRemote(uid, s).then((remote) => setSettings(remote));
-    void loadProgressRemote(book.id).then((p) => {
-      if (p) {
-        setChapterIndex(Math.min(p.chapterIndex, book.chapters.length - 1));
-        setCompletedChapterIndexes(
-          [...new Set((p.completedChapterIndexes ?? []).filter((index) => index >= 0))].sort(
-            (a, b) => a - b,
-          ),
-        );
-        setBookCompletionRecorded(Boolean(p.bookCompletionRecorded));
-        pendingRatioRef.current = p.scrollRatio;
-        if (s.mode === "scroll") {
-          requestAnimationFrame(() => {
-            const el = contentRef.current;
-            if (el) el.scrollTop = p.scrollRatio * (el.scrollHeight - el.clientHeight);
-            pendingRatioRef.current = null;
-          });
-        }
-        // Paginated mode: left for the page-measurement effect below to
-        // consume once it knows how many pages this chapter actually has.
-      }
+    void loadProgressForReader(book.id, uid).then(({ progress, conflict }) => {
+      if (cancelled) return;
+      syncConflictRef.current = conflict;
+      setSyncConflict(conflict);
+      if (progress) applyProgress(progress);
       setHydrated(true);
     });
-  }, [book.id, book.chapters.length, uid]);
+    return () => {
+      cancelled = true;
+    };
+  }, [applyProgress, book.id, uid]);
+
+  useEffect(() => {
+    const onConflict = (event: Event) => {
+      const detail = (event as CustomEvent<ProgressConflictEvent>).detail;
+      if (detail.bookId !== book.id) return;
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      syncConflictRef.current = detail;
+      setSyncConflict(detail);
+    };
+    window.addEventListener(PROGRESS_CONFLICT_EVENT, onConflict);
+    return () => window.removeEventListener(PROGRESS_CONFLICT_EVENT, onConflict);
+  }, [book.id]);
+
+  const chooseProgress = useCallback(
+    (source: "local" | "remote") => {
+      if (!syncConflict) return;
+      let selected =
+        source === "remote"
+          ? syncConflict.remote
+          : (loadProgressLocal(book.id, uid) ?? syncConflict.local);
+      if (source === "remote") {
+        selected = acceptRemoteProgress(
+          book.id,
+          uid,
+          selected,
+          syncConflict.local,
+          syncConflict.legacy,
+        );
+      } else {
+        selected = acceptLocalProgress(book.id, uid, selected, syncConflict.remote);
+      }
+      applyProgress(selected);
+      syncConflictRef.current = null;
+      setSyncConflict(null);
+    },
+    [applyProgress, book.id, syncConflict, uid],
+  );
 
   // Persist settings.
   useEffect(() => {
@@ -532,14 +660,32 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   // Debounced progress save.
   const queueSave = useCallback(
     (progress: ReadingProgress) => {
+      if (!hydrated || syncConflictRef.current) return;
       setSaved(false);
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(() => {
-        saveProgress(book.id, progress);
+        if (syncConflictRef.current) return;
+        const paragraphIndex = visibleParagraphIndex();
+        if (paragraphIndex !== null) currentAnchorRef.current = paragraphIndex;
+        saveProgress(
+          book.id,
+          {
+            ...progress,
+            paragraphIndex: paragraphIndex ?? progress.paragraphIndex,
+          },
+          uid,
+        );
         setSaved(true);
       }, 600);
     },
-    [book.id],
+    [book.id, hydrated, uid, visibleParagraphIndex],
+  );
+
+  useEffect(
+    () => () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    },
+    [],
   );
 
   const makeProgress = useCallback(
@@ -573,10 +719,13 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   }, [chapterIndex, makeProgress, queueSave]);
 
   const goto = useCallback(
-    (i: number, edgeRatio: 0 | 1 = 0) => {
+    (i: number, edgeRatio: 0 | 1 = 0, paragraphAnchor?: number) => {
+      if (snapTimer.current) clearTimeout(snapTimer.current);
       const clamped = Math.max(0, Math.min(book.chapters.length - 1, i));
       setChapterIndex(clamped);
       chapterStartedAtRef.current = Date.now();
+      pendingAnchorRef.current = paragraphAnchor ?? null;
+      currentAnchorRef.current = paragraphAnchor ?? null;
       setScrollRatio(edgeRatio);
       setChapterCompletionOpen(false);
       setActiveHighlightId(null);
@@ -598,7 +747,11 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
             });
         });
       }
-      queueSave(makeProgress(clamped, edgeRatio));
+      setRestoreEpoch((epoch) => epoch + 1);
+      queueSave({
+        ...makeProgress(clamped, edgeRatio),
+        ...(paragraphAnchor !== undefined ? { paragraphIndex: paragraphAnchor } : {}),
+      });
       setTocOpen(false);
     },
     [book.chapters.length, makeProgress, queueSave, settings.mode],
@@ -608,7 +761,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
    * Chapter indices are persisted with progress, making reloads, back/next
    * navigation and a second device idempotent instead of XP-generating. */
   const completeCurrentChapter = useCallback(() => {
-    if (completingChapter) return;
+    if (completingChapter || syncConflictRef.current) return;
     const chapterAlreadyCompleted = completedChapterIndexes.includes(chapterIndex);
     const isLastChapter = chapterIndex === book.chapters.length - 1;
     const nextCompleted = chapterAlreadyCompleted
@@ -622,13 +775,14 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
 
     const progress: ReadingProgress = {
       ...makeProgress(chapterIndex, scrollRatio, { index: pageIndex, count: pageCount }),
+      paragraphIndex: currentAnchorRef.current ?? undefined,
       completedChapterIndexes: nextCompleted,
       bookCompletionRecorded: isLastChapter ? true : bookCompletionRecorded,
       updatedAt: Date.now(),
     };
     // Completion is an important boundary: write now rather than waiting
     // for the normal debounce. `saveProgress` remains local-first offline.
-    saveProgress(book.id, progress);
+    saveProgress(book.id, progress, uid);
 
     if (!chapterAlreadyCompleted) {
       const minutes = Math.max(1, Math.round((Date.now() - chapterStartedAtRef.current) / 60_000));
@@ -680,7 +834,14 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     if (settings.mode !== "paginated") return;
     const el = contentRef.current;
     if (!el) return;
-    const update = () => setPageWidthPx(el.clientWidth);
+    const update = () => {
+      const width = el.clientWidth;
+      if (width !== pageWidthRef.current && currentAnchorRef.current !== null) {
+        pendingAnchorRef.current = currentAnchorRef.current;
+      }
+      pageWidthRef.current = width;
+      setPageWidthPx(width);
+    };
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
@@ -709,11 +870,25 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       const count = Math.max(1, remainder > 0.12 ? wholePages + 1 : Math.max(wholePages, 1));
       setPageCount(count);
       const pendingRatio = pendingRatioRef.current;
+      const anchorIndex = pendingAnchorRef.current;
+      const anchor =
+        anchorIndex === null
+          ? null
+          : el.querySelector<HTMLElement>(`[data-paragraph-index="${anchorIndex}"]`);
+      const anchorOffset = anchor
+        ? anchor.getBoundingClientRect().left - el.getBoundingClientRect().left + el.scrollLeft
+        : null;
       const target =
-        pendingRatio !== null
-          ? Math.round(pendingRatio * (count - 1))
-          : Math.min(pageIndex, count - 1);
+        anchorOffset !== null
+          ? Math.max(
+              0,
+              Math.min(count - 1, Math.floor((anchorOffset + pageWidthPx * 0.05) / pageWidthPx)),
+            )
+          : pendingRatio !== null
+            ? Math.round(pendingRatio * (count - 1))
+            : Math.min(pageIndex, count - 1);
       pendingRatioRef.current = null;
+      pendingAnchorRef.current = null;
       el.scrollTo({ left: target * pageWidthPx, behavior: "instant" as ScrollBehavior });
       setPageIndex(target);
     });
@@ -725,6 +900,49 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     settings.mode,
     pageWidthPx,
     chapterIndex,
+    restoreEpoch,
+    settings.fontSize,
+    settings.lineHeight,
+    settings.margin,
+    settings.maxWidth,
+    settings.font,
+  ]);
+
+  // The same text anchor also survives switching to scrolling and changing
+  // type settings in that mode; pixel scrollTop is not a stable position.
+  useEffect(() => {
+    if (
+      !hydrated ||
+      settings.mode !== "scroll" ||
+      (pendingAnchorRef.current === null && pendingRatioRef.current === null)
+    )
+      return;
+    const raf = requestAnimationFrame(() => {
+      const el = contentRef.current;
+      const anchorIndex = pendingAnchorRef.current;
+      const anchor =
+        anchorIndex === null
+          ? null
+          : el?.querySelector<HTMLElement>(`[data-paragraph-index="${anchorIndex}"]`);
+      if (el && anchor) {
+        const top =
+          anchor.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop;
+        el.scrollTo({ top, behavior: "instant" as ScrollBehavior });
+      } else if (el && pendingRatioRef.current !== null) {
+        el.scrollTo({
+          top: pendingRatioRef.current * (el.scrollHeight - el.clientHeight),
+          behavior: "instant" as ScrollBehavior,
+        });
+      }
+      pendingAnchorRef.current = null;
+      pendingRatioRef.current = null;
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [
+    hydrated,
+    chapterIndex,
+    restoreEpoch,
+    settings.mode,
     settings.fontSize,
     settings.lineHeight,
     settings.margin,
@@ -910,17 +1128,33 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
         el.scrollTo({ left: nearest * pageWidthPx, behavior: "smooth" });
       }
       setPageIndex(nearest);
+      currentAnchorRef.current = visibleParagraphIndex();
       const r = pageCount > 1 ? nearest / (pageCount - 1) : 0;
       setScrollRatio(r);
       queueSave(makeProgress(chapterIndex, r, { index: nearest, count: pageCount }));
     }, 120);
-  }, [pageWidthPx, pageCount, chapterIndex, makeProgress, queueSave]);
+  }, [pageWidthPx, pageCount, chapterIndex, makeProgress, queueSave, visibleParagraphIndex]);
+
+  // A focus-induced scroll can schedule a snap with the previous chapter's
+  // page count. Cancel it when the chapter or layout changes, before it can
+  // undo a link/TOC jump with stale bounds.
+  useEffect(
+    () => () => {
+      if (snapTimer.current) clearTimeout(snapTimer.current);
+    },
+    [onPaginatedScroll],
+  );
 
   // Keyboard page-turning on desktop — ignored while typing in a note or
   // any other input so arrow keys still work normally there.
   useEffect(() => {
-    if (settings.mode !== "paginated") return;
+    if (settings.mode !== "paginated" || tocOpen) return;
     function onKeyDown(e: KeyboardEvent) {
+      if (
+        e.defaultPrevented ||
+        document.querySelector('[role="dialog"], [role="alertdialog"], dialog[open]')
+      )
+        return;
       const tag = (document.activeElement?.tagName ?? "").toLowerCase();
       if (tag === "input" || tag === "textarea") return;
       if (e.key === "ArrowRight") goToPage(pageIndex + 1);
@@ -928,7 +1162,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [settings.mode, pageIndex, goToPage]);
+  }, [settings.mode, pageIndex, goToPage, tocOpen]);
 
   const theme = THEME_STYLES[settings.theme];
   const chapter = book.chapters[chapterIndex];
@@ -1190,8 +1424,11 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       onPointerDown={revealControls}
       onPointerUp={captureTextSelection}
     >
+      <ProgressConflictDialog conflict={syncConflict} onChoose={chooseProgress} />
       {/* Top bar */}
       <header
+        data-reader-controls="true"
+        onFocusCapture={revealControls}
         className={`absolute inset-x-0 top-0 z-30 flex items-center justify-between gap-3 border-b px-4 py-3 transition-all duration-300 md:px-6 ${
           controlsVisible
             ? "translate-y-0 opacity-100"
@@ -1349,12 +1586,15 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                 <div key={i} className="relative" style={{ breakInside: "avoid" }}>
                   <p
                     data-paragraph-index={i}
+                    dir={chapter.direction}
                     className="rounded-sm px-2 -mx-2 py-0.5 [hyphens:auto]"
                     style={{ marginBottom: 0, textAlign: settings.alignment }}
                   >
                     <HighlightedParagraph
                       text={p}
                       highlights={paragraphHighlights}
+                      links={chapter.links?.[i]}
+                      onLinkClick={(link) => goto(link.chapterIndex, 0, link.paragraphIndex)}
                       activeHighlightId={activeHighlightId}
                       onHighlightClick={(highlight) => {
                         window.getSelection()?.removeAllRanges();
@@ -1714,23 +1954,55 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
         open={panelOpen}
         onClose={() => setPanelOpen(false)}
         settings={settings}
-        onChange={(patch) => setSettings((s) => ({ ...s, ...patch, updatedAt: Date.now() }))}
+        onChange={(patch) => {
+          pendingAnchorRef.current = currentAnchorRef.current ?? visibleParagraphIndex();
+          setSettings((s) => ({ ...s, ...patch, updatedAt: Date.now() }));
+        }}
         theme={theme}
       />
 
       {/* Table of contents / highlights / bookmarks */}
-      {tocOpen && (
-        <>
-          <div
-            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
-            onClick={() => setTocOpen(false)}
-          />
-          <aside
-            className="fixed left-0 top-0 z-50 flex h-full w-full max-w-sm flex-col border-r shadow-2xl"
+      <ReaderDialog.Root open={tocOpen} onOpenChange={setTocOpen}>
+        <ReaderDialog.Portal>
+          <ReaderDialog.Overlay className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" />
+          <ReaderDialog.Content
+            aria-describedby={undefined}
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              revealControls();
+              document
+                .querySelector<HTMLButtonElement>('button[aria-label="Sumário"]')
+                ?.focus({ preventScroll: true });
+            }}
+            className="fixed left-0 top-0 z-50 flex h-dvh w-full max-w-sm flex-col border-r shadow-2xl"
             style={{ backgroundColor: theme.bg, color: theme.fg, borderColor: theme.rule }}
           >
             <div className="border-b px-5 py-4" style={{ borderColor: theme.rule }}>
-              <h3 className="font-display text-lg font-medium">{book.title}</h3>
+              <div className="flex items-start justify-between gap-3">
+                <ReaderDialog.Title className="font-display text-lg font-medium">
+                  {book.title}
+                </ReaderDialog.Title>
+                <ReaderDialog.Close
+                  aria-label="Fechar sumário"
+                  className="grid min-h-11 min-w-11 shrink-0 place-items-center rounded-full border"
+                  style={{ borderColor: theme.rule }}
+                >
+                  <XIcon className="h-5 w-5" />
+                </ReaderDialog.Close>
+              </div>
+              {book.importWarnings?.length ? (
+                <details
+                  className="mt-3 rounded-lg border p-3 text-xs"
+                  style={{ borderColor: theme.rule }}
+                >
+                  <summary className="cursor-pointer font-medium">Sobre esta importação</summary>
+                  <ul className="mt-2 list-disc space-y-2 pl-4">
+                    {book.importWarnings.map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
               <div
                 className="mt-3 grid grid-cols-3 gap-1 rounded-full p-1"
                 style={{ backgroundColor: theme.rule, fontFamily: "var(--font-sans)" }}
@@ -1744,6 +2016,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                 ).map((t) => (
                   <button
                     key={t.key}
+                    aria-pressed={tocTab === t.key}
                     onClick={() => setTocTab(t.key)}
                     className="rounded-full px-2 py-1.5 text-xs font-medium transition"
                     style={{
@@ -1759,12 +2032,23 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
 
             {tocTab === "toc" && (
               <ul className="flex-1 overflow-y-auto p-3">
-                {book.chapters.map((c: (typeof book.chapters)[number], i: number) => {
-                  const active = i === chapterIndex;
+                {(book.navigation?.length
+                  ? book.navigation
+                  : book.chapters.map((c, i) => ({
+                      label: c.title,
+                      chapterIndex: i,
+                      paragraphIndex: 0,
+                      depth: 0,
+                    }))
+                ).map((entry, i) => {
+                  const active = entry.chapterIndex === chapterIndex;
                   return (
-                    <li key={c.id}>
+                    <li
+                      key={`${entry.chapterIndex}-${entry.paragraphIndex}-${i}`}
+                      style={{ paddingInlineStart: Math.min(entry.depth, 4) * 12 }}
+                    >
                       <button
-                        onClick={() => goto(i)}
+                        onClick={() => goto(entry.chapterIndex, 0, entry.paragraphIndex)}
                         className="w-full rounded-xl px-4 py-3 text-left transition"
                         style={{
                           backgroundColor: active ? theme.accent + "22" : "transparent",
@@ -1774,7 +2058,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                         <span className="text-[10px] tabular-nums" style={{ color: theme.muted }}>
                           {String(i + 1).padStart(2, "0")}
                         </span>
-                        <span className="ml-3 font-display">{c.title}</span>
+                        <span className="ml-3 font-display">{entry.label}</span>
                       </button>
                     </li>
                   );
@@ -1869,9 +2153,9 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                     ))}
                 </ul>
               ))}
-          </aside>
-        </>
-      )}
+          </ReaderDialog.Content>
+        </ReaderDialog.Portal>
+      </ReaderDialog.Root>
     </div>
   );
 }
@@ -1879,14 +2163,45 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
 function HighlightedParagraph({
   text,
   highlights,
+  links = [],
+  onLinkClick,
   activeHighlightId,
   onHighlightClick,
 }: {
   text: string;
   highlights: Highlight[];
+  links?: InternalBookLink[];
+  onLinkClick: (link: InternalBookLink) => void;
   activeHighlightId: string | null;
   onHighlightClick: (highlight: Highlight) => void;
 }) {
+  function renderSlice(start: number, end: number): React.ReactNode {
+    const nodes: React.ReactNode[] = [];
+    let cursor = start;
+    for (const link of links) {
+      const a = Math.max(start, link.startOffset);
+      const b = Math.min(end, link.endOffset);
+      if (a < cursor || b <= a) continue;
+      if (a > cursor) nodes.push(text.slice(cursor, a));
+      nodes.push(
+        <button
+          key={`link-${a}`}
+          type="button"
+          data-reader-action="true"
+          className="inline cursor-pointer text-inherit underline decoration-current underline-offset-4 [font:inherit]"
+          onClick={(event) => {
+            event.stopPropagation();
+            if (window.getSelection()?.isCollapsed) onLinkClick(link);
+          }}
+        >
+          {text.slice(a, b)}
+        </button>,
+      );
+      cursor = b;
+    }
+    if (cursor < end) nodes.push(text.slice(cursor, end));
+    return nodes;
+  }
   const ranges = highlights
     .map((highlight) => ({
       highlight,
@@ -1904,7 +2219,7 @@ function HighlightedParagraph({
     // readable until the legacy mark is removed.
     if (range.start < cursor) continue;
     if (range.start > cursor) {
-      parts.push(text.slice(cursor, range.start));
+      parts.push(renderSlice(cursor, range.start));
     }
     const selected = range.highlight.id === activeHighlightId;
     parts.push(
@@ -1923,12 +2238,12 @@ function HighlightedParagraph({
           color: "inherit",
         }}
       >
-        {text.slice(range.start, range.end)}
+        {renderSlice(range.start, range.end)}
       </mark>,
     );
     cursor = range.end;
   }
-  if (cursor < text.length) parts.push(text.slice(cursor));
+  if (cursor < text.length) parts.push(renderSlice(cursor, text.length));
   return <>{parts}</>;
 }
 

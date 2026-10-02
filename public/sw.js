@@ -2,8 +2,8 @@
 // like Workbox). Two jobs:
 //   1. Makes the app installable ("Add to Home Screen" / desktop install)
 //      on browsers that require an active service worker for that.
-//   2. Runtime-caches same-origin requests so pages you've already opened
-//      still load if you lose connection, and shows the reading-reminder
+//   2. Caches static assets and public pages for basic offline access, and
+//      shows the reading-reminder
 //      notifications (see src/lib/reading-reminder.ts).
 //
 // It deliberately does NOT try to precache the app's hashed JS/CSS
@@ -12,8 +12,17 @@
 // plugins) is fragile. Offline support here is "best effort for pages
 // you've already visited," not full offline-first.
 
-const CACHE_NAME = "bookverse-v1";
+const CACHE_NAME = "bookverse-v2";
 const STATIC_ASSETS = ["/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
+const PUBLIC_PAGES = new Set([
+  "/",
+  "/descobrir",
+  "/catalogo",
+  "/sobre",
+  "/privacidade",
+  "/termos",
+  "/contato",
+]);
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -29,7 +38,9 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))))
+      .then((keys) =>
+        Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))),
+      )
       .then(() => self.clients.claim()),
   );
 });
@@ -45,21 +56,42 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   if (request.mode === "navigate") {
+    const isPublicPage = PUBLIC_PAGES.has(url.pathname);
     event.respondWith(
       fetch(request)
         .then((res) => {
-          const copy = res.clone();
-          caches
-            .open(CACHE_NAME)
-            .then((cache) => cache.put(request, copy))
-            .catch(() => {});
+          if (
+            isPublicPage &&
+            res.ok &&
+            !/private|no-store/i.test(res.headers.get("cache-control") || "")
+          ) {
+            const copy = res.clone();
+            caches
+              .open(CACHE_NAME)
+              .then((cache) => cache.put(request, copy))
+              .catch(() => {});
+          }
           return res;
         })
-        .catch(() => caches.match(request).then((cached) => cached || caches.match("/"))),
+        .catch(
+          async () =>
+            (isPublicPage ? await caches.match(request) : null) ||
+            (await caches.match("/")) ||
+            new Response(
+              "Sem conexão. Abra o BookVerse quando estiver online para preparar a leitura offline.",
+              {
+                status: 503,
+                headers: { "Content-Type": "text/plain; charset=utf-8" },
+              },
+            ),
+        ),
     );
     return;
   }
 
+  // Hashed build assets are immutable. Never cache same-origin loader/API
+  // responses, private book files, auth pages or development source modules.
+  if (!url.pathname.startsWith("/assets/")) return;
   event.respondWith(
     caches.match(request).then(
       (cached) =>

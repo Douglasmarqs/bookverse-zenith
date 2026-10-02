@@ -12,6 +12,7 @@ dist
 dist-ssr
 .output
 .vinxi
+.agent-browser/
 .tanstack/**
 .nitro
 *.local

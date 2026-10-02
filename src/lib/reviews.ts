@@ -24,7 +24,7 @@ import {
 } from "firebase/firestore";
 import { getFirebase } from "./firebase";
 import { withDeadline, withFallback } from "./async-utils";
-import { recordGamificationMilestone } from "./user-profile";
+import { recordGamificationMilestone, type UserProfile } from "./user-profile";
 
 export const REVIEW_MAX_LENGTH = 2000;
 export const REVIEW_MIN_LENGTH = 10;
@@ -81,7 +81,7 @@ export interface ReviewAuthor {
 /** Cria ou atualiza a resenha do usuário para o livro (uma por leitor). */
 export async function saveReview(
   user: ReviewAuthor,
-  profile: { avatarEmoji?: string | null } | null,
+  profile: UserProfile | null,
   bookId: string,
   input: { rating: number; text: string; spoiler: boolean },
 ): Promise<{ isNew: boolean }> {
@@ -103,8 +103,7 @@ export async function saveReview(
       {
         uid: user.uid,
         displayName: user.displayName || user.email?.split("@")[0] || "Leitor",
-        photoURL: user.photoURL ?? null,
-        avatarEmoji: profile?.avatarEmoji ?? null,
+        photoURL: profile?.customPhotoDataUrl ?? profile?.photoURL ?? user.photoURL ?? null,
         rating,
         text,
         spoiler: !!input.spoiler,

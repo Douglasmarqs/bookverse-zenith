@@ -22,6 +22,7 @@ import {
   updateProfile,
   type Auth,
   type User,
+  connectAuthEmulator,
 } from "firebase/auth";
 import {
   initializeFirestore,
@@ -29,20 +30,33 @@ import {
   persistentLocalCache,
   persistentMultipleTabManager,
   type Firestore,
+  connectFirestoreEmulator,
 } from "firebase/firestore";
-import { getStorage, type FirebaseStorage } from "firebase/storage";
+import { getStorage, connectStorageEmulator, type FirebaseStorage } from "firebase/storage";
+import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 
 declare const __FIREBASE_API_KEY__: string;
 
-const firebaseConfig = {
-  apiKey: typeof __FIREBASE_API_KEY__ !== "undefined" ? __FIREBASE_API_KEY__ : "",
-  authDomain: "bookverse-8147a.firebaseapp.com",
-  projectId: "bookverse-8147a",
-  storageBucket: "bookverse-8147a.firebasestorage.app",
-  messagingSenderId: "444153208139",
-  appId: "1:444153208139:web:a00f000f52504bdc3e5cce",
-  measurementId: "G-S5PBNDH0CC",
-};
+// This branch is removed from production builds. Local QA uses a demo project
+// without live Firebase resources or production credentials.
+const useEmulators = import.meta.env.DEV && import.meta.env.VITE_USE_FIREBASE_EMULATORS === "true";
+const firebaseConfig = useEmulators
+  ? {
+      apiKey: "demo-bookverse-local",
+      authDomain: "demo-bookverse.firebaseapp.com",
+      projectId: "demo-bookverse",
+      storageBucket: "demo-bookverse.appspot.com",
+      appId: "demo-bookverse-local",
+    }
+  : {
+      apiKey: typeof __FIREBASE_API_KEY__ !== "undefined" ? __FIREBASE_API_KEY__ : "",
+      authDomain: "bookverse-8147a.firebaseapp.com",
+      projectId: "bookverse-8147a",
+      storageBucket: "bookverse-8147a.firebasestorage.app",
+      messagingSenderId: "444153208139",
+      appId: "1:444153208139:web:a00f000f52504bdc3e5cce",
+      measurementId: "G-S5PBNDH0CC",
+    };
 
 let _app: FirebaseApp | null = null;
 let _auth: Auth | null = null;
@@ -110,6 +124,12 @@ export function getFirebase(): {
       _db = getFirestore(_app);
     }
     _storage = getStorage(_app);
+    if (useEmulators) {
+      connectAuthEmulator(_auth, "http://127.0.0.1:9099");
+      connectFirestoreEmulator(_db, "127.0.0.1", 8085);
+      connectStorageEmulator(_storage, "127.0.0.1", 9199);
+      connectFunctionsEmulator(getFunctions(_app), "127.0.0.1", 5001);
+    }
   }
   return { app: _app!, auth: _auth!, db: _db!, storage: _storage! };
 }

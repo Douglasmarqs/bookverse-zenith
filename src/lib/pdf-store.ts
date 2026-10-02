@@ -1,9 +1,16 @@
+import {
+  privateBookKey,
+  readPrivateBook,
+  writePrivateBook,
+  confirmPrivateBookOwner,
+} from "./private-book-cache";
 /**
  * Private PDF imports. PDFs keep their original binary intact (unlike EPUBs,
  * which are parsed into reflowable chapters) and are mirrored to the same
  * account-only Firebase Storage area used by the EPUB importer.
  */
 import { retryTransient, withDeadline } from "./async-utils";
+import { hasPdfHeader } from "./file-validation";
 import type { Book } from "./sample-book";
 
 const DB_NAME = "bookverse-pdf";
@@ -48,24 +55,6 @@ type PdfRenderPage = {
     viewport: { width: number; height: number };
   }) => { promise: Promise<void> };
 };
-
-function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    if (typeof indexedDB === "undefined") {
-      reject(new Error("IndexedDB não está disponível neste navegador."));
-      return;
-    }
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = () => {
-      if (!request.result.objectStoreNames.contains(STORE)) {
-        request.result.createObjectStore(STORE, { keyPath: "id" });
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () =>
-      reject(request.error ?? new Error("Falha ao abrir o armazenamento local."));
-  });
-}
 
 function safePdfName(name: string) {
   return name.replace(/[\\/:*?"<>|]/g, "-").slice(0, 160) || "livro.pdf";
@@ -229,9 +218,17 @@ export async function createPdfBook(file: File): Promise<PdfBook> {
   if (file.size > 60 * 1024 * 1024) {
     throw new Error("O PDF precisa ter no máximo 60 MB.");
   }
+  if (!hasPdfHeader(new Uint8Array(await file.slice(0, 1024).arrayBuffer()))) {
+    throw new Error("Este arquivo não contém um PDF válido.");
+  }
   const id = newPdfId();
   const title = file.name.replace(/\.pdf$/i, "").trim() || "Documento PDF";
   const extracted = await extractPdfText(file, id, title);
+  if (extracted.pageCount < 1) {
+    throw new Error(
+      "Não foi possível ler as páginas deste PDF. Verifique se ele está íntegro e sem senha.",
+    );
+  }
   return {
     id,
     title,
@@ -268,46 +265,25 @@ export async function ensurePdfBookText(book: PdfBook): Promise<PdfBook> {
   };
 }
 
-export async function savePdfBook(book: PdfBook): Promise<void> {
-  const db = await openDb();
-  await new Promise<void>((resolve, reject) => {
-    const transaction = db.transaction(STORE, "readwrite");
-    transaction.objectStore(STORE).put(book);
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () =>
-      reject(transaction.error ?? new Error("Falha ao salvar o PDF localmente."));
-  });
-  db.close();
-  memoryBooks.set(book.id, book);
+export async function savePdfBook(uid: string, book: PdfBook): Promise<void> {
+  await writePrivateBook(DB_NAME, uid, book.id, book);
+  memoryBooks.set(privateBookKey(uid, book.id), book);
 }
 
-export async function getPdfBook(id: string): Promise<PdfBook | null> {
-  const cached = memoryBooks.get(id);
+export async function getPdfBook(uid: string, id: string): Promise<PdfBook | null> {
+  const key = privateBookKey(uid, id);
+  const cached = memoryBooks.get(key);
   if (cached) return cached;
-  const db = await openDb();
-  const result = await new Promise<PdfBook | null>((resolve, reject) => {
-    const transaction = db.transaction(STORE, "readonly");
-    const request = transaction.objectStore(STORE).get(id);
-    request.onsuccess = () => resolve((request.result as PdfBook | undefined) ?? null);
-    request.onerror = () =>
-      reject(request.error ?? new Error("Falha ao ler o PDF deste aparelho."));
-  });
-  db.close();
-  if (result) memoryBooks.set(id, result);
-  return result;
+  const book = await readPrivateBook<PdfBook>(DB_NAME, uid, id, () =>
+    confirmPrivateBookOwner(uid, id, "pdfFiles"),
+  );
+  if (book) memoryBooks.set(key, book);
+  return book;
 }
 
-export async function deletePdfBook(id: string): Promise<void> {
-  const db = await openDb();
-  await new Promise<void>((resolve, reject) => {
-    const transaction = db.transaction(STORE, "readwrite");
-    transaction.objectStore(STORE).delete(id);
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () =>
-      reject(transaction.error ?? new Error("Falha ao remover o PDF deste aparelho."));
-  });
-  db.close();
-  memoryBooks.delete(id);
+export async function deletePdfBook(uid: string, id: string): Promise<void> {
+  await writePrivateBook(DB_NAME, uid, id, null);
+  memoryBooks.delete(privateBookKey(uid, id));
 }
 
 export async function uploadPdfBookToCloud(uid: string, book: PdfBook): Promise<void> {
@@ -370,7 +346,7 @@ export async function uploadPdfBookToCloud(uid: string, book: PdfBook): Promise<
 }
 
 export async function downloadPdfBookFromCloud(uid: string, id: string): Promise<PdfBook | null> {
-  const cached = memoryBooks.get(id);
+  const cached = memoryBooks.get(privateBookKey(uid, id));
   if (cached) return cached;
   const { getFirebase } = await import("./firebase");
   const firebase = getFirebase();
@@ -422,7 +398,7 @@ export async function downloadPdfBookFromCloud(uid: string, id: string): Promise
       coverExtractionVersion: metadata.coverExtractionVersion ?? 0,
       source: new Blob([source], { type: "application/pdf" }),
     };
-    memoryBooks.set(id, book);
+    memoryBooks.set(privateBookKey(uid, id), book);
     return book;
   } catch (error) {
     console.warn("[pdf] cloud download failed", error);

@@ -109,7 +109,7 @@ function Home() {
               ) : (
                 <Link
                   to={signedIn ? "/descobrir" : "/auth"}
-                  search={signedIn ? undefined : { redirect: "/" }}
+                  search={signedIn ? { q: undefined, categoria: undefined } : { redirect: "/" }}
                   className="inline-flex items-center gap-2 rounded-xl bg-gold px-5 py-3 text-sm font-semibold text-primary-foreground shadow-lg shadow-gold/15"
                 >
                   {signedIn ? "Descobrir livros" : "Entrar na minha conta"}{" "}
@@ -147,7 +147,9 @@ function Home() {
             </p>
             <Link
               to={signedIn ? "/descobrir" : "/auth"}
-              search={signedIn ? undefined : { redirect: "/descobrir" }}
+              search={
+                signedIn ? { q: undefined, categoria: undefined } : { redirect: "/descobrir" }
+              }
               className="mt-5 inline-flex items-center gap-2 rounded-full border border-gold/45 px-4 py-2 text-sm font-medium text-gold transition hover:bg-gold/10"
             >
               {signedIn ? "Abrir Descobrir" : "Entrar"} <ArrowRight className="h-3.5 w-3.5" />

@@ -11,12 +11,36 @@
  *   each spine item          → an XHTML file with the actual chapter content
  */
 import JSZip from "jszip";
-import type { Book, Chapter, ChapterBlock } from "./sample-book";
+import type { Book, Chapter, ChapterBlock, BookNavigationEntry } from "./reading-book";
+import { resolveEpubHref, resolveBookLocation } from "./epub-navigation";
 import { newEpubId } from "./epub-store";
+import { isEmbeddedRasterImageReference } from "./file-validation";
 
 const MAX_FILE_SIZE = 60 * 1024 * 1024; // 60MB — generous for a text-only book
+const MAX_ARCHIVE_ENTRIES = 5000;
+const MAX_DECLARED_UNCOMPRESSED_BYTES = 160 * 1024 * 1024;
+const MAX_TEXT_RESOURCE_CHARS = 4_000_000;
+const MAX_TOTAL_CHAPTER_CHARS = 30_000_000;
+const MAX_IMAGE_BASE64_CHARS = 12_000_000;
+const MAX_NAVIGATION_ENTRIES = 3000;
+type PendingLink = {
+  chapterIndex: number;
+  paragraphIndex: number;
+  href: string;
+  startOffset: number;
+  endOffset: number;
+};
 
 export class EpubParseError extends Error {}
+class EpubResourceLimitError extends EpubParseError {}
+
+/** JSZip reads this from the ZIP directory, though its TypeScript interface
+ * keeps `_data` private. Extraction limits below still apply if absent. */
+function declaredSize(file: JSZip.JSZipObject): number | null {
+  const size = (file as JSZip.JSZipObject & { _data?: { uncompressedSize?: unknown } })._data
+    ?.uncompressedSize;
+  return typeof size === "number" && Number.isFinite(size) && size >= 0 ? size : null;
+}
 
 function parseXml(text: string): Document {
   const doc = new DOMParser().parseFromString(text, "application/xml");
@@ -43,7 +67,14 @@ function joinPath(dir: string, relative: string): string {
 async function readText(zip: JSZip, path: string): Promise<string> {
   const file = zip.file(path) ?? zip.file(decodeURIComponent(path));
   if (!file) throw new EpubParseError(`Arquivo "${path}" não encontrado dentro do EPUB.`);
-  return file.async("string");
+  if ((declaredSize(file) ?? 0) > MAX_TEXT_RESOURCE_CHARS * 4) {
+    throw new EpubResourceLimitError("Um recurso de texto do EPUB excede o limite de importação.");
+  }
+  const text = await file.async("string");
+  if (text.length > MAX_TEXT_RESOURCE_CHARS) {
+    throw new EpubResourceLimitError("Um recurso de texto do EPUB excede o limite de importação.");
+  }
+  return text;
 }
 
 function textOf(el: Element | null): string {
@@ -83,8 +114,9 @@ async function resolveImageSrc(
   rawSrc: string,
   cache: Map<string, string | null>,
 ): Promise<string | null> {
-  const clean = rawSrc.split("#")[0]?.trim();
-  if (!clean || clean.startsWith("data:") || /^https?:\/\//i.test(clean)) return clean || null;
+  if (!isEmbeddedRasterImageReference(rawSrc)) return null;
+  const clean = rawSrc.split(/[?#]/, 1)[0]?.trim();
+  if (!clean) return null;
 
   const path = joinPath(chapterDir, decodeURIComponent(clean));
   const cached = cache.get(path);
@@ -96,7 +128,15 @@ async function resolveImageSrc(
       cache.set(path, null);
       return null;
     }
+    if ((declaredSize(file) ?? 0) > MAX_IMAGE_BASE64_CHARS) {
+      cache.set(path, null);
+      return null;
+    }
     const base64 = await file.async("base64");
+    if (base64.length > MAX_IMAGE_BASE64_CHARS) {
+      cache.set(path, null);
+      return null;
+    }
     const raw = `data:${guessMimeType(path)};base64,${base64}`;
     // 900px on the long side is plenty for how wide the reader column
     // gets, and keeps an illustrated book's total IndexedDB footprint
@@ -127,15 +167,19 @@ async function extractChapter(
   chapterDir: string,
   imageCache: Map<string, string | null>,
   imageBudget: { remaining: number },
+  sourcePath: string,
+  pendingLinks: PendingLink[],
 ): Promise<Chapter> {
   const doc = parseXml(html);
   const body = doc.body ?? doc.documentElement;
+  body?.querySelectorAll("script, style, iframe, object, embed, form").forEach((el) => el.remove());
 
   const heading = body?.querySelector("h1, h2, h3");
   const title = textOf(heading) || textOf(doc.querySelector("title")) || `Capítulo ${index + 1}`;
 
   const paragraphs: string[] = [];
   const blocks: ChapterBlock[] = [];
+  const paragraphElements: Element[] = [];
 
   async function pushImage(rawSrc: string | null, alt: string | null) {
     if (!rawSrc || imageBudget.remaining <= 0) return;
@@ -167,6 +211,24 @@ async function extractChapter(
       const text = (el.textContent ?? "").replace(/\s+/g, " ").trim();
       if (!text) continue;
       paragraphs.push(text);
+      paragraphElements.push(el);
+      for (const link of Array.from(el.querySelectorAll("a[href]")).slice(0, 100)) {
+        const label = (link.textContent ?? "").replace(/\s+/g, " ").trim();
+        if (!label) continue;
+        const range = doc.createRange();
+        range.selectNodeContents(el);
+        range.setEndBefore(link);
+        const leading = (link.textContent ?? "").match(/^\s*/)?.[0] ?? "";
+        const startOffset = (range.toString() + leading).replace(/\s+/g, " ").trimStart().length;
+        if (text.slice(startOffset, startOffset + label.length) !== label) continue;
+        pendingLinks.push({
+          chapterIndex: index,
+          paragraphIndex: paragraphs.length - 1,
+          href: link.getAttribute("href")!,
+          startOffset,
+          endOffset: startOffset + label.length,
+        });
+      }
       blocks.push({ type: "text", paragraphIndex: paragraphs.length - 1 });
     }
   } else {
@@ -198,7 +260,35 @@ async function extractChapter(
     }
   }
 
-  return { id: `cap-${index}`, title, paragraphs, blocks };
+  const anchors: Record<string, number> = Object.create(null);
+  let anchorParagraph = 0;
+  for (const element of Array.from(body?.querySelectorAll("[id], a[name]") ?? []).slice(
+    0,
+    MAX_NAVIGATION_ENTRIES,
+  )) {
+    while (anchorParagraph < paragraphElements.length - 1) {
+      const paragraph = paragraphElements[anchorParagraph];
+      if (
+        paragraph.contains(element) ||
+        element.contains(paragraph) ||
+        element.compareDocumentPosition(paragraph) & Node.DOCUMENT_POSITION_FOLLOWING
+      )
+        break;
+      anchorParagraph++;
+    }
+    const id = element.getAttribute("id") ?? element.getAttribute("name");
+    if (id && !Object.hasOwn(anchors, id)) anchors[id] = anchorParagraph;
+  }
+  const direction = body?.getAttribute("dir") ?? doc.documentElement.getAttribute("dir");
+  return {
+    id: `cap-${index}`,
+    title,
+    paragraphs,
+    blocks,
+    sourcePath,
+    anchors,
+    ...(direction === "rtl" || direction === "ltr" ? { direction } : {}),
+  };
 }
 
 function guessMimeType(href: string): string {
@@ -211,8 +301,6 @@ function guessMimeType(href: string): string {
       return "image/png";
     case "gif":
       return "image/gif";
-    case "svg":
-      return "image/svg+xml";
     case "webp":
       return "image/webp";
     default:
@@ -237,7 +325,11 @@ function guessMimeType(href: string): string {
  * without this a heavily-illustrated book could bloat IndexedDB storage
  * and make the reader noticeably slower to scroll.
  */
-async function downscaleImage(dataUrl: string, maxDim: number, quality: number): Promise<string> {
+async function downscaleImage(
+  dataUrl: string,
+  maxDim: number,
+  quality: number,
+): Promise<string | null> {
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
       const el = new Image();
@@ -254,18 +346,16 @@ async function downscaleImage(dataUrl: string, maxDim: number, quality: number):
     canvas.width = w;
     canvas.height = h;
     const ctx = canvas.getContext("2d");
-    if (!ctx) return dataUrl;
+    if (!ctx) return null;
     ctx.drawImage(img, 0, 0, w, h);
     return canvas.toDataURL("image/jpeg", quality);
   } catch {
-    // If anything about decoding/resizing fails, fall back to the
-    // original — better a possibly-large image than none at all, and
-    // IndexedDB (unlike Firestore) has no strict per-document size cap.
-    return dataUrl;
+    // Do not persist the original, potentially very large or malformed data.
+    return null;
   }
 }
 
-async function downscaleCover(dataUrl: string): Promise<string> {
+async function downscaleCover(dataUrl: string): Promise<string | null> {
   return downscaleImage(dataUrl, 480, 0.82);
 }
 
@@ -282,6 +372,20 @@ export async function parseEpubFile(file: File): Promise<Book> {
     zip = await JSZip.loadAsync(file);
   } catch {
     throw new EpubParseError("Não foi possível abrir este arquivo — ele parece estar corrompido.");
+  }
+  if (Object.keys(zip.files).length > MAX_ARCHIVE_ENTRIES) {
+    throw new EpubResourceLimitError(
+      "Este EPUB contém arquivos demais para uma importação segura.",
+    );
+  }
+  const declaredBytes = Object.values(zip.files).reduce(
+    (total, entry) => total + (declaredSize(entry) ?? 0),
+    0,
+  );
+  if (declaredBytes > MAX_DECLARED_UNCOMPRESSED_BYTES) {
+    throw new EpubResourceLimitError(
+      "O conteúdo expandido deste EPUB excede o limite de importação.",
+    );
   }
 
   // 1. Find the OPF package file via META-INF/container.xml
@@ -303,7 +407,6 @@ export async function parseEpubFile(file: File): Promise<Book> {
 
   const opfXml = await readText(zip, opfPath);
   const opfDoc = parseXml(opfXml);
-  const opfDir = opfPath.includes("/") ? opfPath.slice(0, opfPath.lastIndexOf("/") + 1) : "";
 
   // 2. Metadata
   const title =
@@ -320,8 +423,10 @@ export async function parseEpubFile(file: File): Promise<Book> {
     const id = item.getAttribute("id");
     const href = item.getAttribute("href");
     if (!id || !href) continue;
+    const resolved = resolveEpubHref(opfPath, href);
+    if (!resolved) continue;
     manifest.set(id, {
-      href: joinPath(opfDir, href),
+      href: resolved.path,
       mediaType: item.getAttribute("media-type") ?? "",
       properties: item.getAttribute("properties") ?? "",
     });
@@ -340,11 +445,17 @@ export async function parseEpubFile(file: File): Promise<Book> {
     : coverMetaId
       ? manifest.get(coverMetaId)
       : undefined;
-  if (coverEntry) {
+  if (coverEntry && isEmbeddedRasterImageReference(coverEntry.href)) {
     try {
       const coverFile = zip.file(coverEntry.href);
       if (coverFile) {
+        if ((declaredSize(coverFile) ?? 0) > MAX_IMAGE_BASE64_CHARS) {
+          throw new EpubResourceLimitError("A capa deste EPUB é grande demais.");
+        }
         const base64 = await coverFile.async("base64");
+        if (base64.length > MAX_IMAGE_BASE64_CHARS) {
+          throw new EpubResourceLimitError("A capa deste EPUB é grande demais.");
+        }
         const raw = `data:${guessMimeType(coverEntry.href)};base64,${base64}`;
         cover = await downscaleCover(raw);
       }
@@ -363,24 +474,48 @@ export async function parseEpubFile(file: File): Promise<Book> {
   }
 
   const chapters: Chapter[] = [];
+  const pendingLinks: PendingLink[] = [];
+  const importWarnings: string[] = [];
   let index = 0;
   const imageCache = new Map<string, string | null>();
   const imageBudget = { remaining: MAX_IMAGES_PER_BOOK };
+  let totalChapterChars = 0;
   for (const idref of spineRefs) {
     const item = manifest.get(idref);
     if (!item) continue;
     // Skip non-HTML spine entries (rare, but the spec technically allows it).
     if (item.mediaType && !/html|xml/.test(item.mediaType)) continue;
+    const pendingLinkCount = pendingLinks.length;
     try {
       const html = await readText(zip, item.href);
-      const chapterDir = item.href.includes("/") ? item.href.slice(0, item.href.lastIndexOf("/") + 1) : "";
-      const chapter = await extractChapter(html, index, zip, chapterDir, imageCache, imageBudget);
+      totalChapterChars += html.length;
+      if (totalChapterChars > MAX_TOTAL_CHAPTER_CHARS) {
+        throw new EpubResourceLimitError("O texto deste EPUB excede o limite de importação.");
+      }
+      const chapterDir = item.href.includes("/")
+        ? item.href.slice(0, item.href.lastIndexOf("/") + 1)
+        : "";
+      const chapter = await extractChapter(
+        html,
+        index,
+        zip,
+        chapterDir,
+        imageCache,
+        imageBudget,
+        item.href,
+        pendingLinks,
+      );
       const hasImages = chapter.blocks?.some((b) => b.type === "image") ?? false;
       if (chapter.paragraphs.length > 0 || hasImages) {
         chapters.push(chapter);
         index += 1;
       }
     } catch (err) {
+      pendingLinks.length = pendingLinkCount;
+      if (err instanceof EpubResourceLimitError) throw err;
+      importWarnings.push(
+        "Um trecho do arquivo não pôde ser importado. Confira a integridade do EPUB original.",
+      );
       console.warn(`[epub] skipping unreadable spine item ${item.href}`, err);
     }
   }
@@ -389,11 +524,79 @@ export async function parseEpubFile(file: File): Promise<Book> {
     throw new EpubParseError("Não encontramos texto legível dentro deste EPUB.");
   }
 
+  for (const link of pendingLinks) {
+    const chapter = chapters[link.chapterIndex];
+    if (!chapter) continue;
+    const location = resolveBookLocation(chapters, chapter.sourcePath!, link.href);
+    if (!location) continue;
+    chapter.links ??= {};
+    (chapter.links[link.paragraphIndex] ??= []).push({
+      ...location,
+      startOffset: link.startOffset,
+      endOffset: link.endOffset,
+    });
+  }
+
+  const navigation: BookNavigationEntry[] = [];
+  const navItem = Array.from(manifest.values()).find((item) =>
+    item.properties.split(/\s+/).includes("nav"),
+  );
+  const ncxItem =
+    manifest.get(opfDoc.querySelector("spine")?.getAttribute("toc") ?? "") ??
+    Array.from(manifest.values()).find((item) => item.mediaType === "application/x-dtbncx+xml");
+  for (const item of [navItem, ncxItem]) {
+    if (!item || navigation.length) continue;
+    try {
+      const navDoc = parseXml(await readText(zip, item.href));
+      const nav = Array.from(navDoc.querySelectorAll("nav")).find((el) =>
+        (
+          el.getAttributeNS("http://www.idpf.org/2007/ops", "type") ??
+          el.getAttribute("epub:type") ??
+          ""
+        )
+          .split(/\s+/)
+          .includes("toc"),
+      );
+      const links = nav
+        ? Array.from(nav.querySelectorAll("a[href]"))
+        : Array.from(navDoc.querySelectorAll("navPoint > content"));
+      for (const link of links.slice(0, MAX_NAVIGATION_ENTRIES)) {
+        const href = link.getAttribute(nav ? "href" : "src");
+        const label = textOf(
+          nav ? link : (link.parentElement?.querySelector("navLabel > text") ?? null),
+        ).replace(/\s+/g, " ");
+        const location = href ? resolveBookLocation(chapters, item.href, href) : null;
+        if (!location || !label) continue;
+        let depth = 0;
+        for (
+          let parent = link.parentElement;
+          parent && parent !== nav;
+          parent = parent.parentElement
+        ) {
+          if (parent.localName === (nav ? "ol" : "navPoint")) depth++;
+        }
+        navigation.push({ ...location, label, depth: Math.min(8, Math.max(0, depth - 1)) });
+      }
+    } catch {
+      // A broken TOC falls back to NCX or the imported spine chapters.
+    }
+  }
+  const fixedLayout = Array.from(opfDoc.querySelectorAll("metadata > meta")).some(
+    (el) => el.getAttribute("property") === "rendition:layout" && textOf(el) === "pre-paginated",
+  );
+  if (fixedLayout)
+    importWarnings.push(
+      "Este EPUB tem layout fixo. A versão de leitura adapta texto e imagens e pode diferir da diagramação original.",
+    );
+
   return {
     id: newEpubId(),
     title,
     author,
     cover,
     chapters,
+    ...(navigation.length ? { navigation } : {}),
+    ...(importWarnings.length ? { importWarnings: [...new Set(importWarnings)] } : {}),
+    epubVersion: opfDoc.documentElement.getAttribute("version") ?? "desconhecida",
   };
 }

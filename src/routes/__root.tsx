@@ -171,11 +171,24 @@ function RootComponent() {
   const isReaderRoute = pathname.startsWith("/reader/");
 
   useEffect(() => {
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch((err) => {
-        console.warn("[sw] registration failed", err);
-      });
+    if (!("serviceWorker" in navigator)) return;
+    if (import.meta.env.DEV) {
+      // A production worker left on localhost can serve stale Vite modules.
+      void navigator.serviceWorker
+        .getRegistrations()
+        .then((registrations) =>
+          Promise.all(
+            registrations
+              .filter((registration) => registration.scope === `${location.origin}/`)
+              .map((registration) => registration.unregister()),
+          ),
+        )
+        .catch((err) => console.warn("[sw] development cleanup failed", err));
+      return;
     }
+    navigator.serviceWorker.register("/sw.js").catch((err) => {
+      console.warn("[sw] registration failed", err);
+    });
   }, []);
 
   return (

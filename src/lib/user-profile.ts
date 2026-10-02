@@ -289,13 +289,13 @@ export async function deleteUserData(uid: string): Promise<void> {
     await Promise.all(
       epubs.docs.map(async (file) => {
         await deleteEpubBookFromCloud(uid, file.id);
-        await deleteEpubBook(file.id).catch(() => {});
+        await deleteEpubBook(uid, file.id).catch(() => {});
       }),
     );
     await Promise.all(
       pdfs.docs.map(async (file) => {
         await deletePdfBookFromCloud(uid, file.id);
-        await deletePdfBook(file.id).catch(() => {});
+        await deletePdfBook(uid, file.id).catch(() => {});
       }),
     );
   } catch (err) {

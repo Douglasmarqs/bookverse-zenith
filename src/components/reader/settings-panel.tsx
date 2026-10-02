@@ -1,4 +1,5 @@
 import { X, Type, AlignJustify, AlignLeft, Rows3, Columns2 } from "lucide-react";
+import * as Dialog from "@radix-ui/react-dialog";
 import type {
   ReaderSettings,
   ReaderAlignment,
@@ -42,215 +43,227 @@ const THEME_SWATCHES: { value: ReaderTheme; label: string; bg: string; fg: strin
  */
 export function ReaderSettingsPanel({ open, onClose, settings, onChange, theme }: Props) {
   return (
-    <>
-      <div
-        className={`fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity ${
-          open ? "opacity-100" : "pointer-events-none opacity-0"
-        }`}
-        onClick={onClose}
-      />
-      <aside
-        className={`fixed right-0 top-0 z-50 flex h-full w-full max-w-sm flex-col shadow-2xl transition-transform duration-300 ${
-          open ? "translate-x-0" : "translate-x-full"
-        }`}
-        style={{
-          backgroundColor: theme.bg,
-          color: theme.fg,
-          borderLeft: `1px solid ${theme.rule}`,
-          transition: "background-color 0.3s ease, color 0.3s ease, transform 0.3s ease",
-        }}
-        aria-hidden={!open}
-      >
-        <header
-          className="flex items-center justify-between px-5 py-4"
-          style={{ borderBottom: `1px solid ${theme.rule}` }}
+    <Dialog.Root
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+    >
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" />
+        <Dialog.Content
+          aria-describedby={undefined}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            document
+              .querySelector<HTMLButtonElement>('button[aria-label="Ajustes"]')
+              ?.focus({ preventScroll: true });
+          }}
+          className="fixed right-0 top-0 z-50 flex h-dvh w-full max-w-sm flex-col shadow-2xl"
+          style={{
+            backgroundColor: theme.bg,
+            color: theme.fg,
+            borderLeft: `1px solid ${theme.rule}`,
+          }}
         >
-          <h3 className="font-display text-lg font-medium">Ajustes de leitura</h3>
-          <button
-            onClick={onClose}
-            aria-label="Fechar"
-            className="grid h-9 w-9 place-items-center rounded-full transition hover:opacity-70"
+          <header
+            className="flex items-center justify-between px-5 py-4"
+            style={{ borderBottom: `1px solid ${theme.rule}` }}
           >
-            <X className="h-4 w-4" />
-          </button>
-        </header>
+            <Dialog.Title className="font-display text-lg font-medium">
+              Ajustes de leitura
+            </Dialog.Title>
+            <Dialog.Close
+              aria-label="Fechar ajustes"
+              className="grid h-11 w-11 place-items-center rounded-full transition hover:opacity-70"
+            >
+              <X className="h-4 w-4" />
+            </Dialog.Close>
+          </header>
 
-        <div className="flex-1 space-y-8 overflow-y-auto px-5 py-6">
-          <Group label="Tema" theme={theme}>
-            <div className="grid grid-cols-2 gap-2.5">
-              {THEME_SWATCHES.map((t) => (
-                <button
-                  key={t.value}
-                  onClick={() => onChange({ theme: t.value })}
-                  className="flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition"
-                  style={{
-                    borderColor: settings.theme === t.value ? theme.accent : theme.rule,
-                    boxShadow: settings.theme === t.value ? `0 0 0 1px ${theme.accent}` : "none",
-                  }}
-                >
-                  <span
-                    className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[10px] font-semibold ring-1 ring-black/10"
-                    style={{ background: t.bg, color: t.fg }}
-                  >
-                    Aa
-                  </span>
-                  <span className="text-xs font-medium">{t.label}</span>
-                </button>
-              ))}
-            </div>
-          </Group>
-
-          <Group label="Fonte" theme={theme}>
-            <SegGroup
-              theme={theme}
-              value={settings.font}
-              onChange={(v) => onChange({ font: v as ReaderFont })}
-              options={[
-                { value: "serif", label: "Serifada" },
-                { value: "sans", label: "Sem serifa" },
-              ]}
-            />
-          </Group>
-
-          <Group label="Modo de leitura" theme={theme}>
-            <SegGroup
-              theme={theme}
-              value={settings.mode}
-              onChange={(v) => onChange({ mode: v as ReaderMode })}
-              options={[
-                { value: "scroll", label: "Rolagem", icon: <Rows3 className="h-3.5 w-3.5" /> },
-                {
-                  value: "paginated",
-                  label: "Páginas",
-                  icon: <Columns2 className="h-3.5 w-3.5" />,
-                },
-              ]}
-            />
-          </Group>
-
-          {settings.mode === "paginated" && (
-            <Group label="Virada de página" theme={theme}>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={settings.pageTurn !== false}
-                onClick={() => onChange({ pageTurn: settings.pageTurn === false })}
-                className="flex w-full items-center justify-between rounded-2xl border p-3 text-left transition hover:opacity-80"
-                style={{ borderColor: theme.rule }}
-              >
-                <span>
-                  <span className="block text-sm font-medium">Efeito de folha</span>
-                  <span
-                    className="mt-0.5 block text-xs leading-relaxed"
-                    style={{ color: theme.muted }}
-                  >
-                    Dobra uma página por vez, como num leitor digital. Desative para uma troca
-                    direta.
-                  </span>
-                </span>
-                <span
-                  aria-hidden="true"
-                  className="relative ml-4 h-6 w-11 shrink-0 rounded-full transition-colors"
-                  style={{
-                    backgroundColor: settings.pageTurn !== false ? theme.accent : theme.rule,
-                  }}
-                >
-                  <span
-                    className="absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform"
+          <div className="flex-1 space-y-8 overflow-y-auto px-5 py-6">
+            <Group label="Tema" theme={theme}>
+              <div className="grid grid-cols-2 gap-2.5">
+                {THEME_SWATCHES.map((t) => (
+                  <button
+                    key={t.value}
+                    aria-pressed={settings.theme === t.value}
+                    onClick={() => onChange({ theme: t.value })}
+                    className="flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition"
                     style={{
-                      left: 4,
-                      transform: settings.pageTurn !== false ? "translateX(20px)" : "translateX(0)",
+                      borderColor: settings.theme === t.value ? theme.accent : theme.rule,
+                      boxShadow: settings.theme === t.value ? `0 0 0 1px ${theme.accent}` : "none",
                     }}
-                  />
-                </span>
-              </button>
+                  >
+                    <span
+                      className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[10px] font-semibold ring-1 ring-black/10"
+                      style={{ background: t.bg, color: t.fg }}
+                    >
+                      Aa
+                    </span>
+                    <span className="text-xs font-medium">{t.label}</span>
+                  </button>
+                ))}
+              </div>
             </Group>
-          )}
 
-          <Slider
-            theme={theme}
-            label="Tamanho da fonte"
-            icon={<Type className="h-3.5 w-3.5" />}
-            value={settings.fontSize}
-            min={14}
-            max={28}
-            step={1}
-            unit="px"
-            onChange={(v) => onChange({ fontSize: v })}
-          />
+            <Group label="Fonte" theme={theme}>
+              <SegGroup
+                theme={theme}
+                value={settings.font}
+                onChange={(v) => onChange({ font: v as ReaderFont })}
+                options={[
+                  { value: "serif", label: "Serifada" },
+                  { value: "sans", label: "Sem serifa" },
+                ]}
+              />
+            </Group>
 
-          <Slider
-            theme={theme}
-            label="Espaçamento entre linhas"
-            icon={<AlignJustify className="h-3.5 w-3.5" />}
-            value={settings.lineHeight}
-            min={1.3}
-            max={2.2}
-            step={0.05}
-            unit=""
-            onChange={(v) => onChange({ lineHeight: Math.round(v * 100) / 100 })}
-            format={(v) => v.toFixed(2)}
-          />
+            <Group label="Modo de leitura" theme={theme}>
+              <SegGroup
+                theme={theme}
+                value={settings.mode}
+                onChange={(v) => onChange({ mode: v as ReaderMode })}
+                options={[
+                  { value: "scroll", label: "Rolagem", icon: <Rows3 className="h-3.5 w-3.5" /> },
+                  {
+                    value: "paginated",
+                    label: "Páginas",
+                    icon: <Columns2 className="h-3.5 w-3.5" />,
+                  },
+                ]}
+              />
+            </Group>
 
-          <Slider
-            theme={theme}
-            label="Espaço entre parágrafos"
-            value={settings.paragraphSpacing}
-            min={0.25}
-            max={1.5}
-            step={0.05}
-            unit="em"
-            onChange={(v) => onChange({ paragraphSpacing: Math.round(v * 100) / 100 })}
-            format={(v) => v.toFixed(2)}
-          />
+            {settings.mode === "paginated" && (
+              <Group label="Virada de página" theme={theme}>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={settings.pageTurn !== false}
+                  onClick={() => onChange({ pageTurn: settings.pageTurn === false })}
+                  className="flex w-full items-center justify-between rounded-2xl border p-3 text-left transition hover:opacity-80"
+                  style={{ borderColor: theme.rule }}
+                >
+                  <span>
+                    <span className="block text-sm font-medium">Efeito de folha</span>
+                    <span
+                      className="mt-0.5 block text-xs leading-relaxed"
+                      style={{ color: theme.muted }}
+                    >
+                      Dobra uma página por vez, como num leitor digital. Desative para uma troca
+                      direta.
+                    </span>
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className="relative ml-4 h-6 w-11 shrink-0 rounded-full transition-colors"
+                    style={{
+                      backgroundColor: settings.pageTurn !== false ? theme.accent : theme.rule,
+                    }}
+                  >
+                    <span
+                      className="absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform"
+                      style={{
+                        left: 4,
+                        transform:
+                          settings.pageTurn !== false ? "translateX(20px)" : "translateX(0)",
+                      }}
+                    />
+                  </span>
+                </button>
+              </Group>
+            )}
 
-          <Group label="Alinhamento" theme={theme}>
-            <SegGroup
+            <Slider
               theme={theme}
-              value={settings.alignment}
-              onChange={(v) => onChange({ alignment: v as ReaderAlignment })}
-              options={[
-                {
-                  value: "justify",
-                  label: "Justificado",
-                  icon: <AlignJustify className="h-3.5 w-3.5" />,
-                },
-                { value: "left", label: "À esquerda", icon: <AlignLeft className="h-3.5 w-3.5" /> },
-              ]}
+              label="Tamanho da fonte"
+              icon={<Type className="h-3.5 w-3.5" />}
+              value={settings.fontSize}
+              min={14}
+              max={28}
+              step={1}
+              unit="px"
+              onChange={(v) => onChange({ fontSize: v })}
             />
-          </Group>
 
-          <Slider
-            theme={theme}
-            label="Margens laterais"
-            value={settings.margin}
-            min={16}
-            max={96}
-            step={4}
-            unit="px"
-            onChange={(v) => onChange({ margin: v })}
-          />
+            <Slider
+              theme={theme}
+              label="Espaçamento entre linhas"
+              icon={<AlignJustify className="h-3.5 w-3.5" />}
+              value={settings.lineHeight}
+              min={1.3}
+              max={2.2}
+              step={0.05}
+              unit=""
+              onChange={(v) => onChange({ lineHeight: Math.round(v * 100) / 100 })}
+              format={(v) => v.toFixed(2)}
+            />
 
-          <Slider
-            theme={theme}
-            label="Largura do texto"
-            value={settings.maxWidth}
-            min={40}
-            max={90}
-            step={2}
-            unit="ch"
-            onChange={(v) => onChange({ maxWidth: v })}
-          />
-        </div>
+            <Slider
+              theme={theme}
+              label="Espaço entre parágrafos"
+              value={settings.paragraphSpacing}
+              min={0.25}
+              max={1.5}
+              step={0.05}
+              unit="em"
+              onChange={(v) => onChange({ paragraphSpacing: Math.round(v * 100) / 100 })}
+              format={(v) => v.toFixed(2)}
+            />
 
-        <footer
-          className="px-5 py-4 text-xs"
-          style={{ borderTop: `1px solid ${theme.rule}`, color: theme.muted }}
-        >
-          Suas preferências são salvas automaticamente e acompanham sua conta.
-        </footer>
-      </aside>
-    </>
+            <Group label="Alinhamento" theme={theme}>
+              <SegGroup
+                theme={theme}
+                value={settings.alignment}
+                onChange={(v) => onChange({ alignment: v as ReaderAlignment })}
+                options={[
+                  {
+                    value: "justify",
+                    label: "Justificado",
+                    icon: <AlignJustify className="h-3.5 w-3.5" />,
+                  },
+                  {
+                    value: "left",
+                    label: "À esquerda",
+                    icon: <AlignLeft className="h-3.5 w-3.5" />,
+                  },
+                ]}
+              />
+            </Group>
+
+            <Slider
+              theme={theme}
+              label="Margens laterais"
+              value={settings.margin}
+              min={16}
+              max={96}
+              step={4}
+              unit="px"
+              onChange={(v) => onChange({ margin: v })}
+            />
+
+            <Slider
+              theme={theme}
+              label="Largura do texto"
+              value={settings.maxWidth}
+              min={40}
+              max={90}
+              step={2}
+              unit="ch"
+              onChange={(v) => onChange({ maxWidth: v })}
+            />
+          </div>
+
+          <footer
+            className="px-5 py-4 text-xs"
+            style={{ borderTop: `1px solid ${theme.rule}`, color: theme.muted }}
+          >
+            Suas preferências são salvas automaticamente e acompanham sua conta.
+          </footer>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 
@@ -294,6 +307,7 @@ function SegGroup<T extends string>({
         return (
           <button
             key={o.value}
+            aria-pressed={active}
             onClick={() => onChange(o.value)}
             className="inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-2 text-xs font-medium transition"
             style={
@@ -347,6 +361,8 @@ function Slider({
       </div>
       <input
         type="range"
+        aria-label={label}
+        aria-valuetext={`${display}${unit}`}
         min={min}
         max={max}
         step={step}

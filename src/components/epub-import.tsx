@@ -45,7 +45,7 @@ export function EpubImport({ className = "" }: { className?: string }) {
       const isPdf = file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf";
       if (isPdf) {
         const book = await createPdfBook(file);
-        await savePdfBook(book);
+        await savePdfBook(user.uid, book);
         try {
           await uploadPdfBookToCloud(user.uid, book);
           await addToLibrary(
@@ -59,7 +59,7 @@ export function EpubImport({ className = "" }: { className?: string }) {
             "lendo",
           );
         } catch (err) {
-          void deletePdfBook(book.id).catch(() => {});
+          void deletePdfBook(user.uid, book.id).catch(() => {});
           void deletePdfBookFromCloud(user.uid, book.id).catch(() => {});
           throw err;
         }
@@ -69,7 +69,7 @@ export function EpubImport({ className = "" }: { className?: string }) {
       }
       const { parseEpubFile } = await import("@/lib/epub-parser");
       const book = await parseEpubFile(file);
-      await saveEpubBook(book);
+      await saveEpubBook(user.uid, book);
       try {
         // Do not surface a library entry until its private cloud copy exists.
         // That keeps a successful import truthful across every device.
@@ -80,11 +80,13 @@ export function EpubImport({ className = "" }: { className?: string }) {
           "lendo",
         );
       } catch (err) {
-        void deleteEpubBook(book.id).catch(() => {});
+        void deleteEpubBook(user.uid, book.id).catch(() => {});
         void deleteEpubBookFromCloud(user.uid, book.id).catch(() => {});
         throw err;
       }
       toast.success(`"${book.title}" pronto para leitura.`);
+      if (book.importWarnings?.length)
+        toast.warning(book.importWarnings.join(" "), { duration: 10000 });
       void navigate({ to: "/reader/$bookId", params: { bookId: book.id } });
     } catch (err) {
       toast.error(describeFirestoreError(err, "Não foi possível importar este arquivo."));

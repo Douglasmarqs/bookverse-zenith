@@ -455,9 +455,10 @@ function Field({
       <span className="text-muted-foreground">{icon}</span>
       <input
         {...rest}
+        aria-label={rest["aria-label"] ?? rest.placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+        className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
       />
     </label>
   );
@@ -482,15 +483,15 @@ function PasswordField({
       </span>
       <input
         {...rest}
+        aria-label={rest["aria-label"] ?? rest.placeholder}
         type={visible ? "text" : "password"}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+        className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
       />
       <button
         type="button"
         onClick={onToggleVisible}
-        tabIndex={-1}
         aria-label={visible ? "Ocultar senha" : "Mostrar senha"}
         className="text-muted-foreground hover:text-foreground"
       >
