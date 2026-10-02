@@ -1,5 +1,6 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import * as ReaderDialog from "@radix-ui/react-dialog";
 import {
   ArrowLeft,
   ChevronLeft,
@@ -18,7 +19,8 @@ import {
   Languages,
 } from "lucide-react";
 
-import { getSampleBook, type Book } from "@/lib/sample-book";
+import type { Book, InternalBookLink } from "@/lib/reading-book";
+import { legacyDemoTitle } from "@/lib/legacy-demo";
 import { getPublicDomainBook, parseGutenbergReaderId } from "@/lib/public-domain";
 import {
   downloadEpubBookFromCloud,
@@ -89,12 +91,12 @@ export const Route = createFileRoute("/reader/$bookId")({
   loader: ({
     params,
   }):
-    | { source: "sample"; book: Book }
+    | { source: "legacy-demo"; title: string }
     | { source: "gutenberg"; gutenbergId: number }
     | { source: "epub"; localId: string }
     | { source: "pdf"; localId: string } => {
-    const sample = getSampleBook(params.bookId);
-    if (sample) return { source: "sample", book: sample };
+    const legacyTitle = legacyDemoTitle(params.bookId);
+    if (legacyTitle) return { source: "legacy-demo", title: legacyTitle };
     const gutenbergId = parseGutenbergReaderId(params.bookId);
     if (gutenbergId !== null) return { source: "gutenberg", gutenbergId };
     if (isEpubReaderId(params.bookId)) return { source: "epub", localId: params.bookId };
@@ -135,14 +137,51 @@ function GuardedReaderPage() {
     );
   }
 
-  if (loaderData.source === "sample") {
-    return <ReaderPage uid={user.uid} book={loaderData.book} />;
+  if (loaderData.source === "legacy-demo") {
+    return (
+      <section className="mx-auto max-w-lg px-6 py-20 text-center">
+        <p className="text-sm text-muted-foreground">Exemplo de uma versão anterior</p>
+        <h1 className="mt-3 font-display text-3xl">{loaderData.title}</h1>
+        <p className="mt-5 leading-relaxed text-muted-foreground">
+          Este exemplo usava texto de demonstração, que não correspondia ao conteúdo da obra. Ele
+          foi retirado da leitura. Seus registros na biblioteca, anotações e progresso continuam
+          preservados.
+        </p>
+        <p className="mt-3 text-sm text-muted-foreground">
+          Você pode importar seu arquivo EPUB ou PDF pela biblioteca, ou descobrir títulos
+          disponíveis no catálogo.
+        </p>
+        <div className="mt-7 flex flex-wrap justify-center gap-3">
+          <Link
+            to="/biblioteca"
+            className="rounded-full bg-primary px-5 py-3 text-primary-foreground"
+          >
+            Minha biblioteca
+          </Link>
+          <Link to="/catalogo" className="rounded-full border px-5 py-3">
+            Explorar catálogo
+          </Link>
+        </div>
+      </section>
+    );
   }
   if (loaderData.source === "epub") {
-    return <EpubBookLoader uid={user.uid} localId={loaderData.localId} />;
+    return (
+      <EpubBookLoader
+        key={`${user.uid}:${loaderData.localId}`}
+        uid={user.uid}
+        localId={loaderData.localId}
+      />
+    );
   }
   if (loaderData.source === "pdf") {
-    return <PdfBookLoader uid={user.uid} localId={loaderData.localId} />;
+    return (
+      <PdfBookLoader
+        key={`${user.uid}:${loaderData.localId}`}
+        uid={user.uid}
+        localId={loaderData.localId}
+      />
+    );
   }
   return <GutenbergBookLoader uid={user.uid} gutenbergId={loaderData.gutenbergId} />;
 }
@@ -159,7 +198,7 @@ function EpubBookLoader({ uid, localId }: { uid: string; localId: string }) {
     setStage("local");
 
     async function load() {
-      const local = await getEpubBook(localId).catch((err) => {
+      const local = await getEpubBook(uid, localId).catch((err) => {
         console.warn("[reader] failed to read local epub store", err);
         return null;
       });
@@ -175,11 +214,11 @@ function EpubBookLoader({ uid, localId }: { uid: string; localId: string }) {
       if (cancelled) return;
       if (cloudBook) {
         setBook(cloudBook);
-        void saveEpubBook(cloudBook).catch(() => {});
+        void saveEpubBook(uid, cloudBook).catch(() => {});
         return;
       }
       setError(
-        "Este EPUB não foi encontrado neste navegador nem na nuvem. Importe-o novamente em Minha biblioteca.",
+        "Não foi possível acessar este EPUB nesta conta. Conecte-se à internet para recuperar sua cópia ou validar uma importação antiga. Se necessário, importe o arquivo pela biblioteca.",
       );
     }
 
@@ -231,7 +270,7 @@ function PdfBookLoader({ uid, localId }: { uid: string; localId: string }) {
     setStage("local");
 
     async function load() {
-      const local = await getPdfBook(localId).catch((err) => {
+      const local = await getPdfBook(uid, localId).catch((err) => {
         console.warn("[reader] failed to read local pdf store", err);
         return null;
       });
@@ -241,7 +280,7 @@ function PdfBookLoader({ uid, localId }: { uid: string; localId: string }) {
         if (cancelled) return;
         setBook(upgraded);
         if (upgraded !== local) {
-          void savePdfBook(upgraded).catch(() => {});
+          void savePdfBook(uid, upgraded).catch(() => {});
           void uploadPdfBookToCloud(uid, upgraded).catch((error) =>
             console.warn("[pdf] background text-layer sync failed", error),
           );
@@ -255,7 +294,7 @@ function PdfBookLoader({ uid, localId }: { uid: string; localId: string }) {
         const upgraded = await ensurePdfBookText(cloudBook);
         if (cancelled) return;
         setBook(upgraded);
-        void savePdfBook(upgraded).catch(() => {});
+        void savePdfBook(uid, upgraded).catch(() => {});
         if (upgraded !== cloudBook) {
           void uploadPdfBookToCloud(uid, upgraded).catch((error) =>
             console.warn("[pdf] background text-layer sync failed", error),
@@ -264,7 +303,7 @@ function PdfBookLoader({ uid, localId }: { uid: string; localId: string }) {
         return;
       }
       setError(
-        "Este PDF não foi encontrado neste navegador nem na sua cópia privada. Importe-o novamente em Minha biblioteca.",
+        "Não foi possível acessar este PDF nesta conta. Conecte-se à internet para recuperar sua cópia ou validar uma importação antiga. Se necessário, importe o arquivo pela biblioteca.",
       );
     }
 
@@ -497,7 +536,9 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   const revealControls = useCallback(() => {
     setControlsVisible(true);
     if (controlsTimer.current) clearTimeout(controlsTimer.current);
-    controlsTimer.current = setTimeout(() => setControlsVisible(false), 3600);
+    controlsTimer.current = setTimeout(() => {
+      if (!document.activeElement?.closest("[data-reader-controls]")) setControlsVisible(false);
+    }, 3600);
   }, []);
 
   useEffect(() => {
@@ -678,12 +719,13 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   }, [chapterIndex, makeProgress, queueSave]);
 
   const goto = useCallback(
-    (i: number, edgeRatio: 0 | 1 = 0) => {
+    (i: number, edgeRatio: 0 | 1 = 0, paragraphAnchor?: number) => {
+      if (snapTimer.current) clearTimeout(snapTimer.current);
       const clamped = Math.max(0, Math.min(book.chapters.length - 1, i));
       setChapterIndex(clamped);
       chapterStartedAtRef.current = Date.now();
-      pendingAnchorRef.current = null;
-      currentAnchorRef.current = null;
+      pendingAnchorRef.current = paragraphAnchor ?? null;
+      currentAnchorRef.current = paragraphAnchor ?? null;
       setScrollRatio(edgeRatio);
       setChapterCompletionOpen(false);
       setActiveHighlightId(null);
@@ -706,7 +748,10 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
         });
       }
       setRestoreEpoch((epoch) => epoch + 1);
-      queueSave(makeProgress(clamped, edgeRatio));
+      queueSave({
+        ...makeProgress(clamped, edgeRatio),
+        ...(paragraphAnchor !== undefined ? { paragraphIndex: paragraphAnchor } : {}),
+      });
       setTocOpen(false);
     },
     [book.chapters.length, makeProgress, queueSave, settings.mode],
@@ -1090,11 +1135,26 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     }, 120);
   }, [pageWidthPx, pageCount, chapterIndex, makeProgress, queueSave, visibleParagraphIndex]);
 
+  // A focus-induced scroll can schedule a snap with the previous chapter's
+  // page count. Cancel it when the chapter or layout changes, before it can
+  // undo a link/TOC jump with stale bounds.
+  useEffect(
+    () => () => {
+      if (snapTimer.current) clearTimeout(snapTimer.current);
+    },
+    [onPaginatedScroll],
+  );
+
   // Keyboard page-turning on desktop — ignored while typing in a note or
   // any other input so arrow keys still work normally there.
   useEffect(() => {
-    if (settings.mode !== "paginated") return;
+    if (settings.mode !== "paginated" || tocOpen) return;
     function onKeyDown(e: KeyboardEvent) {
+      if (
+        e.defaultPrevented ||
+        document.querySelector('[role="dialog"], [role="alertdialog"], dialog[open]')
+      )
+        return;
       const tag = (document.activeElement?.tagName ?? "").toLowerCase();
       if (tag === "input" || tag === "textarea") return;
       if (e.key === "ArrowRight") goToPage(pageIndex + 1);
@@ -1102,7 +1162,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [settings.mode, pageIndex, goToPage]);
+  }, [settings.mode, pageIndex, goToPage, tocOpen]);
 
   const theme = THEME_STYLES[settings.theme];
   const chapter = book.chapters[chapterIndex];
@@ -1367,6 +1427,8 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       <ProgressConflictDialog conflict={syncConflict} onChoose={chooseProgress} />
       {/* Top bar */}
       <header
+        data-reader-controls="true"
+        onFocusCapture={revealControls}
         className={`absolute inset-x-0 top-0 z-30 flex items-center justify-between gap-3 border-b px-4 py-3 transition-all duration-300 md:px-6 ${
           controlsVisible
             ? "translate-y-0 opacity-100"
@@ -1524,12 +1586,15 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                 <div key={i} className="relative" style={{ breakInside: "avoid" }}>
                   <p
                     data-paragraph-index={i}
+                    dir={chapter.direction}
                     className="rounded-sm px-2 -mx-2 py-0.5 [hyphens:auto]"
                     style={{ marginBottom: 0, textAlign: settings.alignment }}
                   >
                     <HighlightedParagraph
                       text={p}
                       highlights={paragraphHighlights}
+                      links={chapter.links?.[i]}
+                      onLinkClick={(link) => goto(link.chapterIndex, 0, link.paragraphIndex)}
                       activeHighlightId={activeHighlightId}
                       onHighlightClick={(highlight) => {
                         window.getSelection()?.removeAllRanges();
@@ -1897,18 +1962,47 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       />
 
       {/* Table of contents / highlights / bookmarks */}
-      {tocOpen && (
-        <>
-          <div
-            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
-            onClick={() => setTocOpen(false)}
-          />
-          <aside
-            className="fixed left-0 top-0 z-50 flex h-full w-full max-w-sm flex-col border-r shadow-2xl"
+      <ReaderDialog.Root open={tocOpen} onOpenChange={setTocOpen}>
+        <ReaderDialog.Portal>
+          <ReaderDialog.Overlay className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" />
+          <ReaderDialog.Content
+            aria-describedby={undefined}
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              revealControls();
+              document
+                .querySelector<HTMLButtonElement>('button[aria-label="Sumário"]')
+                ?.focus({ preventScroll: true });
+            }}
+            className="fixed left-0 top-0 z-50 flex h-dvh w-full max-w-sm flex-col border-r shadow-2xl"
             style={{ backgroundColor: theme.bg, color: theme.fg, borderColor: theme.rule }}
           >
             <div className="border-b px-5 py-4" style={{ borderColor: theme.rule }}>
-              <h3 className="font-display text-lg font-medium">{book.title}</h3>
+              <div className="flex items-start justify-between gap-3">
+                <ReaderDialog.Title className="font-display text-lg font-medium">
+                  {book.title}
+                </ReaderDialog.Title>
+                <ReaderDialog.Close
+                  aria-label="Fechar sumário"
+                  className="grid min-h-11 min-w-11 shrink-0 place-items-center rounded-full border"
+                  style={{ borderColor: theme.rule }}
+                >
+                  <XIcon className="h-5 w-5" />
+                </ReaderDialog.Close>
+              </div>
+              {book.importWarnings?.length ? (
+                <details
+                  className="mt-3 rounded-lg border p-3 text-xs"
+                  style={{ borderColor: theme.rule }}
+                >
+                  <summary className="cursor-pointer font-medium">Sobre esta importação</summary>
+                  <ul className="mt-2 list-disc space-y-2 pl-4">
+                    {book.importWarnings.map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
               <div
                 className="mt-3 grid grid-cols-3 gap-1 rounded-full p-1"
                 style={{ backgroundColor: theme.rule, fontFamily: "var(--font-sans)" }}
@@ -1922,6 +2016,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                 ).map((t) => (
                   <button
                     key={t.key}
+                    aria-pressed={tocTab === t.key}
                     onClick={() => setTocTab(t.key)}
                     className="rounded-full px-2 py-1.5 text-xs font-medium transition"
                     style={{
@@ -1937,12 +2032,23 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
 
             {tocTab === "toc" && (
               <ul className="flex-1 overflow-y-auto p-3">
-                {book.chapters.map((c: (typeof book.chapters)[number], i: number) => {
-                  const active = i === chapterIndex;
+                {(book.navigation?.length
+                  ? book.navigation
+                  : book.chapters.map((c, i) => ({
+                      label: c.title,
+                      chapterIndex: i,
+                      paragraphIndex: 0,
+                      depth: 0,
+                    }))
+                ).map((entry, i) => {
+                  const active = entry.chapterIndex === chapterIndex;
                   return (
-                    <li key={c.id}>
+                    <li
+                      key={`${entry.chapterIndex}-${entry.paragraphIndex}-${i}`}
+                      style={{ paddingInlineStart: Math.min(entry.depth, 4) * 12 }}
+                    >
                       <button
-                        onClick={() => goto(i)}
+                        onClick={() => goto(entry.chapterIndex, 0, entry.paragraphIndex)}
                         className="w-full rounded-xl px-4 py-3 text-left transition"
                         style={{
                           backgroundColor: active ? theme.accent + "22" : "transparent",
@@ -1952,7 +2058,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                         <span className="text-[10px] tabular-nums" style={{ color: theme.muted }}>
                           {String(i + 1).padStart(2, "0")}
                         </span>
-                        <span className="ml-3 font-display">{c.title}</span>
+                        <span className="ml-3 font-display">{entry.label}</span>
                       </button>
                     </li>
                   );
@@ -2047,9 +2153,9 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                     ))}
                 </ul>
               ))}
-          </aside>
-        </>
-      )}
+          </ReaderDialog.Content>
+        </ReaderDialog.Portal>
+      </ReaderDialog.Root>
     </div>
   );
 }
@@ -2057,14 +2163,45 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
 function HighlightedParagraph({
   text,
   highlights,
+  links = [],
+  onLinkClick,
   activeHighlightId,
   onHighlightClick,
 }: {
   text: string;
   highlights: Highlight[];
+  links?: InternalBookLink[];
+  onLinkClick: (link: InternalBookLink) => void;
   activeHighlightId: string | null;
   onHighlightClick: (highlight: Highlight) => void;
 }) {
+  function renderSlice(start: number, end: number): React.ReactNode {
+    const nodes: React.ReactNode[] = [];
+    let cursor = start;
+    for (const link of links) {
+      const a = Math.max(start, link.startOffset);
+      const b = Math.min(end, link.endOffset);
+      if (a < cursor || b <= a) continue;
+      if (a > cursor) nodes.push(text.slice(cursor, a));
+      nodes.push(
+        <button
+          key={`link-${a}`}
+          type="button"
+          data-reader-action="true"
+          className="inline cursor-pointer text-inherit underline decoration-current underline-offset-4 [font:inherit]"
+          onClick={(event) => {
+            event.stopPropagation();
+            if (window.getSelection()?.isCollapsed) onLinkClick(link);
+          }}
+        >
+          {text.slice(a, b)}
+        </button>,
+      );
+      cursor = b;
+    }
+    if (cursor < end) nodes.push(text.slice(cursor, end));
+    return nodes;
+  }
   const ranges = highlights
     .map((highlight) => ({
       highlight,
@@ -2082,7 +2219,7 @@ function HighlightedParagraph({
     // readable until the legacy mark is removed.
     if (range.start < cursor) continue;
     if (range.start > cursor) {
-      parts.push(text.slice(cursor, range.start));
+      parts.push(renderSlice(cursor, range.start));
     }
     const selected = range.highlight.id === activeHighlightId;
     parts.push(
@@ -2101,12 +2238,12 @@ function HighlightedParagraph({
           color: "inherit",
         }}
       >
-        {text.slice(range.start, range.end)}
+        {renderSlice(range.start, range.end)}
       </mark>,
     );
     cursor = range.end;
   }
-  if (cursor < text.length) parts.push(text.slice(cursor));
+  if (cursor < text.length) parts.push(renderSlice(cursor, text.length));
   return <>{parts}</>;
 }
 

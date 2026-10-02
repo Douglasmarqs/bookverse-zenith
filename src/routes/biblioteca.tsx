@@ -155,10 +155,10 @@ function BibliotecaPage({ uid }: { uid: string }) {
         // person never sees a false "removed" success while a private file
         // remains orphaned.
         await deleteEpubBookFromCloud(uid, entry.readerId);
-        await deleteEpubBook(entry.readerId).catch(() => {});
+        await deleteEpubBook(uid, entry.readerId).catch(() => {});
       } else if (entry.readerId && isPdfReaderId(entry.readerId)) {
         await deletePdfBookFromCloud(uid, entry.readerId);
-        await deletePdfBook(entry.readerId).catch(() => {});
+        await deletePdfBook(uid, entry.readerId).catch(() => {});
       }
       await removeFromLibrary(uid, entry.id);
       toast.success("Livro removido da biblioteca.");
@@ -178,7 +178,7 @@ function BibliotecaPage({ uid }: { uid: string }) {
       const isPdf = file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf";
       if (isPdf) {
         const book = await createPdfBook(file);
-        await savePdfBook(book);
+        await savePdfBook(uid, book);
         try {
           await uploadPdfBookToCloud(uid, book);
           await addToLibrary(
@@ -192,7 +192,7 @@ function BibliotecaPage({ uid }: { uid: string }) {
             "quero-ler",
           );
         } catch (err) {
-          void deletePdfBook(book.id).catch(() => {});
+          void deletePdfBook(uid, book.id).catch(() => {});
           void deletePdfBookFromCloud(uid, book.id).catch(() => {});
           throw err;
         }
@@ -208,7 +208,7 @@ function BibliotecaPage({ uid }: { uid: string }) {
       // actually use "Adicionar EPUB" should pay the download cost for.
       const { parseEpubFile } = await import("@/lib/epub-parser");
       const book = await parseEpubFile(file);
-      await saveEpubBook(book);
+      await saveEpubBook(uid, book);
       try {
         await uploadEpubBookToCloud(uid, book, file);
         await addToLibrary(
@@ -217,7 +217,7 @@ function BibliotecaPage({ uid }: { uid: string }) {
           "quero-ler",
         );
       } catch (err) {
-        void deleteEpubBook(book.id).catch(() => {});
+        void deleteEpubBook(uid, book.id).catch(() => {});
         void deleteEpubBookFromCloud(uid, book.id).catch(() => {});
         throw err;
       }
@@ -227,6 +227,8 @@ function BibliotecaPage({ uid }: { uid: string }) {
           onClick: () => navigate({ to: "/reader/$bookId", params: { bookId: book.id } }),
         },
       });
+      if (book.importWarnings?.length)
+        toast.warning(book.importWarnings.join(" "), { duration: 10000 });
     } catch (err) {
       toast.error(describeFirestoreError(err, "Não foi possível importar este arquivo."));
     } finally {
