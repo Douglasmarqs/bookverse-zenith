@@ -1,6 +1,6 @@
 # Bookverse 2.0 — auditoria e execução
 
-Atualizada: 2 de outubro de 2026
+Atualizada: 5 de outubro de 2026
 Base examinada: `Douglasmarqs/bookverse-zenith`, `main` em `3e8b1e3`
 
 ## Estado do produto encontrado
@@ -33,15 +33,16 @@ As regras atuais de Firestore e Storage protegem biblioteca, progresso, preferê
 10. **Acessibilidade do EPUB.** Sumário e ajustes usam diálogos com título, ciclo de foco, Escape e retorno ao controle de origem. Controles fechados saem da navegação; sliders têm nomes e valores acessíveis. O cabeçalho não desaparece enquanto tem foco. Um ajuste de rolagem pendente do capítulo anterior foi corrigido para não desfazer a navegação a uma nota. Campos de autenticação receberam nomes acessíveis e o botão de mostrar senha pode ser usado pelo teclado.
 11. **Privacidade do cache local.** EPUB e PDF agora separam IndexedDB e memória por UID e livro. O armazenamento legado é mantido, mas só é migrado após confirmar no servidor que o arquivo pertence à conta atual. Uma cópia já migrada continua disponível offline. A primeira abertura de um cache legado precisa de conexão; falhas não apagam a cópia antiga. O loader também reinicia imediatamente na troca de conta/livro.
 12. **Integração Firebase.** Adicionado modo de emuladores, limitado ao desenvolvimento e ao projeto `demo-bookverse`, com testes reais de Auth, Firestore e Storage. As regras de avaliações agora exigem que o UID do documento corresponda ao autor autenticado. Os textos inventados de livros de demonstração foram retirados: IDs antigos mostram um aviso, preservando biblioteca, progresso e anotações.
+13. **Posição dentro de uma página PDF.** O progresso agora inclui a rolagem horizontal e vertical normalizada da página ampliada. A posição volta após recarregar, continua equivalente ao trocar entre mobile e desktop e participa da escolha de conflito entre dispositivos. Ajustar a página inteira temporariamente não apaga o último ponto ampliado; mudar de página começa no canto inicial.
 
 ## Verificação realizada
 
-- `npm test`: 21 testes passaram, incluindo resolução de navegação EPUB e IDs legados, além da suíte anterior de progresso, arquivos, catálogo, service worker e PDF.
+- `npm test`: 24 testes passaram, incluindo resolução de navegação EPUB, IDs legados e posição ampliada em PDF, além da suíte anterior de progresso, arquivos, catálogo e service worker.
 - `npx tsc --noEmit`: passou.
 - `npm run lint`: passou com 6 avisos preexistentes de Fast Refresh e nenhum erro.
 - `npm run build`: passou após as mudanças de código desta rodada.
 - Navegador local: Home examinada em 320, 360, 375, 390, 412, 768, 1024, 1440 e 1920 px; Catálogo em 320, 390, 768, 1024 e 1440 px. Nas larguras examinadas não houve scroll horizontal da página. Login, Descobrir e Catálogo renderizaram. Uma sessão limpa do navegador abriu o Catálogo sem erro de hidratação após a correção do worker.
-- PDF local: componente real com PDF de teste gerado de três páginas, em harness fora das rotas de produção e ignorado pelo Git. Larguras 320, 360, 375, 390, 412, 768, 844 (landscape), 1024, 1440 e 1920 px sem overflow horizontal da página; ajuste à largura conferido também com barra de rolagem vertical. Zoom 200% mantém a borda inicial acessível e permite rolagem interna. Trocas rápidas, cor da página renderizada, posição local após recarga, preferências após recarga, Escape, retorno/ciclo de foco e armazenamento negado foram verificados sem erros de execução. Evento local de conflito verificou bloqueio de navegação e aplicação da posição escolhida; não representa um teste de comunicação com Firestore.
+- PDF local: componente real com PDF de teste gerado de três páginas, em harness fora das rotas de produção e ignorado pelo Git. Larguras 320, 360, 375, 390, 412, 768, 844 (landscape), 1024, 1440 e 1920 px sem overflow horizontal da página; ajuste à largura conferido também com barra de rolagem vertical. Zoom 200% mantém a borda inicial acessível e permite rolagem interna. A posição ampliada de 45,01% horizontal e 64,95% vertical foi restaurada exatamente após recarga e permaneceu equivalente após redimensionar de 390 × 844 para 1000 × 700; avançar à página 2 reiniciou a posição em 0%. Trocas rápidas, cor da página renderizada, preferências após recarga, Escape, retorno/ciclo de foco e armazenamento negado foram verificados sem erros de execução. Evento local de conflito verificou bloqueio de navegação e aplicação da posição escolhida; não representa um teste de comunicação com Firestore.
 
 - `npm run test:integration`: 4 testes passaram nos emuladores, cobrindo isolamento de dados/arquivos, retomada em outro cliente, gravação offline seguida de reconexão e autorização/validação de avaliações. Logs esperados de `PERMISSION_DENIED` correspondem às tentativas que o teste exige bloquear.
 - Navegador autenticado: cadastro, upload EPUB pela interface, armazenamento privado, abertura em um segundo perfil limpo, restauração de progresso e conflito real de posições via transação Firestore. A escolha da posição da conta foi aplicada ao leitor. Esses testes usam os emuladores, sem contas ou arquivos de produção.
@@ -58,7 +59,7 @@ As regras atuais de Firestore e Storage protegem biblioteca, progresso, preferê
 
 - Ampliar a integração para perda de conexão durante operações do leitor; verificar as funções de marcos de leitura e repetir os fluxos em dispositivos físicos.
 - Montar corpus de EPUB 2/3, imagens, sumário, RTL e layout fixo; medir a precisão da restauração. Migrar do índice de parágrafo para âncora textual mais precisa ou CFI quando o motor suportar.
-- Separar o PDF original do modo de texto extraído sem perder busca/seleção. Ajuste à largura/página foi adicionado ao leitor por imagem; faltam miniaturas, duas páginas em tablets quando apropriado e recuperação da posição de rolagem dentro de uma página ampliada.
+- Separar o PDF original do modo de texto extraído sem perder busca/seleção. Ajuste à largura/página e recuperação da posição ampliada foram adicionados ao leitor por imagem; faltam miniaturas e duas páginas em tablets quando apropriado.
 - Corrigir a descoberta de clássicos: a busca genérica `classic literature` retorna livros **sobre** clássicos. Selecionar obras por IDs/edições verificadas e mostrar indisponibilidade real.
 - Testar estados de erro/offline e acessibilidade do leitor em mobile, tablet, landscape e teclado. Medir bundles grandes de PDF.js, Firestore e JSZip e carregar somente nas rotas necessárias.
 

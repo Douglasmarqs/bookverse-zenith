@@ -19,6 +19,7 @@ export function legacyRecovery(
     scrollRatio: 0,
     overallRatio: 0,
     paragraphIndex: undefined,
+    pdfViewport: undefined,
     completedChapterIndexes: [],
     bookCompletionRecorded: false,
     updatedAt: 0,
@@ -38,6 +39,11 @@ export function differentReadingPosition(a: ReadingProgress, b: ReadingProgress)
   }
   if (a.pageIndex !== undefined && b.pageIndex !== undefined && a.pageIndex !== b.pageIndex) {
     return true;
+  }
+  if (a.pdfViewport || b.pdfViewport) {
+    const aViewport = a.pdfViewport ?? { x: 0, y: 0 };
+    const bViewport = b.pdfViewport ?? { x: 0, y: 0 };
+    return Math.abs(aViewport.x - bViewport.x) > 0.02 || Math.abs(aViewport.y - bViewport.y) > 0.02;
   }
   return Math.abs(a.scrollRatio - b.scrollRatio) > 0.02;
 }

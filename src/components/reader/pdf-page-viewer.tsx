@@ -16,7 +16,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import type { PdfBook } from "@/lib/pdf-store";
-import { clampPdfPage, pdfFitScale, pdfOutputScale } from "@/lib/pdf-viewport";
+import {
+  clampPdfPage,
+  pdfFitScale,
+  pdfOutputScale,
+  normalizePdfViewport,
+  capturePdfViewport,
+  pdfViewportOffset,
+} from "@/lib/pdf-viewport";
 import { markAsReading } from "@/lib/library";
 import {
   addPdfRegionHighlight,
@@ -90,6 +97,11 @@ function PdfPageViewerSession({ uid, book }: { uid: string; book: PdfBook }) {
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const pageTurnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isPageTurningRef = useRef(false);
+  const viewportRef = useRef({ page: 1, x: 0, y: 0 });
+  const restoringViewportRef = useRef(true);
+  const viewportSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveLatestRef = useRef<() => void>(() => {});
+  const [restoreEpoch, setRestoreEpoch] = useState(0);
   const [page, setPage] = useState(1);
   const [progressLoaded, setProgressLoaded] = useState(false);
   const [syncConflict, setSyncConflict] = useState<ProgressConflict | null>(null);
@@ -192,6 +204,7 @@ function PdfPageViewerSession({ uid, book }: { uid: string; book: PdfBook }) {
       if (!progressLoaded || syncConflict || settingsOpen || marking) return;
       const target = clampPdfPage(next, pageCount);
       if (target === page || isPageTurningRef.current) return;
+      saveLatestRef.current();
       setRegionDraft(null);
 
       const canvas = canvasRef.current;
@@ -273,8 +286,17 @@ function PdfPageViewerSession({ uid, book }: { uid: string; book: PdfBook }) {
     void loadProgressForReader(book.id, uid)
       .then(({ progress, conflict }) => {
         if (cancelled) return;
-        if (progress)
-          setPage(clampPdfPage((progress.pageIndex ?? progress.chapterIndex) + 1, book.pageCount));
+        if (progress) {
+          const restoredPage = clampPdfPage(
+            (progress.pageIndex ?? progress.chapterIndex) + 1,
+            book.pageCount,
+          );
+          viewportRef.current = {
+            page: restoredPage,
+            ...normalizePdfViewport(progress.pdfViewport),
+          };
+          setPage(restoredPage);
+        }
         setSyncConflict(conflict);
         setProgressLoaded(true);
       })
@@ -321,7 +343,14 @@ function PdfPageViewerSession({ uid, book }: { uid: string; book: PdfBook }) {
       } else {
         selected = acceptLocalProgress(book.id, uid, selected, syncConflict.remote);
       }
-      setPage(clampPdfPage((selected.pageIndex ?? selected.chapterIndex) + 1, pageCount));
+      const restoredPage = clampPdfPage(
+        (selected.pageIndex ?? selected.chapterIndex) + 1,
+        pageCount,
+      );
+      restoringViewportRef.current = true;
+      viewportRef.current = { page: restoredPage, ...normalizePdfViewport(selected.pdfViewport) };
+      setPage(restoredPage);
+      setRestoreEpoch((epoch) => epoch + 1);
       setSyncConflict(null);
     },
     [book.id, pageCount, syncConflict, uid],
@@ -383,15 +412,25 @@ function PdfPageViewerSession({ uid, book }: { uid: string; book: PdfBook }) {
   }, [pageCount, pdfReady, progressLoaded]);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: 0, left: 0 });
-  }, [page]);
-
-  useEffect(() => {
     // Scrollbars consume width on Windows; observe the actual scrolling area
     // so width-fit never adds accidental horizontal overflow.
     const stage = scrollRef.current;
     if (!stage) return;
-    const update = () => setSize({ width: stage.clientWidth, height: stage.clientHeight });
+    let observedWidth = -1;
+    let observedHeight = -1;
+    const update = () => {
+      const width = stage.clientWidth;
+      const height = stage.clientHeight;
+      if (width === observedWidth && height === observedHeight) return;
+      observedWidth = width;
+      observedHeight = height;
+      // A responsive resize changes the scroll range before the PDF canvas is
+      // rerendered. Ignore that synthetic scroll so it cannot overwrite the
+      // normalized reading position that the next render must restore.
+      restoringViewportRef.current = true;
+      if (viewportSaveTimerRef.current) clearTimeout(viewportSaveTimerRef.current);
+      setSize({ width, height });
+    };
     update();
     const observer = new ResizeObserver(update);
     observer.observe(stage);
@@ -412,6 +451,10 @@ function PdfPageViewerSession({ uid, book }: { uid: string; book: PdfBook }) {
       return;
     let cancelled = false;
     let cancelRender: (() => void) | null = null;
+    let restoreFrame = 0;
+    restoringViewportRef.current = true;
+    if (viewportSaveTimerRef.current) clearTimeout(viewportSaveTimerRef.current);
+    if (viewportRef.current.page !== page) viewportRef.current = { page, x: 0, y: 0 };
     async function renderPage() {
       setLoading(true);
       setError(null);
@@ -447,6 +490,21 @@ function PdfPageViewerSession({ uid, book }: { uid: string; book: PdfBook }) {
         const visibleContext = canvas!.getContext("2d", { alpha: false });
         if (!visibleContext) throw new Error("Canvas unavailable");
         visibleContext.drawImage(buffer, 0, 0);
+        const area = scrollRef.current;
+        if (area)
+          area.scrollTo({ ...pdfViewportOffset(area, viewportRef.current), behavior: "instant" });
+        restoreFrame = requestAnimationFrame(() => {
+          if (cancelled) return;
+          // Scrollbar appearance can change the available dimensions after
+          // the canvas is committed. Restore once layout has settled too.
+          if (area)
+            area.scrollTo({ ...pdfViewportOffset(area, viewportRef.current), behavior: "instant" });
+          restoreFrame = requestAnimationFrame(() => {
+            if (cancelled) return;
+            restoringViewportRef.current = false;
+            saveLatestRef.current();
+          });
+        });
         setRenderedPage(page);
         setLoading(false);
       } catch (cause) {
@@ -462,6 +520,7 @@ function PdfPageViewerSession({ uid, book }: { uid: string; book: PdfBook }) {
     });
     return () => {
       cancelled = true;
+      cancelAnimationFrame(restoreFrame);
       cancelRender?.();
       if (renderCancelRef.current === cancelRender) renderCancelRef.current = null;
     };
@@ -475,10 +534,20 @@ function PdfPageViewerSession({ uid, book }: { uid: string; book: PdfBook }) {
     pdfReady,
     progressLoaded,
     size,
+    restoreEpoch,
   ]);
 
-  useEffect(() => {
-    if (!progressLoaded || !pdfReady || loading || error || renderedPage !== page || syncConflict)
+  const persistProgress = useCallback(() => {
+    if (
+      !progressLoaded ||
+      !pdfReady ||
+      loading ||
+      error ||
+      renderedPage !== page ||
+      syncConflict ||
+      restoringViewportRef.current ||
+      viewportRef.current.page !== page
+    )
       return;
     saveProgress(
       book.id,
@@ -489,6 +558,7 @@ function PdfPageViewerSession({ uid, book }: { uid: string; book: PdfBook }) {
         pageIndex: page - 1,
         pageCount,
         scrollRatio: 0,
+        pdfViewport: { x: viewportRef.current.x, y: viewportRef.current.y },
         overallRatio: pageCount > 1 ? (page - 1) / (pageCount - 1) : 0,
         updatedAt: Date.now(),
       },
@@ -506,6 +576,43 @@ function PdfPageViewerSession({ uid, book }: { uid: string; book: PdfBook }) {
     syncConflict,
     uid,
   ]);
+
+  useEffect(() => {
+    saveLatestRef.current = persistProgress;
+    persistProgress();
+  }, [persistProgress]);
+
+  const onViewportScroll = useCallback(() => {
+    const area = scrollRef.current;
+    if (
+      !area ||
+      restoringViewportRef.current ||
+      loading ||
+      renderedPage !== page ||
+      syncConflict ||
+      viewportRef.current.page !== page
+    )
+      return;
+    const next = capturePdfViewport(area, viewportRef.current);
+    if (
+      Math.abs(next.x - viewportRef.current.x) < 0.0001 &&
+      Math.abs(next.y - viewportRef.current.y) < 0.0001
+    )
+      return;
+    viewportRef.current = { page, ...next };
+    if (viewportSaveTimerRef.current) clearTimeout(viewportSaveTimerRef.current);
+    viewportSaveTimerRef.current = setTimeout(() => saveLatestRef.current(), 250);
+  }, [loading, page, renderedPage, syncConflict]);
+
+  useEffect(() => {
+    const flush = () => saveLatestRef.current();
+    window.addEventListener("pagehide", flush);
+    return () => {
+      if (viewportSaveTimerRef.current) clearTimeout(viewportSaveTimerRef.current);
+      window.removeEventListener("pagehide", flush);
+      flush();
+    };
+  }, []);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -669,8 +776,9 @@ function PdfPageViewerSession({ uid, book }: { uid: string; book: PdfBook }) {
       >
         <div
           ref={scrollRef}
+          onScroll={onViewportScroll}
           className="absolute inset-0 overflow-auto"
-          style={{ padding: `${displaySettings.pagePadding}px` }}
+          style={{ padding: `${displaySettings.pagePadding}px`, overflowAnchor: "none" }}
         >
           <div className="flex min-h-full w-max min-w-full">
             <div

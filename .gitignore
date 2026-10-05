@@ -15,6 +15,7 @@ dist-ssr
 .agent-browser/
 .tanstack/**
 .nitro
+.vercel/
 *.local
 
 # Wrangler / Cloudflare

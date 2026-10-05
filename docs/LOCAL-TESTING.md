@@ -56,6 +56,10 @@ Importe a fixture pela biblioteca. Abra o sumário, selecione “Notas finais”
 
 Abra o mesmo livro em dois perfis independentes de navegador com a mesma conta. Verifique recuperação da cópia privada e posição. Avance os dois para posições diferentes; o leitor deve pedir uma escolha. Uma conta diferente não deve conseguir abrir esse arquivo, mesmo no navegador que já o armazenou. Caches de versões anteriores só são migrados após confirmação da propriedade no servidor, preservando os registros antigos.
 
+### Regressão da posição em PDF
+
+Importe um PDF de várias páginas, use “Largura da tela”, aumente o zoom e role nos dois eixos. Recarregue a página: o mesmo trecho deve voltar ao visor. Redimensione a janela e confirme que o trecho continua proporcionalmente equivalente. Ao avançar para outra página, a rolagem deve começar no canto inicial. Com o mesmo PDF aberto em dois perfis da mesma conta, posições suficientemente diferentes na mesma página devem abrir a escolha de conflito com os percentuais de rolagem.
+
 ## Verificações gerais
 
 ```sh

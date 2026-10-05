@@ -10,7 +10,10 @@ import {
 import type { ProgressConflict, ReadingProgress } from "@/lib/reader-store";
 
 function positionLabel(progress: ReadingProgress): string {
-  if (progress.pageIndex !== undefined) return `Página ${progress.pageIndex + 1}`;
+  if (progress.pageIndex !== undefined) {
+    const viewport = progress.pdfViewport;
+    return `Página ${progress.pageIndex + 1}${viewport ? ` · rolagem ${Math.round(viewport.y * 100)}%, horizontal ${Math.round(viewport.x * 100)}%` : ""}`;
+  }
   const percentage = Math.round((progress.overallRatio ?? 0) * 100);
   return `Capítulo ${progress.chapterIndex + 1} · ${percentage}%`;
 }

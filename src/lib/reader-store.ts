@@ -60,6 +60,8 @@ export interface ReadingProgress {
   chapterCount?: number;
   pageIndex?: number;
   pageCount?: number;
+  /** Relative pan within an original PDF page; optional for old progress. */
+  pdfViewport?: { x: number; y: number };
   /** Chapters explicitly confirmed by the reader. Keeping the ids in the
    * progress document makes the completion reward idempotent across reloads
    * and devices; merely jumping through the table of contents never counts
