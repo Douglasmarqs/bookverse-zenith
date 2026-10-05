@@ -9,7 +9,7 @@
     "build:dev": "vite build --mode development",
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "test:integration": "node --test tests/integration/*.test.mjs",
-    "emulators": "firebase emulators:start --only auth,firestore,storage --project demo-bookverse",
+    "emulators": "npm --prefix functions run build && firebase emulators:start --only auth,firestore,storage,functions --project demo-bookverse",
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write ."

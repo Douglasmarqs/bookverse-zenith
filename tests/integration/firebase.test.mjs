@@ -20,6 +20,7 @@ import {
   waitForPendingWrites,
 } from "firebase/firestore";
 import { getStorage, connectStorageEmulator, ref, uploadBytes, getBytes } from "firebase/storage";
+import { getFunctions, connectFunctionsEmulator, httpsCallable } from "firebase/functions";
 
 // Fixed local endpoints and a demo-only project: this suite cannot select a
 // deployed Firebase project through environment variables or credentials.
@@ -39,7 +40,9 @@ function client(name) {
   connectFirestoreEmulator(db, "127.0.0.1", 8085);
   const storage = getStorage(app);
   connectStorageEmulator(storage, "127.0.0.1", 9199);
-  const result = { app, auth, db, storage };
+  const functions = getFunctions(app);
+  connectFunctionsEmulator(functions, "127.0.0.1", 5001);
+  const result = { app, auth, db, storage, functions };
   clients.push(result);
   return result;
 }
@@ -53,7 +56,7 @@ before(
     const response = await fetch("http://127.0.0.1:4400/emulators");
     assert.ok(response.ok, "Start the Firebase emulators before running integration tests");
     const emulators = await response.json();
-    for (const service of ["auth", "firestore", "storage"])
+    for (const service of ["auth", "firestore", "storage", "functions"])
       assert.ok(emulators[service], `${service} emulator is required`);
     owner = client("owner");
     other = client("other");
@@ -63,6 +66,12 @@ before(
     await createUserWithEmailAndPassword(owner.auth, email, password);
     await createUserWithEmailAndPassword(other.auth, `other-${suffix}@example.test`, password);
     await signInWithEmailAndPassword(device.auth, email, password);
+    await setDoc(doc(owner.db, "users", owner.auth.currentUser.uid), {
+      uid: owner.auth.currentUser.uid,
+      displayName: "Local QA",
+      xp: 0,
+      booksCompleted: 0,
+    });
   },
   { timeout: 30000 },
 );
@@ -116,6 +125,28 @@ test(
       (await getDocFromServer(privateDoc(device, "progress", "offline"))).data().chapterIndex,
       4,
     );
+  },
+);
+
+test(
+  "reading milestones reach the Functions emulator and remain idempotent",
+  { timeout: 30000 },
+  async () => {
+    const uid = owner.auth.currentUser.uid;
+    const bookId = `milestone-${suffix}`;
+    await setDoc(doc(owner.db, "users", uid, "library", bookId), { status: "quero-ler" });
+    const record = httpsCallable(owner.functions, "recordReadingMilestone");
+
+    assert.deepEqual((await record({ type: "book-added", resourceId: bookId })).data, {
+      accepted: true,
+    });
+    assert.deepEqual((await record({ type: "book-added", resourceId: bookId })).data, {
+      accepted: false,
+    });
+
+    const profile = (await getDocFromServer(doc(device.db, "users", uid))).data();
+    assert.equal(profile.xp, 5);
+    assert.equal(profile.weeklyBooksAdded, 1);
   },
 );
 

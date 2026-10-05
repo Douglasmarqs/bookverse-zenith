@@ -4,13 +4,13 @@
 
 Requisitos: Node compatível com o projeto, Firebase CLI e Java 21 no PATH. O runtime das funções é Node 20; use essa versão para reproduzir o ambiente de execução das funções.
 
-Instale as dependências com `npm ci`. Em um terminal, execute:
+Instale as dependências com `npm ci` e `npm --prefix functions ci`. Em um terminal, execute:
 
 ```sh
 npm run emulators
 ```
 
-Esse comando inicia Auth (9099), Firestore (8085) e Storage (9199), somente em `127.0.0.1`, no projeto `demo-bookverse`. Não usa dados de produção. Os dados são temporários e desaparecem ao encerrar os emuladores.
+Esse comando inicia Auth (9099), Firestore (8085), Storage (9199) e Functions (5001), somente em `127.0.0.1`, no projeto `demo-bookverse`. Não usa dados de produção. Os dados são temporários e desaparecem ao encerrar os emuladores.
 
 Em outro terminal:
 
@@ -22,12 +22,12 @@ A suíte cria contas isoladas e usa endpoints locais fixos. Falha se os emulador
 
 ## Interface autenticada
 
-Para também executar funções localmente:
+O comando anterior já inclui as Functions. Para preparar esse runtime isoladamente antes de iniciar os emuladores:
 
 ```sh
 npm --prefix functions ci
 npm --prefix functions run build
-firebase emulators:start --only auth,firestore,storage,functions --project demo-bookverse
+npm run emulators
 ```
 
 No PowerShell, inicie a interface:
@@ -63,6 +63,10 @@ Importe um PDF de várias páginas, use “Largura da tela”, aumente o zoom e 
 ### Catálogo de domínio público
 
 Abra `/catalogo` e confira “Clássicos em domínio público”. A seleção deve começar com edições verificadas em português e cada item exibido deve abrir no leitor. Bloqueie temporariamente `gutendex.com`: a prateleira deve informar indisponibilidade, enquanto tendências e gêneros continuam utilizáveis.
+
+### Marcos de leitura e reconexão
+
+Com os quatro emuladores ativos, `npm run test:integration` chama a Function `recordReadingMilestone` duas vezes para o mesmo livro. A primeira resposta deve aceitar o evento; a segunda deve recusá-lo como duplicado, mantendo apenas 5 XP e um livro adicionado. Na interface autenticada, desconecte a rede antes de concluir um capítulo e reconecte em seguida: o marco pendente deve permanecer vinculado à mesma conta e ser reenviado sem duplicar XP.
 
 ## Verificações gerais
 
