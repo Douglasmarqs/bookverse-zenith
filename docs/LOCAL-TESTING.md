@@ -60,6 +60,10 @@ Abra o mesmo livro em dois perfis independentes de navegador com a mesma conta. 
 
 Importe um PDF de várias páginas, use “Largura da tela”, aumente o zoom e role nos dois eixos. Recarregue a página: o mesmo trecho deve voltar ao visor. Redimensione a janela e confirme que o trecho continua proporcionalmente equivalente. Ao avançar para outra página, a rolagem deve começar no canto inicial. Com o mesmo PDF aberto em dois perfis da mesma conta, posições suficientemente diferentes na mesma página devem abrir a escolha de conflito com os percentuais de rolagem.
 
+### Catálogo de domínio público
+
+Abra `/catalogo` e confira “Clássicos em domínio público”. A seleção deve começar com edições verificadas em português e cada item exibido deve abrir no leitor. Bloqueie temporariamente `gutendex.com`: a prateleira deve informar indisponibilidade, enquanto tendências e gêneros continuam utilizáveis.
+
 ## Verificações gerais
 
 ```sh

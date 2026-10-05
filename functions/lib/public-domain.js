@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getPublicDomainBook = exports.searchPublicDomainBooks = void 0;
+exports.getPublicDomainBook = exports.getPublicDomainBooksByIds = exports.searchPublicDomainBooks = void 0;
 /**
  * Public-domain reading — real, full book text for titles whose copyright
  * has expired (Machado de Assis, Eça de Queirós, etc.), sourced from
@@ -24,15 +24,34 @@ async function fetchWithTimeout(url, ms) {
         clearTimeout(timer);
     }
 }
+function hasReadableText(b) {
+    return Object.entries(b.formats ?? {}).some(([mime, url]) => mime.startsWith("text/plain") && /^https?:\/\//i.test(url));
+}
 function summarize(b) {
     return {
         id: b.id,
         title: b.title,
         author: b.authors?.map((a) => a.name).join(", ") || "Autor desconhecido",
-        cover: b.formats["image/jpeg"] ?? null,
+        cover: b.formats["image/jpeg"]?.replace(/^http:/i, "https:") ?? null,
         languages: b.languages ?? [],
         subjects: (b.subjects ?? []).slice(0, 4),
+        availability: "read",
     };
+}
+function readableSummaries(books, maxResults, preferredIds) {
+    const readable = books.filter(hasReadableText);
+    if (!preferredIds)
+        return readable.slice(0, maxResults).map(summarize);
+    const byId = new Map();
+    for (const book of readable) {
+        if (!byId.has(book.id))
+            byId.set(book.id, book);
+    }
+    return preferredIds
+        .map((id) => byId.get(id))
+        .filter((book) => Boolean(book))
+        .slice(0, maxResults)
+        .map(summarize);
 }
 function textUrls(formats) {
     return Object.entries(formats)
@@ -191,8 +210,28 @@ exports.searchPublicDomainBooks = (0, https_1.onCall)({ cors: true, maxInstances
         throw new https_1.HttpsError("unavailable", "Catálogo de domínio público indisponível agora.");
     }
     const data = (await res.json());
-    const max = Math.min(request.data?.maxResults ?? 24, 40);
-    return { results: data.results.slice(0, max).map(summarize) };
+    const requested = Number(request.data?.maxResults);
+    const max = Number.isFinite(requested) ? Math.max(0, Math.min(Math.trunc(requested), 40)) : 24;
+    return { results: readableSummaries(data.results ?? [], max) };
+});
+exports.getPublicDomainBooksByIds = (0, https_1.onCall)({ cors: true, maxInstances: 10 }, async (request) => {
+    const ids = [...new Set(request.data?.ids ?? [])]
+        .filter((id) => Number.isInteger(id) && id > 0 && id <= 1000000)
+        .slice(0, 24);
+    if (ids.length === 0) {
+        throw new https_1.HttpsError("invalid-argument", "Informe ao menos uma edição válida.");
+    }
+    const url = `${GUTENDEX_BASE}/books?ids=${ids.join(",")}&languages=pt,en`;
+    const res = await fetchWithTimeout(url, 9000);
+    if (!res.ok) {
+        throw new https_1.HttpsError("unavailable", "Catálogo de domínio público indisponível agora.");
+    }
+    const data = (await res.json());
+    const requested = Number(request.data?.maxResults);
+    const max = Number.isFinite(requested)
+        ? Math.max(0, Math.min(Math.trunc(requested), ids.length, 24))
+        : ids.length;
+    return { results: readableSummaries(data.results ?? [], max, ids) };
 });
 exports.getPublicDomainBook = (0, https_1.onCall)({ cors: true, timeoutSeconds: 60, memory: "512MiB", maxInstances: 10 }, async (request) => {
     const gutenbergId = request.data?.gutenbergId;

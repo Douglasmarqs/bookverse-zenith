@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Flame, Sparkles, Plus, Check, Loader2, BookOpenCheck } from "lucide-react";
 import { booksBySubject, trendingBooks, type OpenLibraryBook } from "@/lib/open-library";
 import {
-  searchPublicDomainBooks,
+  curatedPublicDomainClassics,
   gutenbergReaderId,
   type PublicDomainSummary,
 } from "@/lib/public-domain";
@@ -69,7 +69,7 @@ function CatalogoPage() {
           trendingBooks("monthly", 18, {
             onUpdate: (r) => !cancelled && setMonthlyTrending(r),
           }),
-          searchPublicDomainBooks("classic literature", 12),
+          curatedPublicDomainClassics(12),
         ]);
         if (cancelled) return;
         if (tr.status === "fulfilled") setTrending(tr.value);
@@ -114,8 +114,19 @@ function CatalogoPage() {
             ))}
           </BookRail>
         </Shelf>
+      ) : loading ? (
+        <ShelfSkeleton />
       ) : (
-        loading && <ShelfSkeleton />
+        <Shelf
+          eyebrow="Ler agora"
+          title="Clássicos em domínio público"
+          icon={<BookOpenCheck className="h-4 w-4" />}
+        >
+          <p className="rounded-xl border border-border/60 bg-secondary/30 px-4 py-5 text-sm text-muted-foreground">
+            Esta seleção está temporariamente indisponível. As tendências e prateleiras abaixo
+            continuam acessíveis.
+          </p>
+        </Shelf>
       )}
 
       {trending.length > 0 ? (

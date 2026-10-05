@@ -34,11 +34,13 @@ As regras atuais de Firestore e Storage protegem biblioteca, progresso, preferê
 11. **Privacidade do cache local.** EPUB e PDF agora separam IndexedDB e memória por UID e livro. O armazenamento legado é mantido, mas só é migrado após confirmar no servidor que o arquivo pertence à conta atual. Uma cópia já migrada continua disponível offline. A primeira abertura de um cache legado precisa de conexão; falhas não apagam a cópia antiga. O loader também reinicia imediatamente na troca de conta/livro.
 12. **Integração Firebase.** Adicionado modo de emuladores, limitado ao desenvolvimento e ao projeto `demo-bookverse`, com testes reais de Auth, Firestore e Storage. As regras de avaliações agora exigem que o UID do documento corresponda ao autor autenticado. Os textos inventados de livros de demonstração foram retirados: IDs antigos mostram um aviso, preservando biblioteca, progresso e anotações.
 13. **Posição dentro de uma página PDF.** O progresso agora inclui a rolagem horizontal e vertical normalizada da página ampliada. A posição volta após recarregar, continua equivalente ao trocar entre mobile e desktop e participa da escolha de conflito entre dispositivos. Ajustar a página inteira temporariamente não apaga o último ponto ampliado; mudar de página começa no canto inicial.
+14. **Clássicos com edição verificável.** A prateleira deixou de pesquisar a expressão genérica `classic literature`, que retornava crítica e livros sobre clássicos. Agora consulta IDs verificados do Project Gutenberg, prioriza cinco obras em português e preserva uma ordem editorial estável. Um título só recebe “Ler agora” quando a resposta atual possui texto integral utilizável; respostas malformadas, duplicadas ou sem texto são descartadas. Se a fonte falhar, a prateleira mostra indisponibilidade sem bloquear as demais.
 
 ## Verificação realizada
 
-- `npm test`: 24 testes passaram, incluindo resolução de navegação EPUB, IDs legados e posição ampliada em PDF, além da suíte anterior de progresso, arquivos, catálogo e service worker.
+- `npm test`: 27 testes passaram, incluindo resolução de navegação EPUB, IDs legados, posição ampliada em PDF e seleção verificável de clássicos, além da suíte anterior de progresso, arquivos, catálogo e service worker.
 - `npx tsc --noEmit`: passou.
+- `npm --prefix functions run build`: passou.
 - `npm run lint`: passou com 6 avisos preexistentes de Fast Refresh e nenhum erro.
 - `npm run build`: passou após as mudanças de código desta rodada.
 - Navegador local: Home examinada em 320, 360, 375, 390, 412, 768, 1024, 1440 e 1920 px; Catálogo em 320, 390, 768, 1024 e 1440 px. Nas larguras examinadas não houve scroll horizontal da página. Login, Descobrir e Catálogo renderizaram. Uma sessão limpa do navegador abriu o Catálogo sem erro de hidratação após a correção do worker.
@@ -60,7 +62,6 @@ As regras atuais de Firestore e Storage protegem biblioteca, progresso, preferê
 - Ampliar a integração para perda de conexão durante operações do leitor; verificar as funções de marcos de leitura e repetir os fluxos em dispositivos físicos.
 - Montar corpus de EPUB 2/3, imagens, sumário, RTL e layout fixo; medir a precisão da restauração. Migrar do índice de parágrafo para âncora textual mais precisa ou CFI quando o motor suportar.
 - Separar o PDF original do modo de texto extraído sem perder busca/seleção. Ajuste à largura/página e recuperação da posição ampliada foram adicionados ao leitor por imagem; faltam miniaturas e duas páginas em tablets quando apropriado.
-- Corrigir a descoberta de clássicos: a busca genérica `classic literature` retorna livros **sobre** clássicos. Selecionar obras por IDs/edições verificadas e mostrar indisponibilidade real.
 - Testar estados de erro/offline e acessibilidade do leitor em mobile, tablet, landscape e teclado. Medir bundles grandes de PDF.js, Firestore e JSZip e carregar somente nas rotas necessárias.
 
 ### Etapa 2 — Catálogo
