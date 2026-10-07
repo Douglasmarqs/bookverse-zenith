@@ -16,6 +16,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import type { PdfBook } from "@/lib/pdf-store";
+import {
+  clampPdfPage,
+  pdfFitScale,
+  pdfOutputScale,
+  normalizePdfViewport,
+  capturePdfViewport,
+  pdfViewportOffset,
+} from "@/lib/pdf-viewport";
 import { markAsReading } from "@/lib/library";
 import {
   addPdfRegionHighlight,
@@ -26,17 +34,26 @@ import {
 } from "@/lib/annotations";
 import { openLumiPanel } from "@/lib/lumi-panel-store";
 import { PdfDisplaySettingsPanel } from "@/components/reader/pdf-display-settings";
+import { ProgressConflictDialog } from "@/components/reader/progress-conflict-dialog";
+import { reportProductEvent } from "@/lib/observability";
 import {
   loadPdfDisplaySettings,
+  normalizePdfDisplaySettings,
   savePdfDisplaySettings,
   type PdfDisplaySettings,
 } from "@/lib/pdf-display-settings";
 import {
-  loadProgressRemote,
+  PROGRESS_CONFLICT_EVENT,
+  acceptLocalProgress,
+  acceptRemoteProgress,
+  loadProgressForReader,
+  loadProgressLocal,
   loadSettings,
   saveProgress,
   saveSettings,
   saveSettingsRemote,
+  type ProgressConflict,
+  type ProgressConflictEvent,
 } from "@/lib/reader-store";
 
 const PDF_PAGE_TURN_DURATION_MS = 680;
@@ -67,19 +84,32 @@ type PdfDocument = {
  * PDF.js instead of the browser iframe so the reading chrome, progress,
  * gestures and paper-like page transition stay consistent with EPUBs. */
 export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
+  return <PdfPageViewerSession key={`${uid}:${book.id}`} uid={uid} book={book} />;
+}
+
+function PdfPageViewerSession({ uid, book }: { uid: string; book: PdfBook }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pageTurnCanvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const pdfRef = useRef<PdfDocument | null>(null);
   const destroyPdfRef = useRef<(() => Promise<void>) | null>(null);
   const renderCancelRef = useRef<(() => void) | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const pageTurnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isPageTurningRef = useRef(false);
+  const viewportRef = useRef({ page: 1, x: 0, y: 0 });
+  const restoringViewportRef = useRef(true);
+  const viewportSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveLatestRef = useRef<() => void>(() => {});
+  const [restoreEpoch, setRestoreEpoch] = useState(0);
   const [page, setPage] = useState(1);
+  const [progressLoaded, setProgressLoaded] = useState(false);
+  const [syncConflict, setSyncConflict] = useState<ProgressConflict | null>(null);
   const [pageCount, setPageCount] = useState(Math.max(1, book.pageCount));
   const [pdfReady, setPdfReady] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [renderedPage, setRenderedPage] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [pageTurn, setPageTurn] = useState<PdfPageTurn | null>(null);
@@ -96,6 +126,7 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
   const pageRegions = annotations.pdfRegions.filter((region) => region.page === page);
 
   const pageImageForLumi = useCallback(() => {
+    if (loading || error || renderedPage !== page) return null;
     const source = canvasRef.current;
     if (!source || !source.width || !source.height) return null;
     const maxLongSide = 1400;
@@ -109,7 +140,7 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
     context.fillRect(0, 0, output.width, output.height);
     context.drawImage(source, 0, 0, output.width, output.height);
     return output.toDataURL("image/jpeg", 0.78);
-  }, []);
+  }, [error, loading, page, renderedPage]);
 
   const openPageWithLumi = useCallback(
     (topic: "question" | "translation" | "summary", initialPrompt?: string) => {
@@ -171,12 +202,22 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
 
   const goTo = useCallback(
     (next: number) => {
-      const target = Math.max(1, Math.min(pageCount, next));
+      if (!progressLoaded || syncConflict || settingsOpen || marking) return;
+      const target = clampPdfPage(next, pageCount);
       if (target === page || isPageTurningRef.current) return;
+      saveLatestRef.current();
+      setRegionDraft(null);
 
       const canvas = canvasRef.current;
       const turnCanvas = pageTurnCanvasRef.current;
-      const turnsOneLeaf = pageTurnEnabled && Math.abs(target - page) === 1 && canvas?.width;
+      const turnsOneLeaf =
+        pageTurnEnabled &&
+        !loading &&
+        !error &&
+        renderedPage === page &&
+        !window.matchMedia("(prefers-reduced-motion: reduce)").matches &&
+        Math.abs(target - page) === 1 &&
+        canvas?.width;
       if (!turnsOneLeaf || !canvas || !turnCanvas) {
         setPage(target);
         return;
@@ -206,7 +247,18 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
         setPage(target);
       }
     },
-    [page, pageCount, pageTurnEnabled],
+    [
+      error,
+      loading,
+      marking,
+      page,
+      pageCount,
+      pageTurnEnabled,
+      progressLoaded,
+      renderedPage,
+      settingsOpen,
+      syncConflict,
+    ],
   );
 
   const togglePageTurn = useCallback(() => {
@@ -218,12 +270,10 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
   }, [pageTurnEnabled, uid]);
 
   const updateDisplaySettings = useCallback((patch: Partial<PdfDisplaySettings>) => {
-    setDisplaySettings((current) => {
-      const next = { ...current, ...patch };
-      savePdfDisplaySettings(next);
-      return next;
-    });
+    setDisplaySettings((current) => normalizePdfDisplaySettings({ ...current, ...patch }));
   }, []);
+
+  useEffect(() => savePdfDisplaySettings(displaySettings), [displaySettings]);
 
   useEffect(() => {
     const objectUrl = URL.createObjectURL(book.source);
@@ -233,11 +283,79 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
       { title: book.title, author: book.author, cover: book.cover ?? null },
       book.id,
     );
-    void loadProgressRemote(book.id).then((progress) => {
-      if (progress?.pageIndex !== undefined) setPage(Math.max(1, progress.pageIndex + 1));
-    });
-    return () => URL.revokeObjectURL(objectUrl);
+    let cancelled = false;
+    void loadProgressForReader(book.id, uid)
+      .then(({ progress, conflict }) => {
+        if (cancelled) return;
+        if (progress) {
+          const restoredPage = clampPdfPage(
+            (progress.pageIndex ?? progress.chapterIndex) + 1,
+            book.pageCount,
+          );
+          viewportRef.current = {
+            page: restoredPage,
+            ...normalizePdfViewport(progress.pdfViewport),
+          };
+          setPage(restoredPage);
+        }
+        setSyncConflict(conflict);
+        setProgressLoaded(true);
+      })
+      .catch((cause) => {
+        console.error("[pdf-reader] progress load failed", cause);
+        if (!cancelled)
+          setError("Não foi possível recuperar sua posição. Reabra o livro para tentar novamente.");
+      });
+    return () => {
+      cancelled = true;
+      URL.revokeObjectURL(objectUrl);
+    };
   }, [book, uid]);
+
+  useEffect(() => {
+    const onConflict = (event: Event) => {
+      const detail = (event as CustomEvent<ProgressConflictEvent>).detail;
+      if (detail.bookId === book.id) {
+        setSettingsOpen(false);
+        setMarking(false);
+        setRegionDraft(null);
+        setSyncConflict(detail);
+      }
+    };
+    window.addEventListener(PROGRESS_CONFLICT_EVENT, onConflict);
+    return () => window.removeEventListener(PROGRESS_CONFLICT_EVENT, onConflict);
+  }, [book.id]);
+
+  const chooseProgress = useCallback(
+    (source: "local" | "remote") => {
+      if (!syncConflict) return;
+      let selected =
+        source === "remote"
+          ? syncConflict.remote
+          : (loadProgressLocal(book.id, uid) ?? syncConflict.local);
+      if (source === "remote") {
+        selected = acceptRemoteProgress(
+          book.id,
+          uid,
+          selected,
+          syncConflict.local,
+          syncConflict.legacy,
+        );
+      } else {
+        selected = acceptLocalProgress(book.id, uid, selected, syncConflict.remote);
+      }
+      const restoredPage = clampPdfPage(
+        (selected.pageIndex ?? selected.chapterIndex) + 1,
+        pageCount,
+      );
+      restoringViewportRef.current = true;
+      viewportRef.current = { page: restoredPage, ...normalizePdfViewport(selected.pdfViewport) };
+      setPage(restoredPage);
+      setRestoreEpoch((epoch) => epoch + 1);
+      setSyncConflict(null);
+    },
+    [book.id, pageCount, syncConflict, uid],
+  );
 
   useEffect(() => subscribeAnnotations(uid, book.id, setAnnotations), [book.id, uid]);
 
@@ -251,6 +369,7 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
 
   useEffect(() => {
     let cancelled = false;
+    let destroy: (() => Promise<void>) | null = null;
     async function open() {
       try {
         const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
@@ -260,10 +379,11 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
             import.meta.url,
           ).toString();
         }
-        const task = pdfjs.getDocument({
-          data: new Uint8Array(await book.source.arrayBuffer()),
-        });
-        destroyPdfRef.current = () => task.destroy();
+        const data = new Uint8Array(await book.source.arrayBuffer());
+        if (cancelled) return;
+        const task = pdfjs.getDocument({ data });
+        destroy = () => task.destroy();
+        destroyPdfRef.current = destroy;
         const pdf = (await task.promise) as unknown as PdfDocument;
         if (cancelled) {
           await task.destroy();
@@ -283,16 +403,35 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
       cancelled = true;
       renderCancelRef.current?.();
       pdfRef.current = null;
-      const destroy = destroyPdfRef.current;
-      destroyPdfRef.current = null;
+      if (destroyPdfRef.current === destroy) destroyPdfRef.current = null;
       if (destroy) void destroy();
     };
   }, [book.source]);
 
   useEffect(() => {
-    const stage = stageRef.current;
+    if (pdfReady && progressLoaded) setPage((current) => clampPdfPage(current, pageCount));
+  }, [pageCount, pdfReady, progressLoaded]);
+
+  useEffect(() => {
+    // Scrollbars consume width on Windows; observe the actual scrolling area
+    // so width-fit never adds accidental horizontal overflow.
+    const stage = scrollRef.current;
     if (!stage) return;
-    const update = () => setSize({ width: stage.clientWidth, height: stage.clientHeight });
+    let observedWidth = -1;
+    let observedHeight = -1;
+    const update = () => {
+      const width = stage.clientWidth;
+      const height = stage.clientHeight;
+      if (width === observedWidth && height === observedHeight) return;
+      observedWidth = width;
+      observedHeight = height;
+      // A responsive resize changes the scroll range before the PDF canvas is
+      // rerendered. Ignore that synthetic scroll so it cannot overwrite the
+      // normalized reading position that the next render must restore.
+      restoringViewportRef.current = true;
+      if (viewportSaveTimerRef.current) clearTimeout(viewportSaveTimerRef.current);
+      setSize({ width, height });
+    };
     update();
     const observer = new ResizeObserver(update);
     observer.observe(stage);
@@ -302,73 +441,212 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
   useEffect(() => {
     const pdf = pdfRef.current;
     const canvas = canvasRef.current;
-    if (!pdf || !canvas || size.width < 80 || size.height < 80) return;
+    if (
+      !pdf ||
+      !canvas ||
+      !progressLoaded ||
+      page > pdf.numPages ||
+      size.width < 80 ||
+      size.height < 80
+    )
+      return;
     let cancelled = false;
+    let cancelRender: (() => void) | null = null;
+    let restoreFrame = 0;
+    restoringViewportRef.current = true;
+    if (viewportSaveTimerRef.current) clearTimeout(viewportSaveTimerRef.current);
+    if (viewportRef.current.page !== page) viewportRef.current = { page, x: 0, y: 0 };
     async function renderPage() {
       setLoading(true);
-      renderCancelRef.current?.();
+      setError(null);
       const pdfPage = await pdf!.getPage(page);
+      if (cancelled) return;
       const initial = pdfPage.getViewport({ scale: 1 });
-      const availableWidth = Math.max(80, size.width - displaySettings.pagePadding * 2);
-      const availableHeight = Math.max(80, size.height - displaySettings.pagePadding * 2);
-      const fitScale = Math.min(availableWidth / initial.width, availableHeight / initial.height);
+      const fitScale = pdfFitScale(initial, size, displaySettings.pagePadding, displaySettings.fit);
       const cssScale = fitScale * displaySettings.zoom;
       const viewport = pdfPage.getViewport({ scale: cssScale });
-      const outputScale = Math.min(window.devicePixelRatio || 1, 2);
-      const context = canvas!.getContext("2d", { alpha: false });
-      if (!context || cancelled) return;
-      canvas!.width = Math.floor(viewport.width * outputScale);
-      canvas!.height = Math.floor(viewport.height * outputScale);
-      canvas!.style.width = `${Math.floor(viewport.width)}px`;
-      canvas!.style.height = `${Math.floor(viewport.height)}px`;
+      const outputScale = pdfOutputScale(viewport.width, viewport.height, window.devicePixelRatio);
+      // Each render owns a canvas. A cancelled PDF.js task can finish asynchronously;
+      // it must never clear or draw into the next page's visible canvas.
+      const buffer = document.createElement("canvas");
+      const context = buffer.getContext("2d", { alpha: false });
+      if (!context) throw new Error("Canvas unavailable");
+      buffer.width = Math.max(1, Math.floor(viewport.width * outputScale));
+      buffer.height = Math.max(1, Math.floor(viewport.height * outputScale));
       const task = pdfPage.render({
         canvasContext: context,
-        canvas: canvas!,
+        canvas: buffer,
         viewport,
         transform: outputScale === 1 ? undefined : [outputScale, 0, 0, outputScale, 0, 0],
       });
-      renderCancelRef.current = () => task.cancel();
+      cancelRender = () => task.cancel();
+      renderCancelRef.current = cancelRender;
       try {
         await task.promise;
-        if (!cancelled) setLoading(false);
+        if (cancelled) return;
+        canvas!.width = buffer.width;
+        canvas!.height = buffer.height;
+        canvas!.style.width = `${Math.floor(viewport.width)}px`;
+        canvas!.style.height = `${Math.floor(viewport.height)}px`;
+        const visibleContext = canvas!.getContext("2d", { alpha: false });
+        if (!visibleContext) throw new Error("Canvas unavailable");
+        visibleContext.drawImage(buffer, 0, 0);
+        const area = scrollRef.current;
+        if (area)
+          area.scrollTo({ ...pdfViewportOffset(area, viewportRef.current), behavior: "instant" });
+        restoreFrame = requestAnimationFrame(() => {
+          if (cancelled) return;
+          // Scrollbar appearance can change the available dimensions after
+          // the canvas is committed. Restore once layout has settled too.
+          if (area)
+            area.scrollTo({ ...pdfViewportOffset(area, viewportRef.current), behavior: "instant" });
+          restoreFrame = requestAnimationFrame(() => {
+            if (cancelled) return;
+            restoringViewportRef.current = false;
+            saveLatestRef.current();
+          });
+        });
+        setRenderedPage(page);
+        setLoading(false);
       } catch (cause) {
         if ((cause as { name?: string })?.name !== "RenderingCancelledException") throw cause;
+      } finally {
+        buffer.width = 0;
+        buffer.height = 0;
       }
     }
     void renderPage().catch((cause) => {
+      reportProductEvent("pdf_render_failed", cause, { format: "pdf", stage: "render" });
       console.error("[pdf-reader] page render failed", cause);
       if (!cancelled) setError("Não foi possível mostrar esta página.");
     });
-    saveProgress(book.id, {
-      chapterIndex: page - 1,
-      chapterCount: pageCount,
-      pageIndex: page - 1,
-      pageCount,
-      scrollRatio: 0,
-      overallRatio: pageCount > 1 ? (page - 1) / (pageCount - 1) : 0,
-      updatedAt: Date.now(),
-    });
     return () => {
       cancelled = true;
-      renderCancelRef.current?.();
+      cancelAnimationFrame(restoreFrame);
+      cancelRender?.();
+      if (renderCancelRef.current === cancelRender) renderCancelRef.current = null;
     };
-  }, [book.id, displaySettings.pagePadding, displaySettings.zoom, page, pageCount, pdfReady, size]);
+  }, [
+    book.id,
+    displaySettings.fit,
+    displaySettings.pagePadding,
+    displaySettings.zoom,
+    page,
+    pageCount,
+    pdfReady,
+    progressLoaded,
+    size,
+    restoreEpoch,
+  ]);
+
+  const persistProgress = useCallback(() => {
+    if (
+      !progressLoaded ||
+      !pdfReady ||
+      loading ||
+      error ||
+      renderedPage !== page ||
+      syncConflict ||
+      restoringViewportRef.current ||
+      viewportRef.current.page !== page
+    )
+      return;
+    saveProgress(
+      book.id,
+      {
+        ...loadProgressLocal(book.id, uid),
+        chapterIndex: page - 1,
+        chapterCount: pageCount,
+        pageIndex: page - 1,
+        pageCount,
+        scrollRatio: 0,
+        pdfViewport: { x: viewportRef.current.x, y: viewportRef.current.y },
+        overallRatio: pageCount > 1 ? (page - 1) / (pageCount - 1) : 0,
+        updatedAt: Date.now(),
+      },
+      uid,
+    );
+  }, [
+    book.id,
+    error,
+    loading,
+    page,
+    pageCount,
+    pdfReady,
+    progressLoaded,
+    renderedPage,
+    syncConflict,
+    uid,
+  ]);
+
+  useEffect(() => {
+    saveLatestRef.current = persistProgress;
+    persistProgress();
+  }, [persistProgress]);
+
+  const onViewportScroll = useCallback(() => {
+    const area = scrollRef.current;
+    if (
+      !area ||
+      restoringViewportRef.current ||
+      loading ||
+      renderedPage !== page ||
+      syncConflict ||
+      viewportRef.current.page !== page
+    )
+      return;
+    const next = capturePdfViewport(area, viewportRef.current);
+    if (
+      Math.abs(next.x - viewportRef.current.x) < 0.0001 &&
+      Math.abs(next.y - viewportRef.current.y) < 0.0001
+    )
+      return;
+    viewportRef.current = { page, ...next };
+    if (viewportSaveTimerRef.current) clearTimeout(viewportSaveTimerRef.current);
+    viewportSaveTimerRef.current = setTimeout(() => saveLatestRef.current(), 250);
+  }, [loading, page, renderedPage, syncConflict]);
+
+  useEffect(() => {
+    const flush = () => saveLatestRef.current();
+    window.addEventListener("pagehide", flush);
+    return () => {
+      if (viewportSaveTimerRef.current) clearTimeout(viewportSaveTimerRef.current);
+      window.removeEventListener("pagehide", flush);
+      flush();
+    };
+  }, []);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       const tag = (document.activeElement?.tagName ?? "").toLowerCase();
-      if (tag === "input" || tag === "textarea") return;
-      if (event.key === "ArrowRight") goTo(page + 1);
-      if (event.key === "ArrowLeft") goTo(page - 1);
+      if (
+        settingsOpen ||
+        syncConflict ||
+        marking ||
+        event.defaultPrevented ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.altKey ||
+        tag === "input" ||
+        tag === "textarea" ||
+        tag === "select" ||
+        (document.activeElement as HTMLElement)?.isContentEditable
+      )
+        return;
+      if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+        event.preventDefault();
+        goTo(page + (event.key === "ArrowRight" ? 1 : -1));
+      }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [goTo, page]);
+  }, [goTo, marking, page, settingsOpen, syncConflict]);
 
   return (
     <div className="fixed inset-0 z-30 flex min-h-0 flex-col overflow-hidden bg-[#edf5ff] text-slate-950">
-      <header className="z-20 flex shrink-0 items-center justify-between gap-2 border-b border-blue-100 bg-white/95 px-2 py-2 shadow-sm backdrop-blur sm:px-5">
-        <div className="flex min-w-0 items-center gap-1 sm:gap-2">
+      <ProgressConflictDialog conflict={syncConflict} onChoose={chooseProgress} />
+      <header className="z-20 flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-blue-100 bg-white/95 px-2 py-2 shadow-sm backdrop-blur sm:flex-nowrap sm:px-5">
+        <div className="flex min-w-0 basis-full items-center gap-1 sm:basis-auto sm:gap-2">
           <Link
             to="/biblioteca"
             className="grid h-10 w-10 shrink-0 place-items-center rounded-full transition hover:bg-blue-50"
@@ -381,9 +659,10 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
             <p className="truncate text-[11px] text-slate-500">PDF privado · modo página</p>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="ml-auto flex shrink-0 items-center gap-1">
           <button
             type="button"
+            disabled={loading || !!error || renderedPage !== page}
             onClick={() => {
               setMarking((value) => !value);
               setRegionDraft(null);
@@ -449,6 +728,7 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
           <a
             href={url ?? undefined}
             download={book.sourceName}
+            aria-label="Baixar PDF original"
             className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-blue-200 px-2.5 text-xs font-medium text-blue-700 transition hover:bg-blue-50 sm:px-3"
           >
             <Download className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Baixar</span>
@@ -458,17 +738,30 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
 
       <main
         ref={stageRef}
-        className="relative min-h-0 flex-1 touch-pan-y overflow-hidden bg-[radial-gradient(circle_at_50%_20%,#ffffff_0%,#edf5ff_70%)]"
+        className="relative min-h-0 flex-1 touch-auto overflow-hidden bg-[radial-gradient(circle_at_50%_20%,#ffffff_0%,#edf5ff_70%)]"
         onTouchStart={(event) => {
-          if (marking || settingsOpen) {
+          const scroll = scrollRef.current;
+          if (
+            marking ||
+            settingsOpen ||
+            syncConflict ||
+            event.touches.length !== 1 ||
+            (scroll && scroll.scrollWidth > scroll.clientWidth + 2)
+          ) {
             touchStartRef.current = null;
             return;
           }
           const touch = event.touches[0];
           touchStartRef.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
         }}
+        onTouchMove={(event) => {
+          if (event.touches.length !== 1) touchStartRef.current = null;
+        }}
+        onTouchCancel={() => {
+          touchStartRef.current = null;
+        }}
         onTouchEnd={(event) => {
-          if (marking || settingsOpen) {
+          if (marking || settingsOpen || syncConflict) {
             touchStartRef.current = null;
             return;
           }
@@ -479,26 +772,33 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
           const dx = touch.clientX - start.x;
           const dy = touch.clientY - start.y;
           if (Math.abs(dx) >= 44 && Math.abs(dx) > Math.abs(dy) * 1.2) {
-            goTo(page + (dx > 0 ? 1 : -1));
+            goTo(page + (dx < 0 ? 1 : -1));
           }
         }}
       >
         <div
+          ref={scrollRef}
+          onScroll={onViewportScroll}
           className="absolute inset-0 overflow-auto"
-          style={{ padding: `${displaySettings.pagePadding}px` }}
+          style={{ padding: `${displaySettings.pagePadding}px`, overflowAnchor: "none" }}
         >
-          <div className="grid min-h-full min-w-full place-items-center">
+          <div className="flex min-h-full w-max min-w-full">
             <div
-              className="relative shrink-0 shadow-2xl ring-1 ring-slate-900/10"
+              className="relative m-auto shrink-0 shadow-2xl ring-1 ring-slate-900/10"
               style={{
                 filter: `brightness(${displaySettings.brightness}) contrast(${displaySettings.contrast})`,
               }}
             >
-              <canvas ref={canvasRef} className="block bg-white" />
+              <canvas
+                ref={canvasRef}
+                role="img"
+                aria-label={`Página ${page} de ${pageCount} de ${book.title}. PDF digitalizado; use a Lumi para consultar a imagem.`}
+                className="block bg-white"
+              />
               <div
                 className={`absolute inset-0 ${marking ? "cursor-crosshair touch-none" : "pointer-events-none"}`}
                 onPointerDown={(event) => {
-                  if (!marking) return;
+                  if (!marking || loading || renderedPage !== page) return;
                   event.currentTarget.setPointerCapture(event.pointerId);
                   const point = normalizedPoint(event);
                   setRegionDraft({ startX: point.x, startY: point.y, ...point });
@@ -515,6 +815,7 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
                   setRegionDraft(null);
                   void saveRegion(completed);
                 }}
+                onPointerCancel={() => setRegionDraft(null)}
               >
                 {marking &&
                   pageRegions.map((region) => (
@@ -586,14 +887,17 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
         </div>
         {(loading || !pdfReady) && !error && (
           <div className="pointer-events-none absolute inset-0 z-[5] grid place-items-center bg-[#edf5ff]/70">
-            <div className="rounded-full bg-white/95 px-4 py-2 text-xs text-slate-600 shadow-lg">
+            <div
+              role="status"
+              className="rounded-full bg-white/95 px-4 py-2 text-xs text-slate-600 shadow-lg"
+            >
               <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin" /> Preparando página…
             </div>
           </div>
         )}
         {error && (
           <div className="absolute inset-0 grid place-items-center p-6 text-center">
-            <div className="max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+            <div role="alert" className="max-w-sm rounded-2xl bg-white p-6 shadow-xl">
               <FileImage className="mx-auto h-6 w-6 text-blue-600" />
               <p className="mt-3 font-medium">{error}</p>
               <p className="mt-1 text-xs text-slate-500">
@@ -609,26 +913,19 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
             </p>
           </div>
         )}
-        <button
-          onClick={() => goTo(page - 1)}
-          disabled={page <= 1 || marking || settingsOpen}
-          aria-label="Página anterior"
-          className="absolute inset-y-0 left-0 grid w-14 place-items-center text-slate-700 opacity-0 transition hover:bg-white/20 hover:opacity-100 disabled:pointer-events-none sm:w-24"
-        >
-          <ChevronLeft className="h-7 w-7 rounded-full bg-white/90 p-1 shadow" />
-        </button>
-        <button
-          onClick={() => goTo(page + 1)}
-          disabled={page >= pageCount || marking || settingsOpen}
-          aria-label="Próxima página"
-          className="absolute inset-y-0 right-0 grid w-14 place-items-center text-slate-700 opacity-0 transition hover:bg-white/20 hover:opacity-100 disabled:pointer-events-none sm:w-24"
-        >
-          <ChevronRight className="h-7 w-7 rounded-full bg-white/90 p-1 shadow" />
-        </button>
       </main>
 
       <footer className="z-20 shrink-0 border-t border-blue-100 bg-white/95 px-3 pb-[max(0.65rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur sm:px-6">
         <div className="mx-auto flex max-w-4xl items-center gap-3 text-[11px] text-slate-500">
+          <button
+            type="button"
+            onClick={() => goTo(page - 1)}
+            disabled={page <= 1 || marking || settingsOpen || !!syncConflict}
+            aria-label="Página anterior"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full hover:bg-blue-50 disabled:opacity-30"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
           <span className="tabular-nums">{Math.round((page / pageCount) * 100)}%</span>
           <input
             aria-label="Ir para página"
@@ -636,12 +933,22 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
             min={1}
             max={pageCount}
             value={page}
+            disabled={!progressLoaded || marking || !!syncConflict}
             onChange={(event) => goTo(Number(event.target.value))}
-            className="h-1 flex-1 accent-blue-600"
+            className="h-8 min-w-0 flex-1 accent-blue-600"
           />
           <span className="shrink-0 tabular-nums">
             Pág. {page}/{pageCount}
           </span>
+          <button
+            type="button"
+            onClick={() => goTo(page + 1)}
+            disabled={page >= pageCount || marking || settingsOpen || !!syncConflict}
+            aria-label="Próxima página"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full hover:bg-blue-50 disabled:opacity-30"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
         </div>
       </footer>
       <PdfDisplaySettingsPanel

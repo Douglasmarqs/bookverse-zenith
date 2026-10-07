@@ -11,24 +11,22 @@
  * that doesn't set CORS headers — if so, this throws a clear error rather
  * than hanging (the reader page already shows that error to the user).
  */
-import { getFunctions, httpsCallable } from "firebase/functions";
 import { createBreaker } from "./net-utils";
+import { bookverseCallable } from "./firebase-functions";
+import {
+  CURATED_PUBLIC_DOMAIN_CLASSIC_IDS,
+  normalizePublicDomainBooks,
+  type PublicDomainSummary,
+} from "./public-domain-catalog";
+
+export type { PublicDomainSummary } from "./public-domain-catalog";
 
 /** Cloud Functions may not be deployed in this environment — after the first
  * failure, skip them for a while instead of waiting on a timeout each time. */
 const pdFnBreaker = createBreaker(5 * 60_000);
 
-import { getFirebase } from "./firebase";
+import { getFirebase } from "./firebase-services";
 import type { Book, Chapter } from "./sample-book";
-
-export interface PublicDomainSummary {
-  id: number;
-  title: string;
-  author: string;
-  cover: string | null;
-  languages: string[];
-  subjects: string[];
-}
 
 const LANGUAGE_LABELS: Record<string, string> = {
   pt: "Português",
@@ -100,17 +98,6 @@ interface GutendexBook {
   languages: string[];
   subjects: string[];
   formats: Record<string, string>;
-}
-
-function summarize(b: GutendexBook): PublicDomainSummary {
-  return {
-    id: b.id,
-    title: b.title,
-    author: b.authors?.map((a) => a.name).join(", ") || "Autor desconhecido",
-    cover: b.formats["image/jpeg"] ?? null,
-    languages: b.languages ?? [],
-    subjects: (b.subjects ?? []).slice(0, 4),
-  };
 }
 
 function textUrls(formats: Record<string, string>): string[] {
@@ -271,8 +258,24 @@ async function directSearchPublicDomain(
   const url = `${GUTENDEX_BASE}/books?search=${encodeURIComponent(query)}&languages=pt,en`;
   const res = await fetchWithTimeout(url, 9000);
   if (!res.ok) throw new Error(`Gutendex ${res.status}`);
-  const data = (await res.json()) as { results: GutendexBook[] };
-  return (data.results ?? []).slice(0, maxResults).map(summarize);
+  const data = (await res.json()) as { results?: unknown };
+  return normalizePublicDomainBooks(data.results, { maxResults });
+}
+
+async function directPublicDomainBooksByIds(
+  ids: readonly number[],
+  maxResults: number,
+): Promise<PublicDomainSummary[]> {
+  const selected = ids.slice(0, 24);
+  if (selected.length === 0) return [];
+  const url = `${GUTENDEX_BASE}/books?ids=${selected.join(",")}&languages=pt,en`;
+  const res = await fetchWithTimeout(url, 9000);
+  if (!res.ok) throw new Error(`Gutendex ${res.status}`);
+  const data = (await res.json()) as { results?: unknown };
+  return normalizePublicDomainBooks(data.results, {
+    maxResults,
+    preferredIds: selected,
+  });
 }
 
 async function directGetPublicDomainBook(gutenbergId: number): Promise<Book> {
@@ -302,12 +305,12 @@ export async function searchPublicDomainBooks(
   const fb = getFirebase();
   if (fb && !pdFnBreaker.isOpen()) {
     try {
-      const fn = httpsCallable<
+      const fn = bookverseCallable<
         { query: string; maxResults?: number },
         { results: PublicDomainSummary[] }
         // Gutendex has a 9 s server-side deadline; a shorter client deadline
         // made a healthy callable function look unavailable.
-      >(getFunctions(fb.app), "searchPublicDomainBooks", { timeout: 15_000 });
+      >("searchPublicDomainBooks", 15_000);
       const res = await fn({ query, maxResults });
       return res.data.results ?? [];
     } catch (err) {
@@ -327,17 +330,45 @@ export async function searchPublicDomainBooks(
   }
 }
 
+/** A stable shelf of verified editions, instead of a keyword search that can
+ * return criticism and reference books merely containing "classic literature". */
+export async function curatedPublicDomainClassics(maxResults = 12): Promise<PublicDomainSummary[]> {
+  const ids = CURATED_PUBLIC_DOMAIN_CLASSIC_IDS.slice(0, Math.max(0, Math.min(24, maxResults)));
+  if (ids.length === 0) return [];
+
+  const fb = getFirebase();
+  if (fb && !pdFnBreaker.isOpen()) {
+    try {
+      const fn = bookverseCallable<
+        { ids: number[]; maxResults: number },
+        { results: PublicDomainSummary[] }
+      >("getPublicDomainBooksByIds", 15_000);
+      const res = await fn({ ids: [...ids], maxResults: ids.length });
+      return res.data.results ?? [];
+    } catch (err) {
+      pdFnBreaker.trip();
+      console.warn(
+        "[public-domain] curated cloud function failed, falling back to direct fetch",
+        err,
+      );
+    }
+  }
+
+  try {
+    return await directPublicDomainBooksByIds(ids, ids.length);
+  } catch (err) {
+    console.warn("[public-domain] curated direct fetch failed", err);
+    return [];
+  }
+}
+
 export async function getPublicDomainBook(gutenbergId: number): Promise<Book> {
   const fb = getFirebase();
   let cloudFunctionTried = false;
   if (fb && !pdFnBreaker.isOpen()) {
     try {
       cloudFunctionTried = true;
-      const fn = httpsCallable<{ gutenbergId: number }, Book>(
-        getFunctions(fb.app),
-        "getPublicDomainBook",
-        { timeout: 30_000 },
-      );
+      const fn = bookverseCallable<{ gutenbergId: number }, Book>("getPublicDomainBook", 30_000);
       const res = await fn({ gutenbergId });
       return res.data;
     } catch (err) {

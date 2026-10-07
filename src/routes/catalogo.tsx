@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Flame, Sparkles, Plus, Check, Loader2, BookOpenCheck } from "lucide-react";
 import { booksBySubject, trendingBooks, type OpenLibraryBook } from "@/lib/open-library";
 import {
-  searchPublicDomainBooks,
+  curatedPublicDomainClassics,
   gutenbergReaderId,
   type PublicDomainSummary,
 } from "@/lib/public-domain";
@@ -13,6 +13,7 @@ import { describeFirestoreError } from "@/lib/async-utils";
 import { useAuthUser, useInView } from "@/hooks/use-auth-user";
 import { LanguageBadge } from "@/components/language-badge";
 import { Carousel } from "@/components/carousel";
+import { reportProductEvent } from "@/lib/observability";
 
 export const Route = createFileRoute("/catalogo")({
   head: () => ({
@@ -21,12 +22,12 @@ export const Route = createFileRoute("/catalogo")({
       {
         name: "description",
         content:
-          "Bestsellers, tendências e prateleiras curadas por gênero. Descubra e adicione títulos à sua biblioteca.",
+          "Tendências de leitura e prateleiras por gênero. Descubra e adicione títulos à sua biblioteca.",
       },
       { property: "og:title", content: "Catálogo — BookVerse" },
       {
         property: "og:description",
-        content: "Bestsellers, tendências e prateleiras curadas por gênero.",
+        content: "Tendências de leitura e prateleiras por gênero.",
       },
     ],
   }),
@@ -51,7 +52,7 @@ const SHELVES: { key: string; subject: string; title: string; eyebrow: string }[
 
 function CatalogoPage() {
   const [trending, setTrending] = useState<OpenLibraryBook[]>([]);
-  const [bestsellers, setBestsellers] = useState<OpenLibraryBook[]>([]);
+  const [monthlyTrending, setMonthlyTrending] = useState<OpenLibraryBook[]>([]);
   const [publicDomain, setPublicDomain] = useState<PublicDomainSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -62,20 +63,36 @@ function CatalogoPage() {
     let cancelled = false;
     (async () => {
       try {
-        const [tr, best, pd] = await Promise.allSettled([
+        const [tr, monthly, pd] = await Promise.allSettled([
           trendingBooks("weekly", 12, {
             onUpdate: (r) => !cancelled && setTrending(r),
           }),
-          booksBySubject("bestsellers", 12, {
-            onUpdate: (r) => !cancelled && setBestsellers(r),
+          trendingBooks("monthly", 18, {
+            onUpdate: (r) => !cancelled && setMonthlyTrending(r),
           }),
-          searchPublicDomainBooks("classic literature", 12),
+          curatedPublicDomainClassics(12),
         ]);
         if (cancelled) return;
         if (tr.status === "fulfilled") setTrending(tr.value);
-        if (best.status === "fulfilled") setBestsellers(best.value);
+        else
+          reportProductEvent("catalog_request_failed", tr.reason, {
+            provider: "open-library",
+            stage: "weekly",
+          });
+        if (monthly.status === "fulfilled") setMonthlyTrending(monthly.value);
+        else
+          reportProductEvent("catalog_request_failed", monthly.reason, {
+            provider: "open-library",
+            stage: "monthly",
+          });
         if (pd.status === "fulfilled") setPublicDomain(pd.value);
+        else
+          reportProductEvent("catalog_request_failed", pd.reason, {
+            provider: "gutendex",
+            stage: "curated",
+          });
       } catch (err) {
+        reportProductEvent("catalog_request_failed", err, { stage: "catalog" });
         console.warn("[catalogo] failed to load catalog data", err);
       } finally {
         if (!cancelled) setLoading(false);
@@ -86,6 +103,9 @@ function CatalogoPage() {
     };
   }, []);
 
+  const weeklyIds = new Set(trending.map((book) => book.workKey));
+  const monthlyOnly = monthlyTrending.filter((book) => !weeklyIds.has(book.workKey)).slice(0, 12);
+
   return (
     <div className="mx-auto max-w-7xl px-5 py-12 md:px-8">
       <p className="text-[11px] uppercase tracking-[0.28em] text-gold">Catálogo</p>
@@ -93,8 +113,8 @@ function CatalogoPage() {
         Um mundo de livros esperando por você
       </h1>
       <p className="mt-4 max-w-2xl text-muted-foreground">
-        Bestsellers, tendências da semana e prateleiras curadas por gênero — capa e metadados reais
-        via Open Library. Os títulos em domínio público podem ser lidos direto no app.
+        Tendências da Open Library e prateleiras por gênero com capas e metadados reais. Os títulos
+        em domínio público podem ser lidos direto no app.
       </p>
 
       {/* Each rail appears as soon as its own source answers — a single slow
@@ -111,8 +131,19 @@ function CatalogoPage() {
             ))}
           </BookRail>
         </Shelf>
+      ) : loading ? (
+        <ShelfSkeleton />
       ) : (
-        loading && <ShelfSkeleton />
+        <Shelf
+          eyebrow="Ler agora"
+          title="Clássicos em domínio público"
+          icon={<BookOpenCheck className="h-4 w-4" />}
+        >
+          <p className="rounded-xl border border-border/60 bg-secondary/30 px-4 py-5 text-sm text-muted-foreground">
+            Esta seleção está temporariamente indisponível. As tendências e prateleiras abaixo
+            continuam acessíveis.
+          </p>
+        </Shelf>
       )}
 
       {trending.length > 0 ? (
@@ -127,10 +158,14 @@ function CatalogoPage() {
         loading && <ShelfSkeleton />
       )}
 
-      {bestsellers.length > 0 ? (
-        <Shelf eyebrow="Mais vendidos" title="Bestsellers" icon={<Sparkles className="h-4 w-4" />}>
+      {monthlyOnly.length > 0 ? (
+        <Shelf
+          eyebrow="Em destaque"
+          title="Tendências do mês"
+          icon={<Sparkles className="h-4 w-4" />}
+        >
           <BookRail>
-            {bestsellers.map((b, i) => (
+            {monthlyOnly.map((b, i) => (
               <OpenLibraryCard key={b.workKey + i} book={b} />
             ))}
           </BookRail>

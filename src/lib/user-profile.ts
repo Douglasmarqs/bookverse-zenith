@@ -18,10 +18,21 @@ import {
   setDoc,
   type Unsubscribe,
 } from "firebase/firestore";
-import { getFunctions, httpsCallable } from "firebase/functions";
 import type { User } from "firebase/auth";
-import { getFirebase } from "./firebase";
+import { getFirebase } from "./firebase-services";
 import { withDeadline, withFallback } from "./async-utils";
+import {
+  isRetryableMilestoneError,
+  markMilestoneAttempt,
+  normalizePendingMilestones,
+  queueMilestone,
+  removeMilestone,
+  type GamificationMilestone,
+  type MilestoneDetails,
+  type PendingMilestone,
+} from "./milestone-queue";
+
+export type { GamificationMilestone } from "./milestone-queue";
 
 export interface UserProfile {
   uid: string;
@@ -70,39 +81,108 @@ export interface UserProfile {
 
 const READ_TIMEOUT_MS = 5000;
 const WRITE_TIMEOUT_MS = 10000;
+const MILESTONE_QUEUE_KEY = (uid: string) => `bookverse:milestone-queue:v1:${uid}`;
+const flushingMilestones = new Set<string>();
 
-export type GamificationMilestone =
-  | "book-added"
-  | "chapter-completed"
-  | "book-completed"
-  | "diary-entry"
-  | "review-published"
-  | "reading-session";
+function readMilestoneQueue(uid: string): PendingMilestone[] {
+  if (typeof window === "undefined") return [];
+  try {
+    return normalizePendingMilestones(
+      JSON.parse(localStorage.getItem(MILESTONE_QUEUE_KEY(uid)) ?? "[]"),
+    );
+  } catch {
+    return [];
+  }
+}
+
+function writeMilestoneQueue(uid: string, queue: PendingMilestone[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(MILESTONE_QUEUE_KEY(uid), JSON.stringify(queue));
+  } catch {
+    // The callable still runs; only durable retry is unavailable in this browser.
+  }
+}
+
+async function sendPendingMilestone(uid: string, pending: PendingMilestone): Promise<void> {
+  const fb = getFirebase();
+  const user = fb?.auth.currentUser;
+  if (!fb || !user || user.uid !== uid || user.isAnonymous) return;
+  if (typeof navigator !== "undefined" && !navigator.onLine) return;
+
+  writeMilestoneQueue(uid, markMilestoneAttempt(readMilestoneQueue(uid), pending));
+  try {
+    const { bookverseCallable } = await import("./firebase-functions");
+    const call = bookverseCallable<
+      { type: GamificationMilestone; resourceId: string } & MilestoneDetails,
+      { accepted: boolean }
+    >("recordReadingMilestone", 12_000);
+    await call({ type: pending.type, resourceId: pending.resourceId, ...pending.details });
+    writeMilestoneQueue(uid, removeMilestone(readMilestoneQueue(uid), pending));
+  } catch (error) {
+    if (!isRetryableMilestoneError(error)) {
+      writeMilestoneQueue(uid, removeMilestone(readMilestoneQueue(uid), pending));
+    }
+    throw error;
+  }
+}
+
+/** Retries idempotent milestone requests after a reload or reconnection. The
+ * queue is scoped to the authenticated UID, so another account can never
+ * submit events that were produced by the previous one. */
+export function flushPendingMilestones(uid?: string): void {
+  if (typeof window === "undefined" || !navigator.onLine) return;
+  const user = getFirebase()?.auth.currentUser;
+  if (!user || user.isAnonymous || (uid && user.uid !== uid) || flushingMilestones.has(user.uid)) {
+    return;
+  }
+  flushingMilestones.add(user.uid);
+  void (async () => {
+    try {
+      for (const pending of readMilestoneQueue(user.uid)) {
+        try {
+          await sendPendingMilestone(user.uid, pending);
+        } catch (error) {
+          if (isRetryableMilestoneError(error)) break;
+          console.warn("[user-profile] discarded invalid pending milestone", error);
+        }
+      }
+    } finally {
+      flushingMilestones.delete(user.uid);
+    }
+  })();
+}
 
 /** Sends a bounded, idempotent event to the callable Function. The server
  * owns XP and ranking counters; callers never send a point total. */
 export async function recordGamificationMilestone(
   type: GamificationMilestone,
   resourceId: string,
-  details: {
-    chapterIndex?: number;
-    chapterCount?: number;
-    pagesRead?: number;
-    readingMinutes?: number;
-  } = {},
+  details: MilestoneDetails = {},
 ): Promise<void> {
   const fb = getFirebase();
-  if (!fb || !resourceId) return;
+  const user = fb?.auth.currentUser;
+  if (!fb || !user || user.isAnonymous || !resourceId) return;
+  const pending: PendingMilestone = {
+    type,
+    resourceId: resourceId.slice(0, 180),
+    details,
+    queuedAt: Date.now(),
+    attempts: 0,
+  };
+  writeMilestoneQueue(user.uid, queueMilestone(readMilestoneQueue(user.uid), pending));
   try {
-    const call = httpsCallable<
-      { type: GamificationMilestone; resourceId: string } & typeof details,
-      { accepted: boolean }
-    >(getFunctions(fb.app), "recordReadingMilestone", { timeout: 12_000 });
-    await call({ type, resourceId: resourceId.slice(0, 180), ...details });
+    await sendPendingMilestone(user.uid, pending);
   } catch (err) {
-    // Never interrupt the book itself for a non-essential score update.
-    console.warn("[user-profile] milestone failed", err);
+    // Never interrupt the book itself for a non-essential score update. A
+    // transient failure remains queued and the deterministic server event id
+    // makes every retry safe.
+    console.warn("[user-profile] milestone queued for retry", err);
   }
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("online", () => flushPendingMilestones(), { passive: true });
 }
 
 function localDateKey(d: Date): string {
@@ -172,6 +252,7 @@ export async function ensureUserProfile(user: User): Promise<void> {
         WRITE_TIMEOUT_MS,
         "timeout",
       );
+      flushPendingMilestones(user.uid);
       return;
     }
 
@@ -190,6 +271,7 @@ export async function ensureUserProfile(user: User): Promise<void> {
       patch.updatedAt = serverTimestamp();
       await withDeadline(setDoc(ref, patch, { merge: true }), WRITE_TIMEOUT_MS, "timeout");
     }
+    flushPendingMilestones(user.uid);
   } catch (err) {
     console.warn("[user-profile] ensureUserProfile failed", err);
   }
@@ -255,7 +337,7 @@ export async function updateProfileFields(
 
 /** Deletes every Firestore document belonging to a user — profile,
  * library, and reading progress. Used before/after deleting the Auth
- * account itself (see lib/firebase.ts's deleteAccount). Best-effort per
+ * account itself (see lib/firebase-account.ts's deleteAccount). Best-effort per
  * subcollection so a partial failure doesn't block the rest. */
 export async function deleteUserData(uid: string): Promise<void> {
   const fb = getFirebase();
@@ -266,10 +348,10 @@ export async function deleteUserData(uid: string): Promise<void> {
   // we never claim a private EPUB/PDF has gone away when it is still in the
   // cloud. The operations are idempotent, so the person can safely retry.
   try {
-    const removeOrphans = httpsCallable<undefined, { deleted: boolean }>(
-      getFunctions(fb.app),
+    const { bookverseCallable } = await import("./firebase-functions");
+    const removeOrphans = bookverseCallable<undefined, { deleted: boolean }>(
       "deletePrivateFiles",
-      { timeout: 20_000 },
+      20_000,
     );
     await removeOrphans();
     const [{ deleteEpubBook, deleteEpubBookFromCloud }, { deletePdfBook, deletePdfBookFromCloud }] =
@@ -289,13 +371,13 @@ export async function deleteUserData(uid: string): Promise<void> {
     await Promise.all(
       epubs.docs.map(async (file) => {
         await deleteEpubBookFromCloud(uid, file.id);
-        await deleteEpubBook(file.id).catch(() => {});
+        await deleteEpubBook(uid, file.id).catch(() => {});
       }),
     );
     await Promise.all(
       pdfs.docs.map(async (file) => {
         await deletePdfBookFromCloud(uid, file.id);
-        await deletePdfBook(file.id).catch(() => {});
+        await deletePdfBook(uid, file.id).catch(() => {});
       }),
     );
   } catch (err) {

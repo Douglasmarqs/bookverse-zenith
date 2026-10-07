@@ -10,7 +10,7 @@ import {
   query,
   type Unsubscribe,
 } from "firebase/firestore";
-import { getFirebase } from "./firebase";
+import { getFirebase } from "./firebase-services";
 import type { UserProfile } from "./user-profile";
 
 export type RankingMetric =

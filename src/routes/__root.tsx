@@ -8,7 +8,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, type ReactNode } from "react";
 
 import "@fontsource/fraunces/400.css";
 import "@fontsource/fraunces/500.css";
@@ -24,9 +24,23 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { isFirebaseConfigured } from "../lib/firebase";
 import { SiteHeader } from "../components/site-header";
 import { SiteFooter } from "../components/site-footer";
-import { LumiPanel } from "../components/lumi-panel";
+import { useLumiPanelState } from "../lib/lumi-panel-store";
 import { InstallPwaBanner } from "../components/install-pwa";
 import { Toaster } from "../components/ui/sonner";
+
+const LumiPanel = lazy(() =>
+  import("../components/lumi-panel").then((module) => ({ default: module.LumiPanel })),
+);
+
+function DeferredLumiPanel() {
+  const { open } = useLumiPanelState();
+  if (!open) return null;
+  return (
+    <Suspense fallback={null}>
+      <LumiPanel />
+    </Suspense>
+  );
+}
 
 function NotFoundComponent() {
   return (
@@ -171,11 +185,24 @@ function RootComponent() {
   const isReaderRoute = pathname.startsWith("/reader/");
 
   useEffect(() => {
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch((err) => {
-        console.warn("[sw] registration failed", err);
-      });
+    if (!("serviceWorker" in navigator)) return;
+    if (import.meta.env.DEV) {
+      // A production worker left on localhost can serve stale Vite modules.
+      void navigator.serviceWorker
+        .getRegistrations()
+        .then((registrations) =>
+          Promise.all(
+            registrations
+              .filter((registration) => registration.scope === `${location.origin}/`)
+              .map((registration) => registration.unregister()),
+          ),
+        )
+        .catch((err) => console.warn("[sw] development cleanup failed", err));
+      return;
     }
+    navigator.serviceWorker.register("/sw.js").catch((err) => {
+      console.warn("[sw] registration failed", err);
+    });
   }, []);
 
   return (
@@ -189,7 +216,7 @@ function RootComponent() {
         {!isReaderRoute && <SiteFooter />}
         {/* The reader opens Lumi with a book/selection context. It must stay
             mounted there too; only the site chrome itself is suppressed. */}
-        <LumiPanel />
+        <DeferredLumiPanel />
         {!isReaderRoute && <InstallPwaBanner />}
         <Toaster position="bottom-center" theme="light" richColors />
       </div>

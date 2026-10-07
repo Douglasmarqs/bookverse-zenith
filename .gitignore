@@ -12,8 +12,10 @@ dist
 dist-ssr
 .output
 .vinxi
+.agent-browser/
 .tanstack/**
 .nitro
+.vercel/
 *.local
 
 # Wrangler / Cloudflare

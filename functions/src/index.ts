@@ -30,7 +30,11 @@ if (getApps().length === 0) {
   initializeApp();
 }
 
-export { searchPublicDomainBooks, getPublicDomainBook } from "./public-domain";
+export {
+  searchPublicDomainBooks,
+  getPublicDomainBooksByIds,
+  getPublicDomainBook,
+} from "./public-domain";
 export { searchGoogleBooks, getGoogleBookMeta } from "./google-books";
 
 const GROQ_API_KEY = defineSecret("GROQ_API_KEY");

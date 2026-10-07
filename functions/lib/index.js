@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deletePrivateFiles = exports.recordReadingMilestone = exports.recommendNextBook = exports.askLumi = exports.getGoogleBookMeta = exports.searchGoogleBooks = exports.getPublicDomainBook = exports.searchPublicDomainBooks = void 0;
+exports.deletePrivateFiles = exports.recordReadingMilestone = exports.recommendNextBook = exports.askLumi = exports.getGoogleBookMeta = exports.searchGoogleBooks = exports.getPublicDomainBook = exports.getPublicDomainBooksByIds = exports.searchPublicDomainBooks = void 0;
 /**
  * askLumi — callable Cloud Function that proxies chat turns to Groq on
  * behalf of the "Lumi" owl reading companion. The API key never reaches
@@ -36,6 +36,7 @@ if ((0, app_1.getApps)().length === 0) {
 }
 var public_domain_1 = require("./public-domain");
 Object.defineProperty(exports, "searchPublicDomainBooks", { enumerable: true, get: function () { return public_domain_1.searchPublicDomainBooks; } });
+Object.defineProperty(exports, "getPublicDomainBooksByIds", { enumerable: true, get: function () { return public_domain_1.getPublicDomainBooksByIds; } });
 Object.defineProperty(exports, "getPublicDomainBook", { enumerable: true, get: function () { return public_domain_1.getPublicDomainBook; } });
 var google_books_1 = require("./google-books");
 Object.defineProperty(exports, "searchGoogleBooks", { enumerable: true, get: function () { return google_books_1.searchGoogleBooks; } });

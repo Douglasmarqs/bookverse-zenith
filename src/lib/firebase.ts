@@ -1,5 +1,5 @@
 /**
- * Firebase client — singletons for app / auth / firestore.
+ * Firebase client — lightweight singletons for app and authentication.
  *
  * The web `apiKey` is a public identifier (security enforced via Firestore
  * Rules + App Check, not by hiding it). It is injected at build time from
@@ -22,32 +22,37 @@ import {
   updateProfile,
   type Auth,
   type User,
+  connectAuthEmulator,
 } from "firebase/auth";
-import {
-  initializeFirestore,
-  getFirestore,
-  persistentLocalCache,
-  persistentMultipleTabManager,
-  type Firestore,
-} from "firebase/firestore";
-import { getStorage, type FirebaseStorage } from "firebase/storage";
-
 declare const __FIREBASE_API_KEY__: string;
 
-const firebaseConfig = {
-  apiKey: typeof __FIREBASE_API_KEY__ !== "undefined" ? __FIREBASE_API_KEY__ : "",
-  authDomain: "bookverse-8147a.firebaseapp.com",
-  projectId: "bookverse-8147a",
-  storageBucket: "bookverse-8147a.firebasestorage.app",
-  messagingSenderId: "444153208139",
-  appId: "1:444153208139:web:a00f000f52504bdc3e5cce",
-  measurementId: "G-S5PBNDH0CC",
-};
+// This branch is removed from production builds. Local QA uses a demo project
+// without live Firebase resources or production credentials.
+const useEmulators = import.meta.env.DEV && import.meta.env.VITE_USE_FIREBASE_EMULATORS === "true";
+
+export function usesFirebaseEmulators(): boolean {
+  return useEmulators;
+}
+const firebaseConfig = useEmulators
+  ? {
+      apiKey: "demo-bookverse-local",
+      authDomain: "demo-bookverse.firebaseapp.com",
+      projectId: "demo-bookverse",
+      storageBucket: "demo-bookverse.appspot.com",
+      appId: "demo-bookverse-local",
+    }
+  : {
+      apiKey: typeof __FIREBASE_API_KEY__ !== "undefined" ? __FIREBASE_API_KEY__ : "",
+      authDomain: "bookverse-8147a.firebaseapp.com",
+      projectId: "bookverse-8147a",
+      storageBucket: "bookverse-8147a.firebasestorage.app",
+      messagingSenderId: "444153208139",
+      appId: "1:444153208139:web:a00f000f52504bdc3e5cce",
+      measurementId: "G-S5PBNDH0CC",
+    };
 
 let _app: FirebaseApp | null = null;
 let _auth: Auth | null = null;
-let _db: Firestore | null = null;
-let _storage: FirebaseStorage | null = null;
 
 function isBrowser() {
   return typeof window !== "undefined";
@@ -85,11 +90,9 @@ export function getFirebaseKeyDebugInfo(): {
   };
 }
 
-export function getFirebase(): {
+export function getFirebaseAuth(): {
   app: FirebaseApp;
   auth: Auth;
-  db: Firestore;
-  storage: FirebaseStorage;
 } | null {
   if (!isBrowser()) return null;
   if (!firebaseConfig.apiKey) {
@@ -99,24 +102,16 @@ export function getFirebase(): {
   if (!_app) {
     _app = getApps()[0] ?? initializeApp(firebaseConfig);
     _auth = getAuth(_app);
-    // Durable multi-tab cache keeps library/progress writes queued through a
-    // temporary mobile connection loss and flushes them when the device is online.
-    try {
-      _db = initializeFirestore(_app, {
-        localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-      });
-    } catch (error) {
-      console.warn("[firebase] persistent cache unavailable; using memory cache", error);
-      _db = getFirestore(_app);
+    if (useEmulators) {
+      connectAuthEmulator(_auth, "http://127.0.0.1:9099");
     }
-    _storage = getStorage(_app);
   }
-  return { app: _app!, auth: _auth!, db: _db!, storage: _storage! };
+  return { app: _app!, auth: _auth! };
 }
 
 /** Ensures a signed-in user (anonymous by default) and resolves with the user. */
 export function ensureUser(): Promise<User | null> {
-  const fb = getFirebase();
+  const fb = getFirebaseAuth();
   if (!fb) return Promise.resolve(null);
   const { auth } = fb;
   return new Promise((resolve) => {
@@ -140,7 +135,7 @@ export function ensureUser(): Promise<User | null> {
  * specific diagnostic (e.g. "Anonymous sign-in disabled in console")
  * rather than a generic fallback message. */
 export function ensureUserOrThrow(): Promise<User> {
-  const fb = getFirebase();
+  const fb = getFirebaseAuth();
   if (!fb) throw new Error("Firebase não está configurado neste ambiente.");
   const { auth } = fb;
   return new Promise((resolve, reject) => {
@@ -160,7 +155,7 @@ export function ensureUserOrThrow(): Promise<User> {
 
 /** Subscribe to auth state changes. */
 export function subscribeAuth(cb: (user: User | null) => void): () => void {
-  const fb = getFirebase();
+  const fb = getFirebaseAuth();
   if (!fb) {
     cb(null);
     return () => {};
@@ -174,7 +169,7 @@ export function subscribeAuth(cb: (user: User | null) => void): () => void {
  * the Google account is already linked to another user.
  */
 export async function signInWithGoogle(): Promise<User> {
-  const fb = getFirebase();
+  const fb = getFirebaseAuth();
   if (!fb) throw new Error("Firebase not initialized");
   const provider = new GoogleAuthProvider();
   const current = fb.auth.currentUser;
@@ -201,7 +196,7 @@ export async function signInWithGoogle(): Promise<User> {
  * preserve uid; falls back to normal sign-in when the account already exists.
  */
 export async function signInWithEmail(email: string, password: string): Promise<User> {
-  const fb = getFirebase();
+  const fb = getFirebaseAuth();
   if (!fb) throw new Error("Firebase not initialized");
   const current = fb.auth.currentUser;
   if (current?.isAnonymous) {
@@ -231,7 +226,7 @@ export async function signUpWithEmail(
   password: string,
   displayName?: string,
 ): Promise<User> {
-  const fb = getFirebase();
+  const fb = getFirebaseAuth();
   if (!fb) throw new Error("Firebase not initialized");
   const current = fb.auth.currentUser;
   let user: User;
@@ -250,14 +245,14 @@ export async function signUpWithEmail(
 }
 
 export async function signOut(): Promise<void> {
-  const fb = getFirebase();
+  const fb = getFirebaseAuth();
   if (!fb) return;
   await fbSignOut(fb.auth);
 }
 
 /** Sends a "reset your password" email via Firebase Auth. */
 export async function resetPassword(email: string): Promise<void> {
-  const fb = getFirebase();
+  const fb = getFirebaseAuth();
   if (!fb) throw new Error("Firebase not initialized");
   await sendPasswordResetEmail(fb.auth, email);
 }
@@ -268,7 +263,7 @@ export function getPrimaryProvider(user: User): string | null {
 }
 
 export async function updateDisplayName(name: string): Promise<void> {
-  const fb = getFirebase();
+  const fb = getFirebaseAuth();
   if (!fb?.auth.currentUser) throw new Error("Você precisa estar logado.");
   await updateProfile(fb.auth.currentUser, { displayName: name.trim() });
 }

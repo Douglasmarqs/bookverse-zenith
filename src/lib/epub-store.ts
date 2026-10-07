@@ -1,3 +1,9 @@
+import {
+  privateBookKey,
+  readPrivateBook,
+  writePrivateBook,
+  confirmPrivateBookOwner,
+} from "./private-book-cache";
 /**
  * Local storage for user-uploaded EPUB books.
  *
@@ -16,24 +22,6 @@ const DB_VERSION = 1;
  * when a reader navigates back to an EPUB it has just opened. */
 const memoryBooks = new Map<string, Book>();
 
-function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    if (typeof indexedDB === "undefined") {
-      reject(new Error("IndexedDB não está disponível neste navegador."));
-      return;
-    }
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(STORE)) {
-        db.createObjectStore(STORE, { keyPath: "id" });
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error ?? new Error("Falha ao abrir o armazenamento local."));
-  });
-}
-
 export function newEpubId(): string {
   const rand =
     typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -46,43 +34,25 @@ export function isEpubReaderId(bookId: string): boolean {
   return bookId.startsWith("epub-");
 }
 
-export async function saveEpubBook(book: Book): Promise<void> {
-  const db = await openDb();
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).put(book);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error ?? new Error("Falha ao salvar o livro localmente."));
-  });
-  db.close();
-  memoryBooks.set(book.id, book);
+export async function saveEpubBook(uid: string, book: Book): Promise<void> {
+  await writePrivateBook(DB_NAME, uid, book.id, book);
+  memoryBooks.set(privateBookKey(uid, book.id), book);
 }
 
-export async function getEpubBook(id: string): Promise<Book | null> {
-  const inMemory = memoryBooks.get(id);
-  if (inMemory) return inMemory;
-  const db = await openDb();
-  const result = await new Promise<Book | null>((resolve, reject) => {
-    const tx = db.transaction(STORE, "readonly");
-    const req = tx.objectStore(STORE).get(id);
-    req.onsuccess = () => resolve((req.result as Book | undefined) ?? null);
-    req.onerror = () => reject(req.error ?? new Error("Falha ao ler o livro local."));
-  });
-  db.close();
-  if (result) memoryBooks.set(id, result);
-  return result;
+export async function getEpubBook(uid: string, id: string): Promise<Book | null> {
+  const key = privateBookKey(uid, id);
+  const cached = memoryBooks.get(key);
+  if (cached) return cached;
+  const book = await readPrivateBook<Book>(DB_NAME, uid, id, () =>
+    confirmPrivateBookOwner(uid, id, "epubFiles"),
+  );
+  if (book) memoryBooks.set(key, book);
+  return book;
 }
 
-export async function deleteEpubBook(id: string): Promise<void> {
-  const db = await openDb();
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).delete(id);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error ?? new Error("Falha ao remover o livro local."));
-  });
-  db.close();
-  memoryBooks.delete(id);
+export async function deleteEpubBook(uid: string, id: string): Promise<void> {
+  await writePrivateBook(DB_NAME, uid, id, null);
+  memoryBooks.delete(privateBookKey(uid, id));
 }
 
 /* ------------------------------------------------------------------ *
@@ -116,7 +86,7 @@ function safeEpubName(name: string) {
  * Storage accepts it would create a broken cross-device library entry.
  */
 export async function uploadEpubBookToCloud(uid: string, book: Book, source: File): Promise<void> {
-  const { getFirebase } = await import("./firebase");
+  const { getFirebase } = await import("./firebase-services");
   const fb = getFirebase();
   if (!fb) throw new Error("Firebase não está configurado neste ambiente.");
 
@@ -161,7 +131,7 @@ export async function uploadEpubBookToCloud(uid: string, book: Book, source: Fil
 }
 
 async function downloadLegacyEpubBook(uid: string, id: string): Promise<Book | null> {
-  const { getFirebase } = await import("./firebase");
+  const { getFirebase } = await import("./firebase-services");
   const fb = getFirebase();
   if (!fb) return null;
   const { doc, getDoc } = await import("firebase/firestore");
@@ -182,9 +152,9 @@ async function downloadLegacyEpubBook(uid: string, id: string): Promise<Book | n
 }
 
 export async function downloadEpubBookFromCloud(uid: string, id: string): Promise<Book | null> {
-  const cached = memoryBooks.get(id);
+  const cached = memoryBooks.get(privateBookKey(uid, id));
   if (cached) return cached;
-  const { getFirebase } = await import("./firebase");
+  const { getFirebase } = await import("./firebase-services");
   const fb = getFirebase();
   if (!fb) return null;
   try {
@@ -198,7 +168,7 @@ export async function downloadEpubBookFromCloud(uid: string, id: string): Promis
       "timeout",
     );
     const book = JSON.parse(new TextDecoder().decode(bytes)) as Book;
-    memoryBooks.set(id, book);
+    memoryBooks.set(privateBookKey(uid, id), book);
     return book;
   } catch (storageError) {
     // A few older/mobile imports reached Storage with the original EPUB but
@@ -216,7 +186,7 @@ export async function downloadEpubBookFromCloud(uid: string, id: string): Promis
         new File([source], "livro-recuperado.epub", { type: "application/epub+zip" }),
       );
       const book = { ...rebuilt, id };
-      memoryBooks.set(id, book);
+      memoryBooks.set(privateBookKey(uid, id), book);
       return book;
     } catch (sourceError) {
       console.warn("[epub] source recovery failed", sourceError);
@@ -234,7 +204,7 @@ export async function downloadEpubBookFromCloud(uid: string, id: string): Promis
 
 /** Removes the durable cloud copy. Local cache removal remains explicit. */
 export async function deleteEpubBookFromCloud(uid: string, id: string): Promise<void> {
-  const { getFirebase } = await import("./firebase");
+  const { getFirebase } = await import("./firebase-services");
   const fb = getFirebase();
   if (!fb) throw new Error("Firebase não está configurado neste ambiente.");
   const { deleteObject, ref } = await import("firebase/storage");

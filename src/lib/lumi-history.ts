@@ -5,7 +5,7 @@
  * (non-anonymous) accounts; anonymous sessions stay ephemeral like before.
  */
 import { deleteDoc, doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
-import { getFirebase } from "./firebase";
+import { getFirebase } from "./firebase-services";
 import { withDeadline, withFallback } from "./async-utils";
 import type { LumiMessage } from "./lumi";
 
