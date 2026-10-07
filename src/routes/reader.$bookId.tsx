@@ -76,6 +76,7 @@ import { describeFirestoreError } from "@/lib/async-utils";
 import { ReaderPageSkeleton } from "@/components/reader-page-skeleton";
 import { PdfPageViewer } from "@/components/reader/pdf-page-viewer";
 import { ProgressConflictDialog } from "@/components/reader/progress-conflict-dialog";
+import { reportProductEvent } from "@/lib/observability";
 
 export const Route = createFileRoute("/reader/$bookId")({
   head: () => ({
@@ -193,6 +194,7 @@ function EpubBookLoader({ uid, localId }: { uid: string; localId: string }) {
 
   useEffect(() => {
     let cancelled = false;
+    let loadStage: "local" | "cloud" = "local";
     setBook(null);
     setError(null);
     setStage("local");
@@ -209,7 +211,8 @@ function EpubBookLoader({ uid, localId }: { uid: string; localId: string }) {
       }
       // Not on this device/browser — it may have been imported elsewhere
       // and synced to Firebase Storage; fetch and cache it locally too.
-      setStage("cloud");
+      loadStage = "cloud";
+      setStage(loadStage);
       const cloudBook = await downloadEpubBookFromCloud(uid, localId);
       if (cancelled) return;
       if (cloudBook) {
@@ -217,6 +220,11 @@ function EpubBookLoader({ uid, localId }: { uid: string; localId: string }) {
         void saveEpubBook(uid, cloudBook).catch(() => {});
         return;
       }
+      reportProductEvent("book_open_failed", undefined, {
+        format: "epub",
+        offline: !navigator.onLine,
+        stage: "cloud",
+      });
       setError(
         "Não foi possível acessar este EPUB nesta conta. Conecte-se à internet para recuperar sua cópia ou validar uma importação antiga. Se necessário, importe o arquivo pela biblioteca.",
       );
@@ -224,6 +232,7 @@ function EpubBookLoader({ uid, localId }: { uid: string; localId: string }) {
 
     void load().catch((err) => {
       if (cancelled) return;
+      reportProductEvent("reader_load_failed", err, { format: "epub", stage: loadStage });
       console.warn("[reader] EPUB load failed", err);
       setError(describeFirestoreError(err, "Não foi possível abrir este EPUB agora."));
     });
@@ -265,6 +274,7 @@ function PdfBookLoader({ uid, localId }: { uid: string; localId: string }) {
 
   useEffect(() => {
     let cancelled = false;
+    let loadStage: "local" | "cloud" = "local";
     setBook(null);
     setError(null);
     setStage("local");
@@ -287,7 +297,8 @@ function PdfBookLoader({ uid, localId }: { uid: string; localId: string }) {
         }
         return;
       }
-      setStage("cloud");
+      loadStage = "cloud";
+      setStage(loadStage);
       const cloudBook = await downloadPdfBookFromCloud(uid, localId);
       if (cancelled) return;
       if (cloudBook) {
@@ -302,6 +313,11 @@ function PdfBookLoader({ uid, localId }: { uid: string; localId: string }) {
         }
         return;
       }
+      reportProductEvent("book_open_failed", undefined, {
+        format: "pdf",
+        offline: !navigator.onLine,
+        stage: "cloud",
+      });
       setError(
         "Não foi possível acessar este PDF nesta conta. Conecte-se à internet para recuperar sua cópia ou validar uma importação antiga. Se necessário, importe o arquivo pela biblioteca.",
       );
@@ -309,6 +325,7 @@ function PdfBookLoader({ uid, localId }: { uid: string; localId: string }) {
 
     void load().catch((err) => {
       if (cancelled) return;
+      reportProductEvent("reader_load_failed", err, { format: "pdf", stage: loadStage });
       console.warn("[reader] PDF load failed", err);
       setError(describeFirestoreError(err, "Não foi possível abrir este PDF agora."));
     });
@@ -368,6 +385,11 @@ function GutenbergBookLoader({ uid, gutenbergId }: { uid: string; gutenbergId: n
       })
       .catch((err) => {
         if (!cancelled) {
+          reportProductEvent("book_open_failed", err, {
+            format: "public-domain",
+            provider: "gutendex",
+            stage: "download",
+          });
           console.warn("[reader] failed to load public domain book", err);
           setError(
             err instanceof Error ? err.message : "Não foi possível carregar este livro agora.",

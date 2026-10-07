@@ -13,6 +13,7 @@ import { describeFirestoreError } from "@/lib/async-utils";
 import { useAuthUser, useInView } from "@/hooks/use-auth-user";
 import { LanguageBadge } from "@/components/language-badge";
 import { Carousel } from "@/components/carousel";
+import { reportProductEvent } from "@/lib/observability";
 
 export const Route = createFileRoute("/catalogo")({
   head: () => ({
@@ -73,9 +74,25 @@ function CatalogoPage() {
         ]);
         if (cancelled) return;
         if (tr.status === "fulfilled") setTrending(tr.value);
+        else
+          reportProductEvent("catalog_request_failed", tr.reason, {
+            provider: "open-library",
+            stage: "weekly",
+          });
         if (monthly.status === "fulfilled") setMonthlyTrending(monthly.value);
+        else
+          reportProductEvent("catalog_request_failed", monthly.reason, {
+            provider: "open-library",
+            stage: "monthly",
+          });
         if (pd.status === "fulfilled") setPublicDomain(pd.value);
+        else
+          reportProductEvent("catalog_request_failed", pd.reason, {
+            provider: "gutendex",
+            stage: "curated",
+          });
       } catch (err) {
+        reportProductEvent("catalog_request_failed", err, { stage: "catalog" });
         console.warn("[catalogo] failed to load catalog data", err);
       } finally {
         if (!cancelled) setLoading(false);

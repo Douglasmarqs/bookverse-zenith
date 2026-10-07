@@ -35,6 +35,7 @@ import {
 import { openLumiPanel } from "@/lib/lumi-panel-store";
 import { PdfDisplaySettingsPanel } from "@/components/reader/pdf-display-settings";
 import { ProgressConflictDialog } from "@/components/reader/progress-conflict-dialog";
+import { reportProductEvent } from "@/lib/observability";
 import {
   loadPdfDisplaySettings,
   normalizePdfDisplaySettings,
@@ -515,6 +516,7 @@ function PdfPageViewerSession({ uid, book }: { uid: string; book: PdfBook }) {
       }
     }
     void renderPage().catch((cause) => {
+      reportProductEvent("pdf_render_failed", cause, { format: "pdf", stage: "render" });
       console.error("[pdf-reader] page render failed", cause);
       if (!cancelled) setError("Não foi possível mostrar esta página.");
     });

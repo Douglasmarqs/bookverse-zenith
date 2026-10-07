@@ -13,6 +13,7 @@
  * Docs: https://openlibrary.org/developers/api
  */
 import type { BookMeta } from "./google-books";
+import { reportProductEvent } from "./observability.ts";
 
 export interface OpenLibraryBook extends BookMeta {
   /** Open Library work key, e.g. "/works/OL45804W". */
@@ -135,6 +136,11 @@ async function cachedFetchJson(url: string): Promise<unknown | null> {
     if (!res.ok) throw new Error(`Open Library ${res.status}`);
     return await res.json();
   } catch (err) {
+    reportProductEvent("catalog_request_failed", err, {
+      offline: typeof navigator !== "undefined" && !navigator.onLine,
+      provider: "open-library",
+      stage: "fetch",
+    });
     console.warn(`[open-library] fetch failed`, err);
     return null;
   } finally {

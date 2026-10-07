@@ -17,6 +17,7 @@ import {
 import { ensureUser } from "./firebase";
 import { getFirebase } from "./firebase-services";
 import { withDeadline, withFallback } from "./async-utils";
+import { reportProductEvent } from "./observability";
 import {
   differentReadingPosition,
   legacyRecovery,
@@ -405,6 +406,11 @@ async function writeRemote(uid: string, bookId: string, p: ReadingProgress): Pro
         typeof window !== "undefined"
       ) {
         reportedConflict.set(key, result.conflict.updatedAt);
+        reportProductEvent("sync_conflict", undefined, {
+          format: p.pageIndex === undefined ? "epub" : "pdf",
+          legacy: false,
+          operation: "progress-write",
+        });
         window.dispatchEvent(
           new CustomEvent<ProgressConflictEvent>(PROGRESS_CONFLICT_EVENT, {
             detail: { bookId, local: p, remote: result.conflict },

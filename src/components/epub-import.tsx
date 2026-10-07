@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { useAuthUser } from "@/hooks/use-auth-user";
 import { describeFirestoreError } from "@/lib/async-utils";
+import { reportProductEvent } from "@/lib/observability";
 
 /**
  * Drag-and-drop book import surface. EPUBs are parsed into reflowable text;
@@ -26,10 +27,10 @@ export function EpubImport({ className = "" }: { className?: string }) {
       void navigate({ to: "/auth", search: { redirect: "/" } });
       return;
     }
+    const isPdf = file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf";
     setBusy(true);
     try {
       const { addToLibrary } = await import("@/lib/library");
-      const isPdf = file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf";
       if (isPdf) {
         const {
           createPdfBook,
@@ -65,7 +66,10 @@ export function EpubImport({ className = "" }: { className?: string }) {
         import("@/lib/epub-parser"),
         import("@/lib/epub-store"),
       ]);
-      const book = await parseEpubFile(file);
+      const book = await parseEpubFile(file).catch((error) => {
+        reportProductEvent("epub_parse_failed", error, { format: "epub", stage: "parse" });
+        throw error;
+      });
       await epubStore.saveEpubBook(user.uid, book);
       try {
         // Do not surface a library entry until its private cloud copy exists.

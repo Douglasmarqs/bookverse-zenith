@@ -72,6 +72,10 @@ Com os quatro emuladores ativos, `npm run test:integration` chama a Function `re
 
 Depois de `npm run build`, abra a prévia de produção em um perfil anônimo limpo e confira a aba Network. A navegação inicial da Home não deve solicitar chunks com `pdf`, `epub`, `firebase-services`, `firebase-functions`, `lumi-panel` ou `lumi-recommendation-card`. Abra a Lumi: o painel deve aparecer e seu chunk deve ser solicitado nesse momento. Ao autenticar, Firestore/Storage podem carregar para perfil, biblioteca e progresso.
 
+### Observabilidade sem conteúdo privado
+
+Execute `npm test` e confira os casos de observabilidade. Eles confirmam que IDs de conta e livro, títulos, buscas, trechos, mensagens de erro e valores arbitrários são removidos. As rotas `/reader/<id>` e `/livro/<slug>` devem aparecer como `/reader/:bookId` e `/livro/:slug`. Quando o host oferece `window.__lovableEvents`, falhas controladas também são encaminhadas ao coletor; no desenvolvimento, o contexto sanitizado aparece no console com o prefixo `[bookverse]`.
+
 ## Verificações gerais
 
 ```sh
