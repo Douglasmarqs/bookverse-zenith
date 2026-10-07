@@ -77,7 +77,7 @@ const SAFE_ERROR_CODES = new Set([
   "unknown",
 ]);
 
-function routeTemplate(pathname: string): string {
+export function sanitizeObservabilityRoute(pathname: string): string {
   if (/^\/reader\/[^/]+/.test(pathname)) return "/reader/:bookId";
   if (/^\/livro\/[^/]+/.test(pathname)) return "/livro/:slug";
   return pathname || "/";
@@ -101,7 +101,7 @@ export function sanitizeObservabilityContext(
 ): Record<string, string | number | boolean> {
   const context: Record<string, string | number | boolean> = {
     event,
-    route: routeTemplate(pathname),
+    route: sanitizeObservabilityRoute(pathname),
   };
   for (const [key, value] of Object.entries(metadata)) {
     if (!SAFE_METADATA_KEYS.has(key)) continue;

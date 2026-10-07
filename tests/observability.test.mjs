@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { sanitizeObservabilityContext } from "../src/lib/observability.ts";
+import { sanitizeLovableErrorContext } from "../src/lib/lovable-error-reporting.ts";
 
 test("observability removes private identifiers, content and arbitrary error messages", () => {
   const error = Object.assign(new Error("trecho privado do livro"), {
@@ -70,6 +71,27 @@ test("observability bounds numeric metadata and rejects arbitrary allowlisted-ke
     route: "/reader/:bookId",
     durationMs: 1200,
     offline: false,
+  });
+  assert.equal(JSON.stringify(context).includes("private"), false);
+});
+
+test("global error reporting discards raw errors, private routes and arbitrary context", () => {
+  const context = sanitizeLovableErrorContext(
+    new TypeError("private excerpt and user id"),
+    {
+      boundary: "tanstack_root_error_component",
+      bookId: "private-book-id",
+      excerpt: "private excerpt",
+      uid: "private-user-id",
+    },
+    "/reader/private-book-id",
+  );
+
+  assert.deepEqual(context, {
+    source: "react_error_boundary",
+    route: "/reader/:bookId",
+    boundary: "tanstack_root_error_component",
+    errorName: "TypeError",
   });
   assert.equal(JSON.stringify(context).includes("private"), false);
 });

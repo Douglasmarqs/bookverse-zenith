@@ -74,7 +74,7 @@ Depois de `npm run build`, abra a prévia de produção em um perfil anônimo li
 
 ### Observabilidade sem conteúdo privado
 
-Execute `npm test` e confira os casos de observabilidade. Eles confirmam que IDs de conta e livro, títulos, buscas, trechos, mensagens de erro e valores arbitrários são removidos. As rotas `/reader/<id>` e `/livro/<slug>` devem aparecer como `/reader/:bookId` e `/livro/:slug`. Quando o host oferece `window.__lovableEvents`, falhas controladas também são encaminhadas ao coletor; no desenvolvimento, o contexto sanitizado aparece no console com o prefixo `[bookverse]`.
+Execute `npm test` e confira os casos de observabilidade. Eles confirmam que IDs de conta e livro, títulos, buscas, trechos, mensagens, stacks e valores arbitrários são removidos dos eventos de produto e do error boundary global. As rotas `/reader/<id>` e `/livro/<slug>` devem aparecer como `/reader/:bookId` e `/livro/:slug`. Quando o host oferece `window.__lovableEvents`, falhas controladas também são encaminhadas ao coletor; no desenvolvimento, o contexto sanitizado aparece no console com o prefixo `[bookverse]`.
 
 ### Resiliência do catálogo
 
