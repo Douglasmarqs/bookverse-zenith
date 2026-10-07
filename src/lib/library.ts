@@ -20,7 +20,7 @@ import {
   setDoc,
   type Unsubscribe,
 } from "firebase/firestore";
-import { getFirebase } from "./firebase";
+import { getFirebase } from "./firebase-services";
 import { recordGamificationMilestone, recordReadingActivity } from "./user-profile";
 import { withDeadline, withFallback } from "./async-utils";
 import type { BookMeta } from "./google-books";

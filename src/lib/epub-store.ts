@@ -86,7 +86,7 @@ function safeEpubName(name: string) {
  * Storage accepts it would create a broken cross-device library entry.
  */
 export async function uploadEpubBookToCloud(uid: string, book: Book, source: File): Promise<void> {
-  const { getFirebase } = await import("./firebase");
+  const { getFirebase } = await import("./firebase-services");
   const fb = getFirebase();
   if (!fb) throw new Error("Firebase não está configurado neste ambiente.");
 
@@ -131,7 +131,7 @@ export async function uploadEpubBookToCloud(uid: string, book: Book, source: Fil
 }
 
 async function downloadLegacyEpubBook(uid: string, id: string): Promise<Book | null> {
-  const { getFirebase } = await import("./firebase");
+  const { getFirebase } = await import("./firebase-services");
   const fb = getFirebase();
   if (!fb) return null;
   const { doc, getDoc } = await import("firebase/firestore");
@@ -154,7 +154,7 @@ async function downloadLegacyEpubBook(uid: string, id: string): Promise<Book | n
 export async function downloadEpubBookFromCloud(uid: string, id: string): Promise<Book | null> {
   const cached = memoryBooks.get(privateBookKey(uid, id));
   if (cached) return cached;
-  const { getFirebase } = await import("./firebase");
+  const { getFirebase } = await import("./firebase-services");
   const fb = getFirebase();
   if (!fb) return null;
   try {
@@ -204,7 +204,7 @@ export async function downloadEpubBookFromCloud(uid: string, id: string): Promis
 
 /** Removes the durable cloud copy. Local cache removal remains explicit. */
 export async function deleteEpubBookFromCloud(uid: string, id: string): Promise<void> {
-  const { getFirebase } = await import("./firebase");
+  const { getFirebase } = await import("./firebase-services");
   const fb = getFirebase();
   if (!fb) throw new Error("Firebase não está configurado neste ambiente.");
   const { deleteObject, ref } = await import("firebase/storage");

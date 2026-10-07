@@ -14,7 +14,8 @@ import {
   updatePassword as fbUpdatePassword,
   deleteUser,
 } from "firebase/auth";
-import { getFirebase, getPrimaryProvider } from "./firebase";
+import { getPrimaryProvider } from "./firebase";
+import { getFirebase } from "./firebase-services";
 
 /** Re-authenticates the current user — required by Firebase before
  * sensitive operations like changing password or deleting the account. */
@@ -34,10 +35,7 @@ async function reauthenticate(currentPassword?: string): Promise<void> {
   await reauthenticateWithCredential(user, credential);
 }
 
-export async function changePassword(
-  currentPassword: string,
-  newPassword: string,
-): Promise<void> {
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
   const fb = getFirebase();
   if (!fb?.auth.currentUser) throw new Error("Você precisa estar logado.");
   await reauthenticate(currentPassword);

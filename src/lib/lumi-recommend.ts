@@ -1,5 +1,4 @@
-import { getFunctions, httpsCallable } from "firebase/functions";
-import { getFirebase } from "./firebase";
+import { getFirebase } from "./firebase-services";
 
 export interface BookRecommendation {
   title: string;
@@ -18,10 +17,11 @@ export async function getNextBookRecommendation(
 ): Promise<BookRecommendation> {
   const fb = getFirebase();
   if (!fb) throw new Error("Faça login para receber recomendações.");
-  const fn = httpsCallable<
+  const { bookverseCallable } = await import("./firebase-functions");
+  const fn = bookverseCallable<
     { recentTitles: { title: string; author?: string }[] },
     BookRecommendation
-  >(getFunctions(fb.app), "recommendNextBook", { timeout: 15000 });
+  >("recommendNextBook", 15_000);
   const res = await fn({ recentTitles });
   return res.data;
 }

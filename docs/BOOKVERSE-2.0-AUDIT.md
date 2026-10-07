@@ -1,6 +1,6 @@
 # Bookverse 2.0 — auditoria e execução
 
-Atualizada: 5 de outubro de 2026
+Atualizada: 6 de outubro de 2026
 Base examinada: `Douglasmarqs/bookverse-zenith`, `main` em `3e8b1e3`
 
 ## Estado do produto encontrado
@@ -36,6 +36,7 @@ As regras atuais de Firestore e Storage protegem biblioteca, progresso, preferê
 13. **Posição dentro de uma página PDF.** O progresso agora inclui a rolagem horizontal e vertical normalizada da página ampliada. A posição volta após recarregar, continua equivalente ao trocar entre mobile e desktop e participa da escolha de conflito entre dispositivos. Ajustar a página inteira temporariamente não apaga o último ponto ampliado; mudar de página começa no canto inicial.
 14. **Clássicos com edição verificável.** A prateleira deixou de pesquisar a expressão genérica `classic literature`, que retornava crítica e livros sobre clássicos. Agora consulta IDs verificados do Project Gutenberg, prioriza cinco obras em português e preserva uma ordem editorial estável. Um título só recebe “Ler agora” quando a resposta atual possui texto integral utilizável; respostas malformadas, duplicadas ou sem texto são descartadas. Se a fonte falhar, a prateleira mostra indisponibilidade sem bloquear as demais.
 15. **Marcos resilientes à desconexão.** O timeout local foi rastreado até o comando de emuladores, que conectava o cliente à porta de Functions sem iniciar esse serviço. O comando agora inicia Auth, Firestore, Storage e Functions em conjunto. Marcos pendentes são armazenados por UID, deduplicados pela mesma identidade idempotente usada no servidor e reenviados depois de reconexão, recarga ou restauração do perfil. Falhas de autenticação ou validação são removidas; falhas transitórias permanecem na fila, limitada a 50 eventos.
+16. **Carga pública por demanda.** Auth foi separado de Firestore/Storage, e os dados de perfil, biblioteca e progresso só carregam depois de uma sessão autenticada. O importador adia biblioteca, parser EPUB/JSZip e PDF.js até a escolha de um arquivo. Firebase Functions carrega apenas ao chamar uma Function; o painel e a recomendação da Lumi também viraram chunks sob demanda. O build mantém Firestore (536,17 kB), PDF.js (488,21 kB mais worker de 1,317 MB) e parser EPUB/JSZip (105,79 kB) isolados, sem pré-carregá-los na Home pública.
 
 ## Verificação realizada
 
@@ -44,6 +45,7 @@ As regras atuais de Firestore e Storage protegem biblioteca, progresso, preferê
 - `npm --prefix functions run build`: passou.
 - `npm run lint`: passou com 6 avisos preexistentes de Fast Refresh e nenhum erro.
 - `npm run build`: passou após as mudanças de código desta rodada.
+- Bundle e navegador de produção local: a Home anônima passou de imports estáticos dos stores PDF/EPUB e recomendação para 29 módulos pré-carregados sem PDF.js, worker PDF, parser EPUB/JSZip, Firestore, Storage, Functions, painel ou recomendação da Lumi. O painel foi aberto e fechado na mesma sessão para confirmar que seu chunk sob demanda continua funcional.
 - Navegador local: Home examinada em 320, 360, 375, 390, 412, 768, 1024, 1440 e 1920 px; Catálogo em 320, 390, 768, 1024 e 1440 px. Nas larguras examinadas não houve scroll horizontal da página. Login, Descobrir e Catálogo renderizaram. Uma sessão limpa do navegador abriu o Catálogo sem erro de hidratação após a correção do worker.
 - PDF local: componente real com PDF de teste gerado de três páginas, em harness fora das rotas de produção e ignorado pelo Git. Larguras 320, 360, 375, 390, 412, 768, 844 (landscape), 1024, 1440 e 1920 px sem overflow horizontal da página; ajuste à largura conferido também com barra de rolagem vertical. Zoom 200% mantém a borda inicial acessível e permite rolagem interna. A posição ampliada de 45,01% horizontal e 64,95% vertical foi restaurada exatamente após recarga e permaneceu equivalente após redimensionar de 390 × 844 para 1000 × 700; avançar à página 2 reiniciou a posição em 0%. Trocas rápidas, cor da página renderizada, preferências após recarga, Escape, retorno/ciclo de foco e armazenamento negado foram verificados sem erros de execução. Evento local de conflito verificou bloqueio de navegação e aplicação da posição escolhida; não representa um teste de comunicação com Firestore.
 
@@ -63,7 +65,7 @@ As regras atuais de Firestore e Storage protegem biblioteca, progresso, preferê
 - Ampliar a integração para perda de conexão durante operações do leitor; verificar as funções de marcos de leitura e repetir os fluxos em dispositivos físicos.
 - Montar corpus de EPUB 2/3, imagens, sumário, RTL e layout fixo; medir a precisão da restauração. Migrar do índice de parágrafo para âncora textual mais precisa ou CFI quando o motor suportar.
 - Separar o PDF original do modo de texto extraído sem perder busca/seleção. Ajuste à largura/página e recuperação da posição ampliada foram adicionados ao leitor por imagem; faltam miniaturas e duas páginas em tablets quando apropriado.
-- Testar estados de erro/offline e acessibilidade do leitor em mobile, tablet, landscape e teclado. Medir bundles grandes de PDF.js, Firestore e JSZip e carregar somente nas rotas necessárias.
+- Testar estados de erro/offline e acessibilidade do leitor em mobile, tablet, landscape e teclado. Repetir a medição de rede com uma conta real e limites móveis antes da liberação em produção.
 
 ### Etapa 2 — Catálogo
 

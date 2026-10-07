@@ -13,8 +13,8 @@
  * Results are cached in-memory + sessionStorage so we don't refetch the
  * same title twice in a session.
  */
-import { getFunctions, httpsCallable } from "firebase/functions";
-import { getFirebase } from "./firebase";
+import { getFirebase } from "./firebase-services";
+import { bookverseCallable } from "./firebase-functions";
 import { searchOpenLibrary } from "./open-library";
 import { createBreaker, createInFlightMap, createLimiter } from "./net-utils";
 
@@ -219,12 +219,11 @@ async function resolveBookMeta(
   const fb = getFirebase();
   if (fb && !fnBreaker.isOpen()) {
     try {
-      const fn = httpsCallable<{ title: string; author?: string }, { meta: BookMeta | null }>(
-        getFunctions(fb.app),
+      // The function's upstream Google Books request can take up to 9 s;
+      // leave room for a cold start and the network round trip.
+      const fn = bookverseCallable<{ title: string; author?: string }, { meta: BookMeta | null }>(
         "getGoogleBookMeta",
-        // The function's upstream Google Books request can take up to 9 s;
-        // leave room for a cold start and the network round trip.
-        { timeout: 15_000 },
+        15_000,
       );
       const res = await fn({ title, author });
       meta = res.data.meta;
@@ -282,10 +281,10 @@ export async function searchBooks(
   const fb = getFirebase();
   if (fb && !fnBreaker.isOpen()) {
     try {
-      const fn = httpsCallable<
+      const fn = bookverseCallable<
         { query: string; category?: string; maxResults?: number },
         { results: BookMeta[]; error?: boolean }
-      >(getFunctions(fb.app), "searchGoogleBooks", { timeout: 15_000 });
+      >("searchGoogleBooks", 15_000);
       const res = await fn({
         query: trimmed,
         category: opts.category,

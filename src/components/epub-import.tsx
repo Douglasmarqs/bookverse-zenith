@@ -4,20 +4,6 @@ import { Loader2, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuthUser } from "@/hooks/use-auth-user";
-import {
-  deleteEpubBook,
-  deleteEpubBookFromCloud,
-  saveEpubBook,
-  uploadEpubBookToCloud,
-} from "@/lib/epub-store";
-import {
-  createPdfBook,
-  deletePdfBook,
-  deletePdfBookFromCloud,
-  savePdfBook,
-  uploadPdfBookToCloud,
-} from "@/lib/pdf-store";
-import { addToLibrary } from "@/lib/library";
 import { describeFirestoreError } from "@/lib/async-utils";
 
 /**
@@ -42,8 +28,16 @@ export function EpubImport({ className = "" }: { className?: string }) {
     }
     setBusy(true);
     try {
+      const { addToLibrary } = await import("@/lib/library");
       const isPdf = file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf";
       if (isPdf) {
+        const {
+          createPdfBook,
+          deletePdfBook,
+          deletePdfBookFromCloud,
+          savePdfBook,
+          uploadPdfBookToCloud,
+        } = await import("@/lib/pdf-store");
         const book = await createPdfBook(file);
         await savePdfBook(user.uid, book);
         try {
@@ -67,21 +61,24 @@ export function EpubImport({ className = "" }: { className?: string }) {
         void navigate({ to: "/reader/$bookId", params: { bookId: book.id } });
         return;
       }
-      const { parseEpubFile } = await import("@/lib/epub-parser");
+      const [{ parseEpubFile }, epubStore] = await Promise.all([
+        import("@/lib/epub-parser"),
+        import("@/lib/epub-store"),
+      ]);
       const book = await parseEpubFile(file);
-      await saveEpubBook(user.uid, book);
+      await epubStore.saveEpubBook(user.uid, book);
       try {
         // Do not surface a library entry until its private cloud copy exists.
         // That keeps a successful import truthful across every device.
-        await uploadEpubBookToCloud(user.uid, book, file);
+        await epubStore.uploadEpubBookToCloud(user.uid, book, file);
         await addToLibrary(
           user.uid,
           { title: book.title, author: book.author, cover: book.cover, readerId: book.id },
           "lendo",
         );
       } catch (err) {
-        void deleteEpubBook(user.uid, book.id).catch(() => {});
-        void deleteEpubBookFromCloud(user.uid, book.id).catch(() => {});
+        void epubStore.deleteEpubBook(user.uid, book.id).catch(() => {});
+        void epubStore.deleteEpubBookFromCloud(user.uid, book.id).catch(() => {});
         throw err;
       }
       toast.success(`"${book.title}" pronto para leitura.`);

@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   BookOpenCheck,
@@ -11,13 +11,18 @@ import {
 } from "lucide-react";
 
 import { EpubImport } from "@/components/epub-import";
-import { LumiRecommendationCard } from "@/components/lumi-recommendation-card";
 import { OnboardingCard } from "@/components/onboarding-card";
 import { TelegramCard } from "@/components/telegram-card";
 import { useAuthUser } from "@/hooks/use-auth-user";
-import { subscribeLibrary, type LibraryEntry } from "@/lib/library";
-import { subscribeReadingProgress, type StoredReadingProgress } from "@/lib/reader-store";
-import { subscribeUserProfile, type UserProfile } from "@/lib/user-profile";
+import type { LibraryEntry } from "@/lib/library";
+import type { StoredReadingProgress } from "@/lib/reader-store";
+import type { UserProfile } from "@/lib/user-profile";
+
+const LumiRecommendationCard = lazy(() =>
+  import("@/components/lumi-recommendation-card").then((module) => ({
+    default: module.LumiRecommendationCard,
+  })),
+);
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -41,19 +46,31 @@ function Home() {
   const [progress, setProgress] = useState<StoredReadingProgress[]>([]);
 
   useEffect(() => {
+    let active = true;
+    let stops: Array<() => void> = [];
     if (!signedIn || !user) {
       setProfile(null);
       setLibrary(null);
       setProgress([]);
-      return;
+      return () => {
+        active = false;
+      };
     }
-    const stopProfile = subscribeUserProfile(user.uid, setProfile);
-    const stopLibrary = subscribeLibrary(user.uid, setLibrary);
-    const stopProgress = subscribeReadingProgress(user.uid, setProgress);
+    void Promise.all([
+      import("@/lib/user-profile"),
+      import("@/lib/library"),
+      import("@/lib/reader-store"),
+    ]).then(([profileModule, libraryModule, readerModule]) => {
+      if (!active) return;
+      stops = [
+        profileModule.subscribeUserProfile(user.uid, setProfile),
+        libraryModule.subscribeLibrary(user.uid, setLibrary),
+        readerModule.subscribeReadingProgress(user.uid, setProgress),
+      ];
+    });
     return () => {
-      stopProfile();
-      stopLibrary();
-      stopProgress();
+      active = false;
+      stops.forEach((stop) => stop());
     };
   }, [signedIn, user]);
 
@@ -186,7 +203,13 @@ function Home() {
             </div>
           </div>
           <div className="pt-0 lg:pt-10">
-            <LumiRecommendationCard user={user} libraryEntries={library ?? []} />
+            <Suspense
+              fallback={
+                <div className="h-28 animate-pulse rounded-2xl border border-border/60 bg-card/35" />
+              }
+            >
+              <LumiRecommendationCard user={user} libraryEntries={library ?? []} />
+            </Suspense>
           </div>
         </section>
       )}

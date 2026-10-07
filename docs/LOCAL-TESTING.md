@@ -68,6 +68,10 @@ Abra `/catalogo` e confira “Clássicos em domínio público”. A seleção de
 
 Com os quatro emuladores ativos, `npm run test:integration` chama a Function `recordReadingMilestone` duas vezes para o mesmo livro. A primeira resposta deve aceitar o evento; a segunda deve recusá-lo como duplicado, mantendo apenas 5 XP e um livro adicionado. Na interface autenticada, desconecte a rede antes de concluir um capítulo e reconecte em seguida: o marco pendente deve permanecer vinculado à mesma conta e ser reenviado sem duplicar XP.
 
+### Regressão de carga da Home
+
+Depois de `npm run build`, abra a prévia de produção em um perfil anônimo limpo e confira a aba Network. A navegação inicial da Home não deve solicitar chunks com `pdf`, `epub`, `firebase-services`, `firebase-functions`, `lumi-panel` ou `lumi-recommendation-card`. Abra a Lumi: o painel deve aparecer e seu chunk deve ser solicitado nesse momento. Ao autenticar, Firestore/Storage podem carregar para perfil, biblioteca e progresso.
+
 ## Verificações gerais
 
 ```sh

@@ -22,7 +22,7 @@ import {
   setDoc,
   type Unsubscribe,
 } from "firebase/firestore";
-import { getFirebase } from "./firebase";
+import { getFirebase } from "./firebase-services";
 import { withDeadline, withFallback } from "./async-utils";
 import { recordGamificationMilestone, type UserProfile } from "./user-profile";
 

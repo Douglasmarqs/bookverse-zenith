@@ -69,7 +69,7 @@ export async function confirmPrivateBookOwner(
   id: string,
   kind: "epubFiles" | "pdfFiles",
 ) {
-  const { getFirebase } = await import("./firebase");
+  const { getFirebase } = await import("./firebase-services");
   const fb = getFirebase();
   if (!fb || fb.auth.currentUser?.uid !== uid) return false;
   const { doc, getDocFromServer } = await import("firebase/firestore");

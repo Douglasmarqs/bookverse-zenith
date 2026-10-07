@@ -9,7 +9,7 @@
  * realmente terminou.
  */
 import { doc, onSnapshot, setDoc, type Unsubscribe } from "firebase/firestore";
-import { getFirebase } from "./firebase";
+import { getFirebase } from "./firebase-services";
 import { withDeadline } from "./async-utils";
 import type { LibraryEntry } from "./library";
 

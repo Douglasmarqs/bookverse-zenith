@@ -3,8 +3,8 @@
  * `askLumi` Firebase Cloud Function (see /functions in the repo root) so the
  * model API key never touches the browser.
  */
-import { getFunctions, httpsCallable } from "firebase/functions";
-import { ensureUserOrThrow, getFirebase } from "./firebase";
+import { ensureUserOrThrow } from "./firebase";
+import { getFirebase } from "./firebase-services";
 import type { LumiContext } from "./lumi-panel-store";
 
 export interface LumiMessage {
@@ -55,11 +55,11 @@ export async function askLumi(
     throw new Error(friendlyAuthError(err));
   }
 
-  const functions = getFunctions(fb.app);
-  const callable = httpsCallable<
+  const { bookverseCallable } = await import("./firebase-functions");
+  const callable = bookverseCallable<
     { messages: LumiMessage[]; context?: LumiContext | null },
     AskLumiResponse
-  >(functions, "askLumi", { timeout: 30000 });
+  >("askLumi", 30_000);
 
   try {
     const res = await callable({ messages, context: context ?? null });

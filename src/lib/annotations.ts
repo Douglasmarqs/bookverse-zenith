@@ -4,7 +4,7 @@
  * single read/subscribe gets everything for the book currently open.
  */
 import { doc, getDoc, onSnapshot, setDoc, type Unsubscribe } from "firebase/firestore";
-import { getFirebase } from "./firebase";
+import { getFirebase } from "./firebase-services";
 import { withDeadline, withFallback } from "./async-utils";
 
 export type HighlightColor = "gold" | "green" | "blue" | "pink";

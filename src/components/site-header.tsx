@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Search, Menu, X, BookOpen, LogOut, Settings, Sparkles, UserRound } from "lucide-react";
 import type { User } from "firebase/auth";
 import { signOut, subscribeAuth } from "../lib/firebase";
-import { ensureUserProfile, subscribeUserProfile, type UserProfile } from "../lib/user-profile";
+import type { UserProfile } from "../lib/user-profile";
 import { openLumiPanel } from "../lib/lumi-panel-store";
 import { UserAvatar } from "./user-avatar";
 import { ThemeSwitcher } from "./theme-switcher";
@@ -40,7 +40,9 @@ export function SiteHeader() {
     () =>
       subscribeAuth((u) => {
         setUser(u);
-        if (u && !u.isAnonymous) void ensureUserProfile(u);
+        if (u && !u.isAnonymous) {
+          void import("../lib/user-profile").then(({ ensureUserProfile }) => ensureUserProfile(u));
+        }
       }),
     [],
   );
@@ -52,10 +54,19 @@ export function SiteHeader() {
       return;
     }
     setProfileReady(false);
-    return subscribeUserProfile(user.uid, (nextProfile) => {
-      setProfile(nextProfile);
-      setProfileReady(true);
+    let active = true;
+    let stop: (() => void) | undefined;
+    void import("../lib/user-profile").then(({ subscribeUserProfile }) => {
+      if (!active) return;
+      stop = subscribeUserProfile(user.uid, (nextProfile) => {
+        setProfile(nextProfile);
+        setProfileReady(true);
+      });
     });
+    return () => {
+      active = false;
+      stop?.();
+    };
   }, [user]);
 
   function submitSearch(e: React.FormEvent) {

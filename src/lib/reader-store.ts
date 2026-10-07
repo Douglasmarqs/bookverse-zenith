@@ -14,7 +14,8 @@ import {
   setDoc,
   type Unsubscribe,
 } from "firebase/firestore";
-import { ensureUser, getFirebase } from "./firebase";
+import { ensureUser } from "./firebase";
+import { getFirebase } from "./firebase-services";
 import { withDeadline, withFallback } from "./async-utils";
 import {
   differentReadingPosition,

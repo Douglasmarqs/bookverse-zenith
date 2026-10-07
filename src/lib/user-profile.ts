@@ -18,9 +18,8 @@ import {
   setDoc,
   type Unsubscribe,
 } from "firebase/firestore";
-import { getFunctions, httpsCallable } from "firebase/functions";
 import type { User } from "firebase/auth";
-import { getFirebase } from "./firebase";
+import { getFirebase } from "./firebase-services";
 import { withDeadline, withFallback } from "./async-utils";
 import {
   isRetryableMilestoneError,
@@ -113,10 +112,11 @@ async function sendPendingMilestone(uid: string, pending: PendingMilestone): Pro
 
   writeMilestoneQueue(uid, markMilestoneAttempt(readMilestoneQueue(uid), pending));
   try {
-    const call = httpsCallable<
+    const { bookverseCallable } = await import("./firebase-functions");
+    const call = bookverseCallable<
       { type: GamificationMilestone; resourceId: string } & MilestoneDetails,
       { accepted: boolean }
-    >(getFunctions(fb.app), "recordReadingMilestone", { timeout: 12_000 });
+    >("recordReadingMilestone", 12_000);
     await call({ type: pending.type, resourceId: pending.resourceId, ...pending.details });
     writeMilestoneQueue(uid, removeMilestone(readMilestoneQueue(uid), pending));
   } catch (error) {
@@ -337,7 +337,7 @@ export async function updateProfileFields(
 
 /** Deletes every Firestore document belonging to a user — profile,
  * library, and reading progress. Used before/after deleting the Auth
- * account itself (see lib/firebase.ts's deleteAccount). Best-effort per
+ * account itself (see lib/firebase-account.ts's deleteAccount). Best-effort per
  * subcollection so a partial failure doesn't block the rest. */
 export async function deleteUserData(uid: string): Promise<void> {
   const fb = getFirebase();
@@ -348,10 +348,10 @@ export async function deleteUserData(uid: string): Promise<void> {
   // we never claim a private EPUB/PDF has gone away when it is still in the
   // cloud. The operations are idempotent, so the person can safely retry.
   try {
-    const removeOrphans = httpsCallable<undefined, { deleted: boolean }>(
-      getFunctions(fb.app),
+    const { bookverseCallable } = await import("./firebase-functions");
+    const removeOrphans = bookverseCallable<undefined, { deleted: boolean }>(
       "deletePrivateFiles",
-      { timeout: 20_000 },
+      20_000,
     );
     await removeOrphans();
     const [{ deleteEpubBook, deleteEpubBookFromCloud }, { deletePdfBook, deletePdfBookFromCloud }] =

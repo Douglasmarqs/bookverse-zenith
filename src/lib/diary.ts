@@ -14,7 +14,7 @@ import {
   serverTimestamp,
   type Unsubscribe,
 } from "firebase/firestore";
-import { getFirebase } from "./firebase";
+import { getFirebase } from "./firebase-services";
 import { withDeadline } from "./async-utils";
 import { recordGamificationMilestone, recordReadingActivity } from "./user-profile";
 

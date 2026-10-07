@@ -11,8 +11,8 @@
  * that doesn't set CORS headers — if so, this throws a clear error rather
  * than hanging (the reader page already shows that error to the user).
  */
-import { getFunctions, httpsCallable } from "firebase/functions";
 import { createBreaker } from "./net-utils";
+import { bookverseCallable } from "./firebase-functions";
 import {
   CURATED_PUBLIC_DOMAIN_CLASSIC_IDS,
   normalizePublicDomainBooks,
@@ -25,7 +25,7 @@ export type { PublicDomainSummary } from "./public-domain-catalog";
  * failure, skip them for a while instead of waiting on a timeout each time. */
 const pdFnBreaker = createBreaker(5 * 60_000);
 
-import { getFirebase } from "./firebase";
+import { getFirebase } from "./firebase-services";
 import type { Book, Chapter } from "./sample-book";
 
 const LANGUAGE_LABELS: Record<string, string> = {
@@ -305,12 +305,12 @@ export async function searchPublicDomainBooks(
   const fb = getFirebase();
   if (fb && !pdFnBreaker.isOpen()) {
     try {
-      const fn = httpsCallable<
+      const fn = bookverseCallable<
         { query: string; maxResults?: number },
         { results: PublicDomainSummary[] }
         // Gutendex has a 9 s server-side deadline; a shorter client deadline
         // made a healthy callable function look unavailable.
-      >(getFunctions(fb.app), "searchPublicDomainBooks", { timeout: 15_000 });
+      >("searchPublicDomainBooks", 15_000);
       const res = await fn({ query, maxResults });
       return res.data.results ?? [];
     } catch (err) {
@@ -339,10 +339,10 @@ export async function curatedPublicDomainClassics(maxResults = 12): Promise<Publ
   const fb = getFirebase();
   if (fb && !pdFnBreaker.isOpen()) {
     try {
-      const fn = httpsCallable<
+      const fn = bookverseCallable<
         { ids: number[]; maxResults: number },
         { results: PublicDomainSummary[] }
-      >(getFunctions(fb.app), "getPublicDomainBooksByIds", { timeout: 15_000 });
+      >("getPublicDomainBooksByIds", 15_000);
       const res = await fn({ ids: [...ids], maxResults: ids.length });
       return res.data.results ?? [];
     } catch (err) {
@@ -368,11 +368,7 @@ export async function getPublicDomainBook(gutenbergId: number): Promise<Book> {
   if (fb && !pdFnBreaker.isOpen()) {
     try {
       cloudFunctionTried = true;
-      const fn = httpsCallable<{ gutenbergId: number }, Book>(
-        getFunctions(fb.app),
-        "getPublicDomainBook",
-        { timeout: 30_000 },
-      );
+      const fn = bookverseCallable<{ gutenbergId: number }, Book>("getPublicDomainBook", 30_000);
       const res = await fn({ gutenbergId });
       return res.data;
     } catch (err) {

@@ -287,7 +287,7 @@ export async function deletePdfBook(uid: string, id: string): Promise<void> {
 }
 
 export async function uploadPdfBookToCloud(uid: string, book: PdfBook): Promise<void> {
-  const { getFirebase } = await import("./firebase");
+  const { getFirebase } = await import("./firebase-services");
   const firebase = getFirebase();
   if (!firebase) throw new Error("Firebase não está configurado neste ambiente.");
 
@@ -348,7 +348,7 @@ export async function uploadPdfBookToCloud(uid: string, book: PdfBook): Promise<
 export async function downloadPdfBookFromCloud(uid: string, id: string): Promise<PdfBook | null> {
   const cached = memoryBooks.get(privateBookKey(uid, id));
   if (cached) return cached;
-  const { getFirebase } = await import("./firebase");
+  const { getFirebase } = await import("./firebase-services");
   const firebase = getFirebase();
   if (!firebase) return null;
 
@@ -409,7 +409,7 @@ export async function downloadPdfBookFromCloud(uid: string, id: string): Promise
 /** Reads only the tiny Firestore metadata document. Used by library shelves
  * to recover PDF covers on a new phone without downloading the full PDF. */
 export async function getPdfCoverFromCloud(uid: string, id: string): Promise<string | null> {
-  const { getFirebase } = await import("./firebase");
+  const { getFirebase } = await import("./firebase-services");
   const firebase = getFirebase();
   if (!firebase) return null;
   try {
@@ -428,7 +428,7 @@ export async function getPdfCoverFromCloud(uid: string, id: string): Promise<str
 }
 
 export async function deletePdfBookFromCloud(uid: string, id: string): Promise<void> {
-  const { getFirebase } = await import("./firebase");
+  const { getFirebase } = await import("./firebase-services");
   const firebase = getFirebase();
   if (!firebase) throw new Error("Firebase não está configurado neste ambiente.");
   const { deleteObject, ref } = await import("firebase/storage");
