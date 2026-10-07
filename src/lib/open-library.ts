@@ -13,6 +13,12 @@
  * Docs: https://openlibrary.org/developers/api
  */
 import type { BookMeta } from "./google-books";
+import {
+  CatalogCircuitOpenError,
+  CatalogRequestError,
+  CatalogRequestPolicy,
+  parseRetryAfterMs,
+} from "./catalog-request-policy.ts";
 import { reportProductEvent } from "./observability.ts";
 
 export interface OpenLibraryBook extends BookMeta {
@@ -126,25 +132,45 @@ export function invalidateOpenLibraryCache(): void {
 
 /** Every fetch in this module is bounded — an unresponsive/blocked network
  * to openlibrary.org must fail within a few seconds, never hang the tab. */
-const FETCH_TIMEOUT_MS = 8000;
+// Two attempts plus the short backoff remain below the former single-request
+// 8 second ceiling, so resilience never turns into a longer blocked shelf.
+const FETCH_TIMEOUT_MS = 3500;
+const openLibraryRequestPolicy = new CatalogRequestPolicy({
+  maxAttempts: 2,
+  failureThreshold: 3,
+  cooldownMs: 30_000,
+  minIntervalMs: 250,
+  baseRetryDelayMs: 350,
+  maxRetryDelayMs: 3_000,
+});
 
 async function cachedFetchJson(url: string): Promise<unknown | null> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(url, { signal: controller.signal });
-    if (!res.ok) throw new Error(`Open Library ${res.status}`);
-    return await res.json();
+    return await openLibraryRequestPolicy.run(async () => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+      try {
+        const res = await fetch(url, { signal: controller.signal });
+        if (!res.ok) {
+          throw new CatalogRequestError(`Open Library ${res.status}`, {
+            status: res.status,
+            retryAfterMs: parseRetryAfterMs(res.headers.get("retry-after")),
+          });
+        }
+        return await res.json();
+      } finally {
+        clearTimeout(timer);
+      }
+    });
   } catch (err) {
     reportProductEvent("catalog_request_failed", err, {
       offline: typeof navigator !== "undefined" && !navigator.onLine,
       provider: "open-library",
-      stage: "fetch",
+      stage: err instanceof CatalogCircuitOpenError ? "circuit-open" : "fetch",
+      status: err instanceof CatalogRequestError ? err.status : undefined,
     });
     console.warn(`[open-library] fetch failed`, err);
     return null;
-  } finally {
-    clearTimeout(timer);
   }
 }
 

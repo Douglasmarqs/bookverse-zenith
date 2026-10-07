@@ -76,6 +76,10 @@ Depois de `npm run build`, abra a prévia de produção em um perfil anônimo li
 
 Execute `npm test` e confira os casos de observabilidade. Eles confirmam que IDs de conta e livro, títulos, buscas, trechos, mensagens de erro e valores arbitrários são removidos. As rotas `/reader/<id>` e `/livro/<slug>` devem aparecer como `/reader/:bookId` e `/livro/:slug`. Quando o host oferece `window.__lovableEvents`, falhas controladas também são encaminhadas ao coletor; no desenvolvimento, o contexto sanitizado aparece no console com o prefixo `[bookverse]`.
 
+### Resiliência do catálogo
+
+Os testes de `catalog-request-policy` usam relógio e espera controlados, sem depender da rede. Eles verificam uma repetição transitória, ausência de retry em HTTP permanente, abertura/recuperação do circuito, espaçamento das chamadas e limite de `Retry-After`. Para conferir a integração visual, abra o Catálogo com a Open Library indisponível: a página deve manter as outras prateleiras e mostrar o estado de indisponibilidade, sem spinner infinito.
+
 ## Verificações gerais
 
 ```sh

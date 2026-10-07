@@ -26,6 +26,7 @@ const SAFE_METADATA_VALUES: Record<string, ReadonlySet<string>> = {
   provider: new Set(["gutendex", "open-library", "storage"]),
   stage: new Set([
     "catalog",
+    "circuit-open",
     "cloud",
     "curated",
     "download",
