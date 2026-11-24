@@ -222,6 +222,8 @@ export async function downloadBook(book: CatalogBook): Promise<string> {
       c.paragraphs.join(" ").split(/\s+/).filter(Boolean).length;
     const junk = (c: (typeof parsed.chapters)[number]) =>
       /cr[ée]ditos|sobre est[ea]|about this (e?book)|licen[çc]a|license/i.test(c.title) ||
+      /^\s*([íi]ndice|sum[áa]rio|contents|table of contents)\s*$/i.test(c.title) ||
+      words(c) < 8 ||
       (words(c) < 120 &&
         /wikisource|exportado|project gutenberg|standard ebooks/i.test(c.paragraphs.join(" ")));
     const kept = parsed.chapters.filter((c) => !junk(c));

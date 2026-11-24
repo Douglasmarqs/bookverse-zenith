@@ -1917,7 +1917,9 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
               const editingHighlight =
                 paragraphHighlights.find((highlight) => highlight.id === editingNoteFor) ?? null;
               return (
-                <div key={i} className="relative" style={{ breakInside: "avoid" }}>
+                // Paragraphs flow across pages like a printed book (no blank
+                // page bottoms), never leaving a lone line behind.
+                <div key={i} className="relative" style={{ orphans: 2, widows: 2 }}>
                   <p
                     data-paragraph-index={i}
                     className={`rounded-sm px-2 -mx-2 py-0.5 [hyphens:auto] ${

@@ -221,14 +221,17 @@ function RootComponent() {
         {!isReaderRoute && <ConfigBanner />}
         {landing && <VisitorHeader />}
         {appChrome && <Sidebar />}
-        <main className={`relative z-[1] flex-1 ${appChrome ? "pb-44 lg:pb-0" : ""}`}>
+        <main
+          className={`relative z-[1] flex-1 ${appChrome ? (pathname.startsWith("/livro/") ? "pb-8 lg:pb-0" : "pb-44 lg:pb-0") : ""}`}
+        >
           {/* Keyed by path so every navigation gets a gentle entrance. */}
           <div key={pathname} className={isReaderRoute ? "" : "page-enter"}>
             <Outlet />
           </div>
         </main>
         {landing && <SiteFooter />}
-        {appChrome && <Dock showMini={pathname !== "/"} />}
+        {/* A book's page is a full-screen detail on phones (mockup 07). */}
+        {appChrome && !pathname.startsWith("/livro/") && <Dock showMini={pathname !== "/"} />}
         <CommandPalette />
         {/* The reader opens Lumi with a book/selection context. It must stay
             mounted there too; only the site chrome itself is suppressed. */}
