@@ -26,6 +26,8 @@ import { Route as SobreRouteImport } from './routes/sobre'
 import { Route as TermosRouteImport } from './routes/termos'
 import { Route as LivroSlugRouteImport } from './routes/livro.$slug'
 import { Route as ReaderBookIdRouteImport } from './routes/reader.$bookId'
+import { Route as ApiCatalogDownloadRouteImport } from './routes/api/catalog.download'
+import { Route as ApiCatalogSearchRouteImport } from './routes/api/catalog.search'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -112,6 +114,16 @@ const ReaderBookIdRoute = ReaderBookIdRouteImport.update({
   path: '/reader/$bookId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCatalogDownloadRoute = ApiCatalogDownloadRouteImport.update({
+  id: '/api/catalog/download',
+  path: '/api/catalog/download',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCatalogSearchRoute = ApiCatalogSearchRouteImport.update({
+  id: '/api/catalog/search',
+  path: '/api/catalog/search',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -131,6 +143,8 @@ export interface FileRoutesByFullPath {
   '/termos': typeof TermosRoute
   '/livro/$slug': typeof LivroSlugRoute
   '/reader/$bookId': typeof ReaderBookIdRoute
+  '/api/catalog/download': typeof ApiCatalogDownloadRoute
+  '/api/catalog/search': typeof ApiCatalogSearchRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -150,6 +164,8 @@ export interface FileRoutesByTo {
   '/termos': typeof TermosRoute
   '/livro/$slug': typeof LivroSlugRoute
   '/reader/$bookId': typeof ReaderBookIdRoute
+  '/api/catalog/download': typeof ApiCatalogDownloadRoute
+  '/api/catalog/search': typeof ApiCatalogSearchRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -170,6 +186,8 @@ export interface FileRoutesById {
   '/termos': typeof TermosRoute
   '/livro/$slug': typeof LivroSlugRoute
   '/reader/$bookId': typeof ReaderBookIdRoute
+  '/api/catalog/download': typeof ApiCatalogDownloadRoute
+  '/api/catalog/search': typeof ApiCatalogSearchRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -191,6 +209,8 @@ export interface FileRouteTypes {
     | '/termos'
     | '/livro/$slug'
     | '/reader/$bookId'
+    | '/api/catalog/download'
+    | '/api/catalog/search'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -210,6 +230,8 @@ export interface FileRouteTypes {
     | '/termos'
     | '/livro/$slug'
     | '/reader/$bookId'
+    | '/api/catalog/download'
+    | '/api/catalog/search'
   id:
     | '__root__'
     | '/'
@@ -229,6 +251,8 @@ export interface FileRouteTypes {
     | '/termos'
     | '/livro/$slug'
     | '/reader/$bookId'
+    | '/api/catalog/download'
+    | '/api/catalog/search'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -249,6 +273,8 @@ export interface RootRouteChildren {
   TermosRoute: typeof TermosRoute
   LivroSlugRoute: typeof LivroSlugRoute
   ReaderBookIdRoute: typeof ReaderBookIdRoute
+  ApiCatalogDownloadRoute: typeof ApiCatalogDownloadRoute
+  ApiCatalogSearchRoute: typeof ApiCatalogSearchRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -372,6 +398,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReaderBookIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/catalog/download': {
+      id: '/api/catalog/download'
+      path: '/api/catalog/download'
+      fullPath: '/api/catalog/download'
+      preLoaderRoute: typeof ApiCatalogDownloadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/catalog/search': {
+      id: '/api/catalog/search'
+      path: '/api/catalog/search'
+      fullPath: '/api/catalog/search'
+      preLoaderRoute: typeof ApiCatalogSearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -393,6 +433,8 @@ const rootRouteChildren: RootRouteChildren = {
   TermosRoute: TermosRoute,
   LivroSlugRoute: LivroSlugRoute,
   ReaderBookIdRoute: ReaderBookIdRoute,
+  ApiCatalogDownloadRoute: ApiCatalogDownloadRoute,
+  ApiCatalogSearchRoute: ApiCatalogSearchRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

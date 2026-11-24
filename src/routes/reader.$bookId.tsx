@@ -204,7 +204,10 @@ const ReaderGuestContext = createContext(false);
 
 function GuardedReaderPage() {
   const loaderData = Route.useLoaderData();
-  const privateFile = loaderData.source === "epub" || loaderData.source === "pdf";
+  // Books saved on this device (free catalogue downloads) open for guests
+  // too; only cloud copies of personal files need an account. PDFs are
+  // always personal imports.
+  const privateFile = loaderData.source === "pdf";
   const session = useReaderSession(!privateFile);
 
   if (session.state !== "ready") {
@@ -247,6 +250,7 @@ function GuardedReaderPage() {
 }
 
 function EpubBookLoader({ uid, localId }: { uid: string; localId: string }) {
+  const guest = useContext(ReaderGuestContext);
   const [book, setBook] = useState<Book | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stage, setStage] = useState<"local" | "cloud">("local");
@@ -269,6 +273,12 @@ function EpubBookLoader({ uid, localId }: { uid: string; localId: string }) {
       }
       // Not on this device/browser — it may have been imported elsewhere
       // and synced to Firebase Storage; fetch and cache it locally too.
+      if (guest) {
+        setError(
+          "Este livro não está salvo neste aparelho. Entre na sua conta para buscá-lo na nuvem, ou baixe-o de novo em Explorar.",
+        );
+        return;
+      }
       setStage("cloud");
       const cloudBook = await downloadEpubBookFromCloud(uid, localId);
       if (cancelled) return;
@@ -286,7 +296,7 @@ function EpubBookLoader({ uid, localId }: { uid: string; localId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [localId, uid]);
+  }, [localId, uid, guest]);
 
   if (error) {
     return (
