@@ -4,10 +4,8 @@ import { LogIn, Search } from "lucide-react";
 
 import { Logo } from "@/components/brand/logo";
 import { MiniPlayer } from "@/components/shell/mini-player";
-import { AccountMenu } from "@/components/shell/account-menu";
-import { ThemeSwitcher } from "@/components/theme-switcher";
 import { openCommandPalette } from "@/lib/command-palette-store";
-import { DISCOVER_SEARCH, MEMBER_NAV, isNavActive } from "@/lib/nav";
+import { DESKTOP_NAV, DISCOVER_SEARCH, isNavActive } from "@/lib/nav";
 import { useAuthState } from "@/hooks/use-auth-user";
 
 /** Desktop navigation: brand, search, the four destinations and "Lendo agora". */
@@ -26,13 +24,13 @@ export function Sidebar() {
         className="mt-6 flex h-11 items-center gap-2.5 whitespace-nowrap rounded-[14px] bg-secondary px-3 text-sm text-faint transition hover:text-foreground"
       >
         <Search className="h-[17px] w-[17px]" />
-        Buscar livros
+        Buscar
         <kbd className="ml-auto rounded-md bg-card px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
           ⌘K
         </kbd>
       </button>
       <nav aria-label="Navegação" className="mt-5 flex flex-col gap-0.5">
-        {MEMBER_NAV.map((item) => {
+        {DESKTOP_NAV.map((item) => {
           const active = isNavActive(pathname, item);
           const Icon = item.icon;
           return (
@@ -61,20 +59,15 @@ export function Sidebar() {
         })}
       </nav>
       <div className="flex-1" />
-      <div className="mb-3 flex items-center justify-between px-1">
-        {signedIn ? (
-          <AccountMenu side="right" />
-        ) : (
-          <Link
-            to="/auth"
-            search={{ redirect: pathname }}
-            className="press inline-flex h-10 items-center gap-2 rounded-full bg-secondary px-4 text-sm font-semibold"
-          >
-            <LogIn className="h-4 w-4" /> Entrar
-          </Link>
-        )}
-        <ThemeSwitcher />
-      </div>
+      {!signedIn && (
+        <Link
+          to="/auth"
+          search={{ redirect: pathname }}
+          className="press mb-3 inline-flex h-11 items-center justify-center gap-2 rounded-full bg-secondary px-4 text-sm font-semibold"
+        >
+          <LogIn className="h-4 w-4" /> Entrar ou criar conta
+        </Link>
+      )}
       <MiniPlayer compact />
     </aside>
   );

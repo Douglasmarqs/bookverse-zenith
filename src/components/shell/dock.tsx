@@ -1,5 +1,4 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { motion } from "motion/react";
 
 import { haptic } from "@/components/motion/interactive";
 import { MiniPlayer } from "@/components/shell/mini-player";
@@ -35,13 +34,6 @@ export function Dock({ showMini = true }: { showMini?: boolean }) {
                   active ? "text-foreground" : "text-faint"
                 }`}
               >
-                {active && (
-                  <motion.span
-                    layoutId="dock-active"
-                    className="absolute inset-x-2 inset-y-0 rounded-[18px] bg-accent-soft"
-                    transition={{ type: "spring", stiffness: 500, damping: 36 }}
-                  />
-                )}
                 <Icon
                   className={`relative h-[21px] w-[21px] ${active ? "text-gold" : ""}`}
                   strokeWidth={active ? 2.2 : 1.8}

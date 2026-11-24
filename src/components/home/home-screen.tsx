@@ -2,7 +2,16 @@ import { Link } from "@tanstack/react-router";
 import { motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
 import type { User } from "firebase/auth";
-import { ArrowRight, BookOpen, Compass, FileUp, Flame, Headphones, Search } from "lucide-react";
+import {
+  ArrowRight,
+  Bell,
+  BookOpen,
+  Compass,
+  FileUp,
+  Flame,
+  Headphones,
+  Search,
+} from "lucide-react";
 
 import { BookArt } from "@/components/book-art";
 import { Lumi } from "@/components/brand/lumi";
@@ -12,7 +21,7 @@ import { LUMI_PICKS } from "@/lib/editorial";
 import { bookPalette } from "@/lib/faux-books";
 import { computeGoalProgress, currentYear, subscribeReadingGoal } from "@/lib/goals";
 import { subscribeLibrary, type LibraryEntry } from "@/lib/library";
-import { DISCOVER_SEARCH } from "@/lib/nav";
+import { DISCOVER_SEARCH, getLastBookInfo } from "@/lib/nav";
 import { getLocalOnboarding, loadOnboarding } from "@/lib/onboarding";
 import { gutenbergReaderId } from "@/lib/public-domain";
 import { subscribeReadingProgress, type StoredReadingProgress } from "@/lib/reader-store";
@@ -141,15 +150,16 @@ export function HomeScreen({ user }: { user: User }) {
     [library, current],
   );
   const picks = useMemo(() => {
-    const owned = new Set((library ?? []).map((e) => e.title.toLowerCase()));
-    return LUMI_PICKS.filter((p) => !owned.has(p.title.toLowerCase())).slice(0, 10);
-  }, [library]);
+    const reading = current?.entry.title.toLowerCase();
+    return LUMI_PICKS.filter((p) => p.title.toLowerCase() !== reading).slice(0, 12);
+  }, [current]);
 
   const goal = computeGoalProgress(library ?? [], goalTarget ?? 0);
   const streak = profile?.currentStreak ?? 0;
   const firstName =
     (profile?.displayName || user.displayName || "").trim().split(/\s+/)[0] || "leitor";
   const ritualRatio = Math.min(1, ritual.todayMinutes / Math.max(1, ritual.goal));
+  const ritualLeft = Math.max(0, Math.ceil(ritual.goal - ritual.todayMinutes));
 
   const rise = (delay = 0) =>
     reduce
@@ -166,7 +176,9 @@ export function HomeScreen({ user }: { user: User }) {
       <motion.header {...rise()} className="flex items-start justify-between gap-4 px-1">
         <div className="min-w-0">
           <p className="text-[13px] font-semibold text-faint first-letter:uppercase">
-            {now.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })}
+            {now
+              .toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })
+              .replace("-feira", "")}
           </p>
           <h1 className="mt-1.5 truncate text-[32px] leading-none lg:text-[44px]">
             {greeting(now)}, {firstName}
@@ -183,12 +195,20 @@ export function HomeScreen({ user }: { user: User }) {
           </button>
           <AccountMenu />
         </div>
-        {streak > 0 && (
-          <span className="hidden h-11 shrink-0 items-center gap-2 rounded-full bg-card px-4 text-sm font-bold shadow-[inset_0_0_0_1px_var(--border)] lg:inline-flex">
+        <div className="hidden shrink-0 items-center gap-2.5 lg:flex">
+          <span className="inline-flex h-[42px] items-center gap-2 rounded-full bg-card px-4 text-sm font-bold shadow-[inset_0_0_0_1px_var(--border)]">
             <Flame className="h-[18px] w-[18px] text-gold" /> {streak}{" "}
             {streak === 1 ? "dia" : "dias"}
           </span>
-        )}
+          <button
+            type="button"
+            aria-label="Notificações"
+            className="press grid h-[42px] w-[42px] place-items-center rounded-full bg-card shadow-[inset_0_0_0_1px_var(--border)]"
+          >
+            <Bell className="h-[19px] w-[19px]" />
+          </button>
+          <AccountMenu />
+        </div>
       </motion.header>
 
       {onboarded === false && (
@@ -221,75 +241,74 @@ export function HomeScreen({ user }: { user: User }) {
           )}
         </motion.div>
 
-        {/* Today + streak */}
-        <motion.div {...rise(0.12)} className="grid grid-cols-2 gap-3 lg:grid-cols-1 lg:gap-5">
-          <div className="surface-card flex items-center gap-3 p-3.5 lg:gap-5 lg:p-6">
+        {/* Today + streak — two cards on phones, one on desktop */}
+        <motion.div {...rise(0.12)} className="grid grid-cols-2 gap-3 lg:hidden">
+          <div className="surface-card flex items-center gap-3 p-3.5">
             <div className="relative shrink-0">
-              <span className="lg:hidden">
-                <Ring ratio={ritualRatio} />
-              </span>
-              <span className="hidden lg:block">
-                <Ring ratio={ritualRatio} size={88} stroke={9} />
-              </span>
-              <span className="absolute inset-0 grid place-items-center font-display text-sm lg:text-xl">
+              <Ring ratio={ritualRatio} />
+              <span className="absolute inset-0 grid place-items-center font-display text-sm">
                 {Math.round(ritualRatio * 100)}%
               </span>
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-bold lg:text-base">Hoje</p>
-              <p className="mt-0.5 text-[12.5px] text-muted-foreground lg:text-sm">
+              <p className="text-sm font-bold">Hoje</p>
+              <p className="mt-0.5 text-[12.5px] text-muted-foreground">
                 {Math.floor(ritual.todayMinutes)} de {ritual.goal} min
               </p>
             </div>
           </div>
-          <div className="surface-card p-3.5 lg:p-6">
+          <div className="surface-card p-3.5">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-bold lg:text-base">
+              <p className="text-sm font-bold">
                 {streak} {streak === 1 ? "dia" : "dias"}
               </p>
               <span className="inline-flex items-center gap-1 text-xs font-bold text-gold">
                 <Flame className="h-[15px] w-[15px]" /> seguidos
               </span>
             </div>
-            <div className="mt-2.5 flex gap-[5px] lg:mt-4 lg:gap-2">
-              {ritual.week.map((d) => (
-                <span
-                  key={d.key}
-                  title={`${Math.round(d.minutes)} min`}
-                  className={`grid h-[26px] flex-1 place-items-center rounded-lg text-[10.5px] font-bold lg:h-9 lg:text-xs ${
-                    d.met
-                      ? "bg-gold text-white"
-                      : d.today
-                        ? "bg-accent-soft text-gold"
-                        : "bg-secondary text-faint"
-                  }`}
-                >
-                  {d.label}
-                </span>
-              ))}
+            <WeekRow week={ritual.week} />
+          </div>
+        </motion.div>
+        <motion.div {...rise(0.12)} className="surface-card hidden flex-col p-6 lg:flex">
+          <div className="flex items-center justify-between">
+            <p className="text-base font-bold">Hoje</p>
+            <p className="text-[13px] text-muted-foreground">meta {ritual.goal} min</p>
+          </div>
+          <div className="mt-4 flex items-center gap-5">
+            <div className="relative shrink-0">
+              <Ring ratio={ritualRatio} size={96} stroke={10} />
+              <span className="absolute inset-0 grid place-items-center font-display text-[22px]">
+                {Math.floor(ritual.todayMinutes)}&apos;
+              </span>
+            </div>
+            <div>
+              <p className="font-display text-[28px] leading-none">
+                {ritualLeft > 0 ? `${ritualLeft} min` : "Meta batida"}
+              </p>
+              <p className="mt-1.5 text-[13.5px] text-muted-foreground">
+                {ritualLeft > 0 ? "para fechar o dia" : "volte amanhã para manter a sequência"}
+              </p>
             </div>
           </div>
-          {goal.target > 0 && (
-            <div className="surface-card col-span-2 hidden items-center gap-4 p-6 lg:col-span-1 lg:flex">
-              <div className="min-w-0 flex-1">
-                <p className="text-base font-bold">Meta de {year}</p>
-                <p className="mt-0.5 text-sm text-muted-foreground">
-                  {goal.completed} de {goal.target} livros
-                </p>
-                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-secondary">
-                  <div
-                    className="h-full rounded-full bg-gold"
-                    style={{ width: `${Math.min(100, goal.percent)}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
+          <div className="flex-1" />
+          <WeekRow week={ritual.week} large />
         </motion.div>
       </div>
 
+      <Rail title="Feito para você" to="/descobrir" delay={0.18}>
+        {picks.map((p) => (
+          <BookTile
+            key={p.gutenbergId}
+            title={p.title}
+            author={p.author}
+            meta={formatMinutes(p.minutes)}
+            readerId={gutenbergReaderId(p.gutenbergId)}
+          />
+        ))}
+      </Rail>
+
       {shelf.length > 0 && (
-        <Rail title="Na sua biblioteca" to="/biblioteca" delay={0.18}>
+        <Rail title="Na sua biblioteca" to="/biblioteca" delay={0.22}>
           {shelf.map((e) => (
             <BookTile
               key={e.id}
@@ -304,18 +323,34 @@ export function HomeScreen({ user }: { user: User }) {
           ))}
         </Rail>
       )}
+    </div>
+  );
+}
 
-      <Rail title="Feito para você" to="/descobrir" delay={0.22}>
-        {picks.map((p) => (
-          <BookTile
-            key={p.gutenbergId}
-            title={p.title}
-            author={p.author}
-            meta={formatMinutes(p.minutes)}
-            readerId={gutenbergReaderId(p.gutenbergId)}
-          />
-        ))}
-      </Rail>
+function WeekRow({
+  week,
+  large = false,
+}: {
+  week: { key: string; label: string; minutes: number; met: boolean; today: boolean }[];
+  large?: boolean;
+}) {
+  return (
+    <div className={`flex ${large ? "mt-5 gap-1.5" : "mt-2.5 gap-[5px]"}`}>
+      {week.map((d) => (
+        <span
+          key={d.key}
+          title={`${Math.round(d.minutes)} min`}
+          className={`grid flex-1 place-items-center font-bold ${large ? "h-[34px] rounded-[10px] text-xs" : "h-[26px] rounded-lg text-[10.5px]"} ${
+            d.met
+              ? "bg-gold text-white"
+              : d.today
+                ? "bg-accent-soft text-gold"
+                : "bg-secondary text-faint"
+          }`}
+        >
+          {d.label}
+        </span>
+      ))}
     </div>
   );
 }
@@ -398,6 +433,17 @@ function ContinueCard({
   const pct = Math.round(ratio * 100);
   const chapter = progress?.chapterIndex != null ? progress.chapterIndex + 1 : null;
   const total = progress?.chapterCount;
+  const [live, setLive] = useState<ReturnType<typeof getLastBookInfo>>(null);
+  useEffect(() => setLive(getLastBookInfo()), []);
+  const mine = live?.id === entry.readerId ? live : null;
+  const footnote =
+    mine?.chapterMinutesLeft != null
+      ? `${formatMinutes(mine.chapterMinutesLeft)} para o fim do capítulo${
+          mine.bookMinutesLeft != null ? ` · ${formatMinutes(mine.bookMinutesLeft)} no total` : ""
+        }`
+      : total
+        ? `Capítulo ${chapter} de ${total}`
+        : null;
   return (
     <div
       className="relative overflow-hidden rounded-[30px] p-[18px] lg:flex lg:h-full lg:gap-7 lg:p-7"
@@ -429,7 +475,11 @@ function ContinueCard({
           </h2>
           <p className="mt-1 truncate text-[13.5px] opacity-75 lg:text-base">
             {entry.author}
-            {chapter ? <span className="hidden lg:inline"> · Capítulo {chapter}</span> : null}
+            {mine?.chapter ? (
+              <span className="hidden lg:inline"> · {mine.chapter}</span>
+            ) : chapter ? (
+              <span className="hidden lg:inline"> · Capítulo {chapter}</span>
+            ) : null}
           </p>
           <div className="hidden flex-1 lg:block" />
           <div className="mt-3.5 flex items-center gap-2.5 text-[12.5px] font-semibold">
@@ -445,7 +495,13 @@ function ContinueCard({
                 transition={{ duration: 1, ease: EASE, delay: 0.3 }}
               />
             </div>
-            {pct}%
+            <span className="lg:hidden">{pct}%</span>
+            <span className="hidden lg:inline">
+              {pct}%
+              {mine?.bookMinutesLeft != null
+                ? ` · ${formatMinutes(mine.bookMinutesLeft)} restantes`
+                : ""}
+            </span>
           </div>
           <div className="mt-4 hidden gap-2.5 lg:flex">
             <ContinueButtons entry={entry} pal={pal} chapter={chapter} />
@@ -455,10 +511,8 @@ function ContinueCard({
       <div className="relative mt-4 flex gap-2 lg:hidden">
         <ContinueButtons entry={entry} pal={pal} chapter={chapter} />
       </div>
-      {total ? (
-        <p className="relative mt-2.5 text-center text-xs opacity-70 lg:hidden">
-          Capítulo {chapter} de {total}
-        </p>
+      {footnote ? (
+        <p className="relative mt-2.5 text-center text-xs opacity-70 lg:hidden">{footnote}</p>
       ) : null}
     </div>
   );
@@ -482,7 +536,10 @@ function ContinueButtons({
         style={{ background: pal.fg, color: pal.bg }}
       >
         <BookOpen className="h-[18px] w-[18px]" strokeWidth={2.2} />
-        {chapter ? `Continuar · Cap. ${chapter}` : "Continuar leitura"}
+        <span className="lg:hidden">
+          {chapter ? `Continuar · Cap. ${chapter}` : "Continuar leitura"}
+        </span>
+        <span className="hidden lg:inline">Continuar leitura</span>
       </Link>
       <Link
         to="/reader/$bookId"

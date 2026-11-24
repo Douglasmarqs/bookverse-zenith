@@ -33,6 +33,8 @@ export interface FauxBook {
   motif: CoverMotif;
   /** Title set in the serif cover face instead of the grotesque. */
   serif: boolean;
+  /** Hand-set title lines for the classics. */
+  lines?: string[];
 }
 
 export const FAUX_BOOKS: FauxBook[] = [
@@ -53,6 +55,7 @@ export const FAUX_BOOKS: FauxBook[] = [
     accent: "#E5482B",
     motif: "tomb",
     serif: true,
+    lines: ["Memórias", "Póstumas de", "Brás Cubas"],
   },
   {
     title: "O Cortiço",
@@ -89,6 +92,7 @@ export const FAUX_BOOKS: FauxBook[] = [
     accent: "#FF8A5B",
     motif: "stripes",
     serif: false,
+    lines: ["Triste Fim", "de Policarpo", "Quaresma"],
   },
   {
     title: "Orgulho e Preconceito",
@@ -98,6 +102,7 @@ export const FAUX_BOOKS: FauxBook[] = [
     accent: "#B3264B",
     motif: "oval",
     serif: true,
+    lines: ["Orgulho e", "Preconceito"],
   },
   {
     title: "Frankenstein",
@@ -125,6 +130,7 @@ export const FAUX_BOOKS: FauxBook[] = [
     accent: "#FFD3EC",
     motif: "checker",
     serif: true,
+    lines: ["Alice no País", "das Maravilhas"],
   },
   {
     title: "O Grande Gatsby",
@@ -134,6 +140,7 @@ export const FAUX_BOOKS: FauxBook[] = [
     accent: "#E8B64C",
     motif: "deco",
     serif: true,
+    lines: ["O Grande", "Gatsby"],
   },
   {
     title: "Os Sertões",
@@ -179,6 +186,7 @@ export const FAUX_BOOKS: FauxBook[] = [
     accent: "#FFE45C",
     motif: "dots",
     serif: false,
+    lines: ["Contos", "Fluminenses"],
   },
 ];
 
@@ -194,15 +202,26 @@ const KNOWN = new Map(FAUX_BOOKS.map((b) => [norm(b.title), b]));
 
 export function fauxBookFor(title: string, author = ""): FauxBook {
   const known = KNOWN.get(norm(title));
-  if (known) return { ...known, author: author || known.author };
+  if (known) return { ...known, title, author: author || known.author };
   let hash = 0;
   for (const ch of norm(title) + norm(author)) hash = (hash * 31 + ch.charCodeAt(0)) | 0;
   const base = FAUX_BOOKS[Math.abs(hash) % FAUX_BOOKS.length]!;
-  const motifs = [...new Set(FAUX_BOOKS.map((b) => b.motif))];
+  // Motifs that stay clear of the title area, for books we don't know.
+  const motifs: CoverMotif[] = [
+    "windows",
+    "spiral",
+    "stripes",
+    "oval",
+    "bolt",
+    "checker",
+    "deco",
+    "dots",
+  ];
   return {
     ...base,
     motif: motifs[Math.abs(hash >> 3) % motifs.length]!,
     serif: (hash & 1) === 0,
+    lines: undefined,
     title,
     author: author || "Autor desconhecido",
   };

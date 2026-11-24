@@ -127,20 +127,30 @@ export function useReadingTimer(uid: string | null) {
 export interface RitualState {
   goal: number;
   todayMinutes: number;
-  /** Last 7 days, oldest first. */
+  /** This week, Monday first. */
   week: { key: string; label: string; minutes: number; met: boolean; today: boolean }[];
 }
 
 const WEEKDAY = ["D", "S", "T", "Q", "Q", "S", "S"];
 
 function buildState(days: RitualDays, goal: number): RitualState {
+  // The current week, Monday to Sunday (S T Q Q S S D).
   const today = new Date();
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+  const todayKey = dayKey(today);
   const week = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(today);
-    d.setDate(today.getDate() - (6 - i));
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
     const key = dayKey(d);
     const minutes = days[key] ?? 0;
-    return { key, label: WEEKDAY[d.getDay()]!, minutes, met: minutes >= goal, today: i === 6 };
+    return {
+      key,
+      label: WEEKDAY[d.getDay()]!,
+      minutes,
+      met: minutes >= goal,
+      today: key === todayKey,
+    };
   });
   return { goal, todayMinutes: days[dayKey()] ?? 0, week };
 }

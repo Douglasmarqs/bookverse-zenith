@@ -38,7 +38,7 @@ export function UserAvatar({
     profile?.photoURL ||
     (allowProviderFallback ? user?.photoURL : null);
   const name = (profile?.displayName || user?.displayName || user?.email || "Leitor").trim();
-  const base = `relative grid shrink-0 place-items-center overflow-hidden rounded-full bg-gold/10 ring-1 ring-gold/40 ${SIZES[size]} ${className}`;
+  const base = `relative grid shrink-0 place-items-center overflow-hidden rounded-full bg-[linear-gradient(135deg,#ffb199,#ff4d1a)] ${SIZES[size]} ${className}`;
 
   if (photo) {
     return (
@@ -59,7 +59,7 @@ export function UserAvatar({
     );
   }
   return (
-    <span className={`${base} font-semibold text-gold`} aria-hidden>
+    <span className={`${base} font-bold text-white`} aria-hidden>
       {name.charAt(0).toUpperCase() || "?"}
     </span>
   );

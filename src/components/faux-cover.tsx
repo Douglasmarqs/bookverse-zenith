@@ -6,21 +6,21 @@
 import { useId } from "react";
 import { motifSvg, type FauxBook } from "@/lib/faux-books";
 
-/** Breaks a title into at most four balanced lines. */
-function titleLines(title: string): string[] {
+/** Title lines: hand-set for the classics, otherwise one line when it fits
+ * and balanced breaks (max four lines) when it doesn't. */
+function titleLines(book: FauxBook): string[] {
+  if (book.lines?.length) return book.lines;
+  const title = book.title.trim();
+  if (title.length <= 14) return [title];
   const words = title.split(/\s+/).filter(Boolean);
-  const max = title.length > 28 ? 13 : 11;
+  const max = title.length > 28 ? 13 : 12;
   const lines: string[] = [];
   for (const w of words) {
     const last = lines[lines.length - 1];
     if (last && (last + " " + w).length <= max) lines[lines.length - 1] = last + " " + w;
     else lines.push(w);
   }
-  if (lines.length > 4) {
-    const head = lines.slice(0, 3);
-    head.push(lines.slice(3).join(" "));
-    return head;
-  }
+  if (lines.length > 4) return [...lines.slice(0, 3), lines.slice(3).join(" ")];
   return lines;
 }
 
@@ -36,10 +36,12 @@ export function FauxCover({
   padTop?: boolean;
 }) {
   const id = useId().replace(/:/g, "");
-  const lines = titleLines(book.title);
-  const longest = Math.max(...lines.map((l) => l.length));
-  const base = lines.length >= 3 ? 21 : longest > 9 ? 24 : 30;
-  const fs = Math.min(base, (168 / Math.max(longest, 1)) * (book.serif ? 2.1 : 1.85));
+  const lines = titleLines(book);
+  const longest = Math.max(...lines.map((l) => l.length), 1);
+  const rule = lines.length >= 3 ? 21 : lines.join("").length > 14 ? 24 : 30;
+  // Same sizing as the approved covers, shrunk only when a line wouldn't fit.
+  const fit = 172 / (longest * (book.serif ? 0.42 : 0.56));
+  const fs = Math.min(rule * (book.serif ? 1.12 : 1), fit) / (book.serif ? 1.12 : 1);
   const art = motifSvg(book);
   return (
     <div
@@ -58,7 +60,12 @@ export function FauxCover({
           </linearGradient>
         </defs>
         <rect width="200" height="300" fill={book.bg} />
-        <g dangerouslySetInnerHTML={{ __html: art }} />
+        <g
+          transform={
+            lines.length >= 3 ? "translate(100 128) scale(0.8) translate(-100 -150)" : undefined
+          }
+          dangerouslySetInnerHTML={{ __html: art }}
+        />
         {showText && (
           <>
             <text

@@ -32,7 +32,7 @@ export function AccountMenu({ side = "bottom" }: { side?: "bottom" | "right" }) 
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label="Sua conta"
-        className="press rounded-full outline-none ring-2 ring-transparent transition hover:ring-gold/40 focus-visible:ring-gold/70"
+        className="press rounded-full outline-none ring-2 ring-transparent transition focus-visible:ring-gold/70"
       >
         <UserAvatar profile={profile} user={user} size="md" allowProviderFallback={profileReady} />
       </DropdownMenuTrigger>
@@ -61,7 +61,7 @@ export function AccountMenu({ side = "bottom" }: { side?: "bottom" | "right" }) 
         </DropdownMenuItem>
         <DropdownMenuItem asChild className="rounded-xl">
           <Link to="/perfil" hash="aparencia" className="flex items-center gap-2 px-3 py-2">
-            <Palette className="h-4 w-4" /> Ambiente
+            <Palette className="h-4 w-4" /> Aparência
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />

@@ -1,4 +1,12 @@
-import { CircleUserRound, Compass, House, LibraryBig, type LucideIcon } from "lucide-react";
+import {
+  ChartNoAxesColumn,
+  CircleUserRound,
+  Compass,
+  House,
+  LibraryBig,
+  Trophy,
+  type LucideIcon,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 
 /** Single source of truth for the app's navigation destinations. */
@@ -23,6 +31,20 @@ export const MEMBER_NAV: {
     icon: CircleUserRound,
     also: ["/metas", "/desafios", "/ranking", "/diario"],
   },
+];
+
+/** Desktop sidebar: same places, with "Você" split into its two halves. */
+export const DESKTOP_NAV: {
+  label: string;
+  to: "/" | "/descobrir" | "/biblioteca" | "/metas" | "/desafios";
+  icon: LucideIcon;
+  also?: string[];
+}[] = [
+  { label: "Início", to: "/", icon: House },
+  { label: "Explorar", to: "/descobrir", icon: Compass, also: ["/livro", "/catalogo"] },
+  { label: "Biblioteca", to: "/biblioteca", icon: LibraryBig },
+  { label: "Progresso", to: "/metas", icon: ChartNoAxesColumn, also: ["/diario", "/perfil"] },
+  { label: "Desafios", to: "/desafios", icon: Trophy, also: ["/ranking"] },
 ];
 
 export function isNavActive(
@@ -55,6 +77,8 @@ export interface LastBook {
   chapter?: string;
   /** Minutes left in the current chapter, when known. */
   chapterMinutesLeft?: number;
+  /** Minutes left in the whole book, when known. */
+  bookMinutesLeft?: number;
   cover?: string;
   updatedAt?: number;
 }
