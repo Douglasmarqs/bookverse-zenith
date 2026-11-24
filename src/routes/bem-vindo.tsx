@@ -441,7 +441,7 @@ function Onboarding() {
         <button
           type="button"
           onClick={() => void finish(false)}
-          className="mx-auto mt-4 text-xs text-muted-foreground underline-offset-4 hover:underline"
+          className="mx-auto mt-2 px-3 py-3 text-xs text-muted-foreground underline-offset-4 hover:underline"
         >
           Pular por agora
         </button>

@@ -145,7 +145,7 @@ function LivroDetalhesPage() {
       />
       <button
         onClick={() => window.history.back()}
-        className="press relative mb-8 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+        className="press relative mb-6 -ml-2 inline-flex min-h-10 items-center gap-2 rounded-full px-2 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" /> Voltar
       </button>

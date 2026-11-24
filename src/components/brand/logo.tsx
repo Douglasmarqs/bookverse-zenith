@@ -71,7 +71,7 @@ export function Logo({ size = 36, className = "" }: { size?: number; className?:
         size={size}
         className="drop-shadow-[0_8px_18px_color-mix(in_oklab,var(--gold)_45%,transparent)] transition-transform duration-500 group-hover:-rotate-6 group-hover:scale-105"
       />
-      <Wordmark className="text-[1.55rem] leading-none" />
+      <Wordmark className="text-[1.55rem] leading-none max-[359px]:hidden" />
     </Link>
   );
 }

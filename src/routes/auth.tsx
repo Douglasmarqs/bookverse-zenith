@@ -404,7 +404,7 @@ function AuthPage() {
                     <button
                       type="button"
                       onClick={() => switchMode("reset")}
-                      className="text-xs text-muted-foreground hover:text-gold"
+                      className="-my-2 py-2 text-xs text-muted-foreground hover:text-gold"
                     >
                       Esqueci minha senha
                     </button>
@@ -534,7 +534,7 @@ function Field({
         {...rest}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+        className="min-w-0 flex-1 bg-transparent py-1 text-base outline-none placeholder:text-muted-foreground sm:text-sm"
       />
     </label>
   );
@@ -553,7 +553,7 @@ function PasswordField({
   onToggleVisible: () => void;
 } & Omit<React.InputHTMLAttributes<HTMLInputElement>, "onChange" | "value" | "type">) {
   return (
-    <label className="flex items-center gap-3 rounded-2xl border border-border bg-card/50 px-4 py-3.5 transition focus-within:border-gold/60 focus-within:ring-4 focus-within:ring-gold/10">
+    <label className="flex items-center gap-3 rounded-2xl border border-border bg-card/50 px-4 py-2.5 transition focus-within:border-gold/60 focus-within:ring-4 focus-within:ring-gold/10">
       <span className="text-muted-foreground">
         <Lock className="h-4 w-4" />
       </span>
@@ -562,14 +562,14 @@ function PasswordField({
         type={visible ? "text" : "password"}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+        className="min-w-0 flex-1 bg-transparent py-1 text-base outline-none placeholder:text-muted-foreground sm:text-sm"
       />
       <button
         type="button"
         onClick={onToggleVisible}
         tabIndex={-1}
         aria-label={visible ? "Ocultar senha" : "Mostrar senha"}
-        className="text-muted-foreground hover:text-foreground"
+        className="-mr-2 grid h-10 w-10 shrink-0 place-items-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground"
       >
         {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
       </button>

@@ -512,7 +512,7 @@ function PerfilPage({ user }: { user: User }) {
             <button
               type="button"
               onClick={() => setShowPasswords((v) => !v)}
-              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+              className="-my-2 inline-flex items-center gap-1.5 py-2 text-xs text-muted-foreground hover:text-foreground"
             >
               {showPasswords ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
               {showPasswords ? "Ocultar senhas" : "Mostrar senhas"}

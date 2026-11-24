@@ -19,61 +19,69 @@ export function SiteFooter() {
         </div>
         <FooterCol title="Ler">
           <li>
-            <Link to="/descobrir" search={DISCOVER_SEARCH} className="hover:text-gold">
+            <Link
+              to="/descobrir"
+              search={DISCOVER_SEARCH}
+              className="inline-block py-1.5 hover:text-gold"
+            >
               Descobrir
             </Link>
           </li>
           <li>
-            <Link to="/biblioteca" className="hover:text-gold">
+            <Link to="/biblioteca" className="inline-block py-1.5 hover:text-gold">
               Minha biblioteca
             </Link>
           </li>
           <li>
-            <Link to="/diario" className="hover:text-gold">
+            <Link to="/diario" className="inline-block py-1.5 hover:text-gold">
               Diário
             </Link>
           </li>
           <li>
-            <button type="button" onClick={() => openLumiPanel()} className="hover:text-gold">
+            <button
+              type="button"
+              onClick={() => openLumiPanel()}
+              className="inline-block py-1.5 hover:text-gold"
+            >
               Fale com a Lumi
             </button>
           </li>
         </FooterCol>
         <FooterCol title="Comunidade">
           <li>
-            <Link to="/metas" className="hover:text-gold">
+            <Link to="/metas" className="inline-block py-1.5 hover:text-gold">
               Metas
             </Link>
           </li>
           <li>
-            <Link to="/desafios" className="hover:text-gold">
+            <Link to="/desafios" className="inline-block py-1.5 hover:text-gold">
               Desafios
             </Link>
           </li>
           <li>
-            <Link to="/ranking" className="hover:text-gold">
+            <Link to="/ranking" className="inline-block py-1.5 hover:text-gold">
               Ranking
             </Link>
           </li>
         </FooterCol>
         <FooterCol title="BookVerse">
           <li>
-            <Link to="/sobre" className="hover:text-gold">
+            <Link to="/sobre" className="inline-block py-1.5 hover:text-gold">
               Sobre
             </Link>
           </li>
           <li>
-            <Link to="/privacidade" className="hover:text-gold">
+            <Link to="/privacidade" className="inline-block py-1.5 hover:text-gold">
               Privacidade
             </Link>
           </li>
           <li>
-            <Link to="/termos" className="hover:text-gold">
+            <Link to="/termos" className="inline-block py-1.5 hover:text-gold">
               Termos
             </Link>
           </li>
           <li>
-            <Link to="/contato" className="hover:text-gold">
+            <Link to="/contato" className="inline-block py-1.5 hover:text-gold">
               Contato
             </Link>
           </li>
@@ -95,7 +103,7 @@ function FooterCol({ title, children }: { title: string; children: React.ReactNo
       <h4 className="font-sans text-[11px] font-semibold uppercase tracking-[0.2em] text-gold">
         {title}
       </h4>
-      <ul className="mt-4 space-y-2.5 text-sm text-muted-foreground">{children}</ul>
+      <ul className="mt-3 space-y-0.5 text-sm text-muted-foreground">{children}</ul>
     </div>
   );
 }

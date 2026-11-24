@@ -555,7 +555,9 @@ function CuratedReadableCard({
           <span className="inline-flex rounded-full bg-gold/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-gold">
             Ler agora
           </span>
-          <span className="mt-3 block truncate font-display text-lg font-medium">{book.title}</span>
+          <span className="mt-3 block truncate font-display text-2xl leading-tight">
+            {book.title}
+          </span>
           <span className="mt-1 block truncate text-xs text-muted-foreground">{book.author}</span>
           <span className="mt-3 line-clamp-2 block text-xs leading-relaxed text-muted-foreground">
             {book.lumiNote}
@@ -566,9 +568,9 @@ function CuratedReadableCard({
         <Link
           to="/reader/$bookId"
           params={{ bookId: gutenbergReaderId(book.gutenbergId) }}
-          className="inline-flex items-center gap-1 text-xs font-semibold text-gold"
+          className="btn-primary px-4 py-2 text-xs"
         >
-          <BookOpenCheck className="h-3.5 w-3.5" /> Abrir
+          <BookOpenCheck className="h-3.5 w-3.5" /> Ler agora
         </Link>
         <SaveButton saving={saving} added={added} onClick={onSave} />
       </div>
@@ -599,20 +601,33 @@ function PublicBookCard({
           <span className="inline-flex rounded-full bg-gold/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-gold">
             Leitura completa
           </span>
-          <span className="mt-3 block truncate font-display text-lg font-medium">{book.title}</span>
+          <span className="mt-3 block truncate font-display text-2xl leading-tight">
+            {book.title}
+          </span>
           <span className="mt-1 block truncate text-xs text-muted-foreground">{book.author}</span>
         </span>
       </Link>
       <div className="mt-4 flex items-center justify-between gap-2">
-        <a
-          href={`https://www.gutenberg.org/ebooks/${book.id}`}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition hover:text-gold"
+        <Link
+          to="/reader/$bookId"
+          params={{ bookId: gutenbergReaderId(book.id) }}
+          className="btn-primary px-4 py-2 text-xs"
         >
-          Fonte EPUB <ExternalLink className="h-3 w-3" />
-        </a>
-        <SaveButton saving={saving} added={added} onClick={onSave} />
+          <BookOpenCheck className="h-3.5 w-3.5" /> Ler agora
+        </Link>
+        <span className="flex items-center gap-1">
+          <a
+            href={`https://www.gutenberg.org/ebooks/${book.id}`}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Ver no Project Gutenberg"
+            title="Ver no Project Gutenberg"
+            className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-gold"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+          <SaveButton saving={saving} added={added} onClick={onSave} />
+        </span>
       </div>
     </article>
   );
@@ -643,7 +658,9 @@ function CatalogBookCard({
           <span className="inline-flex rounded-full border border-border/70 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             Catálogo
           </span>
-          <span className="mt-3 block truncate font-display text-lg font-medium">{book.title}</span>
+          <span className="mt-3 block truncate font-display text-2xl leading-tight">
+            {book.title}
+          </span>
           <span className="mt-1 block truncate text-xs text-muted-foreground">
             {book.author || "Autor desconhecido"}
           </span>
@@ -708,7 +725,7 @@ function SaveButton({
     <button
       onClick={onClick}
       disabled={saving || added}
-      className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border/70 px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition hover:border-gold/45 hover:text-gold disabled:opacity-60"
+      className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-full border border-border/70 px-3 py-1 text-[11px] font-medium text-muted-foreground transition hover:border-gold/45 hover:text-gold disabled:opacity-60"
     >
       {saving ? (
         <Loader2 className="h-3 w-3 animate-spin" />

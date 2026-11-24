@@ -33,7 +33,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { FAUX_BOOKS } from "@/lib/faux-books";
-import { DISCOVER_SEARCH } from "@/lib/nav";
+import { DISCOVER_SEARCH, getLastBookInfo, type LastBook } from "@/lib/nav";
 
 /* -------------------------------------------------------------------------- */
 /*  Shared motion helpers                                                     */
@@ -186,6 +186,9 @@ const SHELF = [
 function Hero() {
   const reduce = useReducedMotion();
   const [open, setOpen] = useState(0);
+  // Returning visitors (with or without an account) jump straight back in.
+  const [lastBook, setLastBook] = useState<LastBook | null>(null);
+  useEffect(() => setLastBook(getLastBookInfo()), []);
   const ref = useRef<HTMLElement>(null);
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
   const shelfY = useTransform(scrollYProgress, [0, 1], [0, 90]);
@@ -264,16 +267,33 @@ function Hero() {
             className="mt-9 flex flex-col gap-3 sm:flex-row"
           >
             <Magnetic>
-              <Link
-                to="/auth"
-                search={{ redirect: "/" }}
-                className="btn-primary btn-sheen w-full px-7 py-4 text-base sm:w-auto"
-              >
-                Começar a ler grátis <ArrowRight className="h-4 w-4" />
-              </Link>
+              {lastBook ? (
+                <Link
+                  to="/reader/$bookId"
+                  params={{ bookId: lastBook.id }}
+                  className="btn-primary btn-sheen w-full max-w-full px-7 py-4 text-base sm:w-auto"
+                >
+                  <span className="truncate">
+                    Continuar {lastBook.title ? `“${lastBook.title}”` : "lendo"}
+                  </span>
+                  <ArrowRight className="h-4 w-4 shrink-0" />
+                </Link>
+              ) : (
+                <Link
+                  to="/descobrir"
+                  search={DISCOVER_SEARCH}
+                  className="btn-primary btn-sheen w-full px-7 py-4 text-base sm:w-auto"
+                >
+                  Começar a ler agora <ArrowRight className="h-4 w-4" />
+                </Link>
+              )}
             </Magnetic>
-            <Link to="/" hash="leitor" className="btn-ghost w-full px-7 py-4 text-base sm:w-auto">
-              Ver o leitor por dentro
+            <Link
+              to="/auth"
+              search={{ redirect: "/", modo: "criar" }}
+              className="btn-ghost w-full px-7 py-4 text-base sm:w-auto"
+            >
+              Criar estante grátis
             </Link>
           </motion.div>
 
@@ -283,7 +303,7 @@ function Hero() {
             transition={{ duration: 1, delay: 0.8 }}
             className="mt-9 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground"
           >
-            {["Gratuito", "Sem anúncios", "Funciona offline", "7 ambientes"].map((t) => (
+            {["Leia sem cadastro", "Gratuito", "Sem anúncios", "Funciona offline"].map((t) => (
               <li key={t} className="flex items-center gap-2">
                 <span className="h-1 w-1 rounded-full bg-gold" />
                 {t}
@@ -368,9 +388,18 @@ function Hero() {
               <blockquote className="mt-2 line-clamp-5 font-[family-name:var(--font-book)] text-[13px] leading-relaxed">
                 “{book.line}”
               </blockquote>
-              <figcaption className="mt-3 flex items-center gap-2 border-t border-dashed border-[#cdbf9f] pt-2.5 text-[10.5px] text-[#6b5a3f]">
-                <LumiMascot size={22} className="!animate-none" />
-                Passe o cursor ou toque nas lombadas
+              <figcaption className="mt-3 flex items-center justify-between gap-2 border-t border-dashed border-[#cdbf9f] pt-2.5 text-[10.5px] text-[#6b5a3f]">
+                <span className="flex items-center gap-2">
+                  <LumiMascot size={22} className="!animate-none" />
+                  Toque nas lombadas
+                </span>
+                <Link
+                  to="/descobrir"
+                  search={{ q: book.title, categoria: undefined }}
+                  className="inline-flex items-center gap-1 rounded-full bg-[#2a241b] px-3 py-1.5 text-[11px] font-semibold text-[#f3ead8] transition hover:bg-[#9c6f27]"
+                >
+                  Ler agora <ArrowRight className="h-3 w-3" />
+                </Link>
               </figcaption>
             </motion.figure>
           </AnimatePresence>

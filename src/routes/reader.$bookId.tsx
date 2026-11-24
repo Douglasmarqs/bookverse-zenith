@@ -1,6 +1,22 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  notFound,
+  useNavigate,
+  useRouterState,
+} from "@tanstack/react-router";
 import { rememberLastBook } from "@/lib/nav";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import type { User } from "firebase/auth";
+import { ensureUser, subscribeAuth } from "@/lib/firebase";
 import { AnimatePresence, motion } from "motion/react";
 import "@fontsource-variable/literata/opsz.css";
 import "@fontsource/atkinson-hyperlegible/400.css";
@@ -70,7 +86,6 @@ import {
   type HighlightColor,
 } from "@/lib/annotations";
 import { ReaderSettingsPanel } from "@/components/reader/settings-panel";
-import { useRequireAuth } from "@/hooks/use-require-auth";
 import { openLumiPanel } from "@/lib/lumi-panel-store";
 import { recordGamificationMilestone } from "@/lib/user-profile";
 import { markAsReading, setLibraryStatus, slugFor } from "@/lib/library";
@@ -122,39 +137,102 @@ export const Route = createFileRoute("/reader/$bookId")({
   component: GuardedReaderPage,
 });
 
-function GuardedReaderPage() {
-  const { state, user } = useRequireAuth();
-  const loaderData = Route.useLoaderData();
-  const { bookId } = Route.useParams();
+type ReaderSession =
+  | { state: "loading" }
+  | { state: "ready"; user: User; guest: boolean }
+  | { state: "redirecting" }
+  | { state: "unavailable" };
 
-  // Lets the dock's "Ler" button jump straight back into this book.
+/**
+ * Public-domain classics and the sample book open for everyone: a visitor
+ * gets an anonymous session, so progress, highlights and bookmarks are saved
+ * from the first page — and creating an account later links that same
+ * session, keeping everything. Private EPUB/PDF files still need an account.
+ */
+function useReaderSession(allowGuest: boolean): ReaderSession {
+  const navigate = useNavigate();
+  const href = useRouterState({ select: (s) => s.location.href });
+  const originRef = useRef(href);
+  const [session, setSession] = useState<ReaderSession>({ state: "loading" });
+
   useEffect(() => {
-    if (state === "authenticated") rememberLastBook(bookId);
-  }, [state, bookId]);
+    let cancelled = false;
+    let triedGuest = false;
+    const unsub = subscribeAuth((u) => {
+      if (cancelled) return;
+      if (u && (!u.isAnonymous || allowGuest)) {
+        setSession({ state: "ready", user: u, guest: u.isAnonymous });
+        return;
+      }
+      if (allowGuest) {
+        if (triedGuest) return;
+        triedGuest = true;
+        void ensureUser().then((guest) => {
+          if (!cancelled && !guest) setSession({ state: "unavailable" });
+        });
+        return;
+      }
+      setSession({ state: "redirecting" });
+      navigate({
+        to: "/auth",
+        search: { redirect: originRef.current },
+        replace: true,
+        viewTransition: false,
+      });
+    });
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, [allowGuest, navigate]);
 
-  if (state !== "authenticated" || !user) {
+  return session;
+}
+
+const ReaderGuestContext = createContext(false);
+
+function GuardedReaderPage() {
+  const loaderData = Route.useLoaderData();
+  const privateFile = loaderData.source === "epub" || loaderData.source === "pdf";
+  const session = useReaderSession(!privateFile);
+
+  if (session.state !== "ready") {
     return (
       <div className="mx-auto grid min-h-[calc(100vh-8rem)] max-w-md place-items-center px-6 text-center">
-        <div>
-          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-gold/30 border-t-gold" />
-          <p className="mt-4 text-sm text-muted-foreground">
-            {state === "loading" ? "Verificando sua sessão…" : "Redirecionando para o login…"}
-          </p>
-        </div>
+        {session.state === "unavailable" ? (
+          <div>
+            <p className="font-display text-4xl">Não foi possível abrir o livro</p>
+            <p className="mt-3 text-sm text-muted-foreground">
+              A leitura como convidado não está disponível agora. Entre na sua conta para continuar.
+            </p>
+            <Link to="/auth" search={{ redirect: undefined }} className="btn-primary mt-6">
+              Entrar
+            </Link>
+          </div>
+        ) : (
+          <div>
+            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-gold/30 border-t-gold" />
+            <p className="mt-4 text-sm text-muted-foreground">
+              {session.state === "loading" ? "Abrindo o livro…" : "Redirecionando para o login…"}
+            </p>
+          </div>
+        )}
       </div>
     );
   }
 
+  const { user, guest } = session;
+  let content: React.ReactNode;
   if (loaderData.source === "sample") {
-    return <ReaderPage uid={user.uid} book={loaderData.book} />;
+    content = <ReaderPage uid={user.uid} book={loaderData.book} />;
+  } else if (loaderData.source === "epub") {
+    content = <EpubBookLoader uid={user.uid} localId={loaderData.localId} />;
+  } else if (loaderData.source === "pdf") {
+    content = <PdfBookLoader uid={user.uid} localId={loaderData.localId} />;
+  } else {
+    content = <GutenbergBookLoader uid={user.uid} gutenbergId={loaderData.gutenbergId} />;
   }
-  if (loaderData.source === "epub") {
-    return <EpubBookLoader uid={user.uid} localId={loaderData.localId} />;
-  }
-  if (loaderData.source === "pdf") {
-    return <PdfBookLoader uid={user.uid} localId={loaderData.localId} />;
-  }
-  return <GutenbergBookLoader uid={user.uid} gutenbergId={loaderData.gutenbergId} />;
+  return <ReaderGuestContext.Provider value={guest}>{content}</ReaderGuestContext.Provider>;
 }
 
 function EpubBookLoader({ uid, localId }: { uid: string; localId: string }) {
@@ -507,6 +585,13 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       if (controlsTimer.current) clearTimeout(controlsTimer.current);
     };
   }, [book.id, revealControls]);
+
+  const guest = useContext(ReaderGuestContext);
+  const [guestTipOpen, setGuestTipOpen] = useState(true);
+  // Lets the dock's "Ler" button (and the landing) jump straight back in.
+  useEffect(() => {
+    rememberLastBook(book.id, book.title, book.author);
+  }, [book.id, book.title, book.author]);
 
   // Opening a book counts as "starting" it — track it in the library so it
   // shows up under "Minha biblioteca" / "Continue lendo" and can be resumed.
@@ -1466,6 +1551,34 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
           </span>
         </div>
       </header>
+
+      {guest && guestTipOpen && controlsVisible && (
+        <div
+          data-reader-action="true"
+          role="status"
+          className="absolute left-1/2 top-[calc(max(0.5rem,env(safe-area-inset-top))+3.6rem)] z-30 flex w-[min(92vw,32rem)] -translate-x-1/2 items-center gap-3 rounded-2xl px-4 py-2.5 text-xs shadow-lg"
+          style={{ background: theme.fg, color: theme.bg, fontFamily: "var(--font-sans)" }}
+        >
+          <span className="min-w-0 flex-1 leading-snug">
+            Lendo como convidado: seu progresso fica salvo neste aparelho.
+          </span>
+          <Link
+            to="/auth"
+            search={{ redirect: `/reader/${book.id}`, modo: "criar" }}
+            className="shrink-0 font-semibold underline underline-offset-2"
+          >
+            Criar conta grátis
+          </Link>
+          <button
+            type="button"
+            aria-label="Fechar aviso"
+            onClick={() => setGuestTipOpen(false)}
+            className="grid h-7 w-7 shrink-0 place-items-center rounded-full opacity-70 hover:opacity-100"
+          >
+            <XIcon className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Content — a tap anywhere that isn't a control shows/hides the
           chrome, like a Kindle. Side zones (paginated) turn pages. */}

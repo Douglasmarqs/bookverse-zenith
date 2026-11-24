@@ -201,8 +201,8 @@ export function ReaderDashboard({ user }: { user: User }) {
       )}
 
       {/* Continue + ritual */}
-      <section className="relative mt-7 grid gap-5 lg:grid-cols-[minmax(0,1.55fr)_minmax(20rem,1fr)]">
-        <motion.div {...rise(0.08)}>
+      <section className="relative mt-7 grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.55fr)_minmax(20rem,1fr)]">
+        <motion.div {...rise(0.08)} className="min-w-0">
           {library === null ? (
             <div className="h-[19rem] animate-pulse rounded-[1.75rem] bg-card" />
           ) : current ? (
@@ -310,8 +310,8 @@ export function ReaderDashboard({ user }: { user: User }) {
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
           </Link>
         </div>
-        <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
-          <div>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+          <div className="min-w-0">
             <div className="no-scrollbar flex h-52 items-end gap-[5px] overflow-x-auto px-2 pt-6">
               {library === null
                 ? Array.from({ length: 9 }, (_, i) => (
@@ -360,8 +360,8 @@ export function ReaderDashboard({ user }: { user: User }) {
             <span className="num text-gold">{goal.completed}</span>
             <span className="text-muted-foreground"> de {goal.target || "—"} livros</span>
           </p>
-          <div className="mt-4 flex h-20 items-end gap-1">
-            {Array.from({ length: Math.max(goal.target, 6) }, (_, i) => {
+          <div className="mt-4 flex h-20 items-end gap-1 overflow-hidden">
+            {Array.from({ length: Math.min(Math.max(goal.target, 6), 36) }, (_, i) => {
               const filled = i < goal.completed;
               const fb = fauxBookFor(String(i * 7 + 3));
               return filled ? (
@@ -375,7 +375,7 @@ export function ReaderDashboard({ user }: { user: User }) {
                     stiffness: 240,
                     damping: 18,
                   }}
-                  className="spine w-5"
+                  className="spine min-w-[3px] max-w-5 flex-1"
                   style={
                     { "--s-bg": fb.bg, height: `${78 + ((i * 13) % 20)}%` } as React.CSSProperties
                   }
@@ -383,7 +383,7 @@ export function ReaderDashboard({ user }: { user: User }) {
               ) : (
                 <span
                   key={i}
-                  className="h-[78%] w-5 rounded-t-[2px] border border-dashed border-border"
+                  className="h-[78%] min-w-[3px] max-w-5 flex-1 rounded-t-[2px] border border-dashed border-border"
                 />
               );
             })}

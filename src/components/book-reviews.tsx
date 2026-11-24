@@ -43,7 +43,9 @@ function Stars({
           type="button"
           disabled={!onChange}
           onClick={() => onChange?.(i)}
-          className={onChange ? "transition hover:scale-110" : "cursor-default"}
+          className={
+            onChange ? "-m-1.5 rounded-full p-1.5 transition hover:scale-110" : "cursor-default"
+          }
           aria-label={`${i} estrela${i > 1 ? "s" : ""}`}
         >
           <Star

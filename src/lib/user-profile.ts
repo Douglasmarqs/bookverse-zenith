@@ -95,6 +95,8 @@ export async function recordGamificationMilestone(
 ): Promise<void> {
   const fb = getFirebase();
   if (!fb || !resourceId) return;
+  // Guests read without an account; XP and rankings start once they create one.
+  if (fb.auth.currentUser?.isAnonymous) return;
   try {
     const call = httpsCallable<
       { type: GamificationMilestone; resourceId: string } & typeof details,

@@ -49,17 +49,32 @@ export const VISITOR_NAV = [
 /** Last book opened in the reader, so "Ler" can jump straight back in. */
 export const LAST_BOOK_KEY = "bookverse:last-book";
 
-export function getLastBook(): string | null {
+export interface LastBook {
+  id: string;
+  title?: string;
+  author?: string;
+}
+
+export function getLastBookInfo(): LastBook | null {
   try {
-    return localStorage.getItem(LAST_BOOK_KEY);
+    const raw = localStorage.getItem(LAST_BOOK_KEY);
+    if (!raw) return null;
+    // Older versions stored the bare reader id.
+    if (!raw.startsWith("{")) return { id: raw };
+    const parsed = JSON.parse(raw) as LastBook;
+    return parsed?.id ? parsed : null;
   } catch {
     return null;
   }
 }
 
-export function rememberLastBook(readerId: string) {
+export function getLastBook(): string | null {
+  return getLastBookInfo()?.id ?? null;
+}
+
+export function rememberLastBook(readerId: string, title?: string, author?: string) {
   try {
-    localStorage.setItem(LAST_BOOK_KEY, readerId);
+    localStorage.setItem(LAST_BOOK_KEY, JSON.stringify({ id: readerId, title, author }));
   } catch {
     // storage unavailable — "Ler" falls back to Descobrir
   }

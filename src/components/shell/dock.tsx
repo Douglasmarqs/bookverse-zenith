@@ -1,6 +1,6 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   BookOpen,
   Compass,
@@ -74,6 +74,8 @@ export function Dock({ signedIn }: { signedIn: boolean }) {
   }
 
   const moreActive = MORE.some((m) => isNavActive(pathname, m));
+  const [hasLastBook, setHasLastBook] = useState(false);
+  useEffect(() => setHasLastBook(!!getLastBook()), [pathname]);
 
   return (
     <>
@@ -97,18 +99,18 @@ export function Dock({ signedIn }: { signedIn: boolean }) {
               icon={Compass}
             />
           </Link>
+          <div className="flex flex-1 justify-center">
+            <button
+              type="button"
+              onClick={openReader}
+              aria-label={hasLastBook ? "Continuar lendo" : "Escolher um livro para ler"}
+              className="press -mt-8 grid h-14 w-14 place-items-center rounded-full border-4 border-background bg-[linear-gradient(160deg,var(--gold-soft),var(--oxide))] text-primary-foreground shadow-[0_12px_26px_-8px_color-mix(in_oklab,var(--gold)_80%,transparent)]"
+            >
+              <BookOpen className="h-6 w-6" />
+            </button>
+          </div>
           {signedIn ? (
             <>
-              <div className="flex flex-1 justify-center">
-                <button
-                  type="button"
-                  onClick={openReader}
-                  aria-label="Continuar lendo"
-                  className="press -mt-8 grid h-14 w-14 place-items-center rounded-full border-4 border-background bg-[linear-gradient(160deg,var(--gold-soft),var(--oxide))] text-primary-foreground shadow-[0_12px_26px_-8px_color-mix(in_oklab,var(--gold)_80%,transparent)]"
-                >
-                  <BookOpen className="h-6 w-6" />
-                </button>
-              </div>
               <Link
                 to="/biblioteca"
                 className={item(pathname.startsWith("/biblioteca"))}

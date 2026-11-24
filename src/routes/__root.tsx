@@ -20,7 +20,6 @@ import "@fontsource-variable/newsreader/opsz.css";
 import "@fontsource-variable/newsreader/opsz-italic.css";
 
 import appCss from "../styles.css?url";
-import { reportLovableError } from "../lib/lovable-error-reporting";
 import { isFirebaseConfigured } from "../lib/firebase";
 import { SiteFooter } from "../components/site-footer";
 import { LumiPanel } from "../components/lumi-panel";
@@ -62,9 +61,6 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
-  useEffect(() => {
-    reportLovableError(error, { boundary: "tanstack_root_error_component" });
-  }, [error]);
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
@@ -177,6 +173,23 @@ function RootComponent() {
   // The reader and the first-run onboarding are focused, full-screen flows
   // without the app's navigation chrome.
   const isReaderRoute = pathname.startsWith("/reader/") || pathname === "/bem-vindo";
+
+  // Page transitions are cosmetic: when the browser skips or aborts one
+  // (rapid navigation, rotating the phone), don't surface it as an error.
+  useEffect(() => {
+    const onRejection = (e: PromiseRejectionEvent) => {
+      const reason = e.reason as { name?: string; message?: string } | undefined;
+      if (
+        reason?.name === "AbortError" ||
+        reason?.name === "InvalidStateError" ||
+        /Transition was (skipped|aborted)/i.test(reason?.message ?? "")
+      ) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("unhandledrejection", onRejection);
+    return () => window.removeEventListener("unhandledrejection", onRejection);
+  }, []);
 
   // "Automático" follows the OS everywhere, including inside the reader where
   // the site chrome (and its theme switcher) is not mounted.

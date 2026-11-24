@@ -461,7 +461,7 @@ function BibliotecaPage({ uid }: { uid: string }) {
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition ${
+                className={`inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition ${
                   filter === f
                     ? "bg-gold text-primary-foreground shadow-sm shadow-gold/20"
                     : "border border-border/70 bg-card/60 text-foreground/75 hover:border-gold/40 hover:text-gold"
@@ -680,7 +680,7 @@ function BookCard({
         onClick={onToggleFavorite}
         aria-label={entry.favorite ? "Remover dos favoritos" : "Marcar como favorito"}
         aria-pressed={entry.favorite ?? false}
-        className="absolute right-3 top-3 grid h-7 w-7 place-items-center rounded-full bg-background/90 ring-1 ring-border/60 backdrop-blur-sm transition hover:scale-110"
+        className="absolute right-2 top-2 grid h-9 w-9 place-items-center rounded-full bg-background/90 ring-1 ring-border/60 backdrop-blur-sm transition hover:scale-110"
       >
         <Heart
           className={`h-3.5 w-3.5 ${entry.favorite ? "fill-destructive text-destructive" : "text-muted-foreground"}`}
@@ -696,13 +696,13 @@ function BookCard({
             {entry.title}
           </Link>
           <p className="mt-0.5 truncate text-xs text-muted-foreground">{entry.author}</p>
-          <div className="mt-1.5 flex items-center gap-0.5">
+          <div className="mt-0.5 -ml-1.5 flex items-center">
             {[1, 2, 3, 4, 5].map((star) => (
               <button
                 key={star}
                 onClick={() => onRate(entry.rating === star ? 0 : star)}
                 aria-label={`Avaliar com ${star} estrela${star === 1 ? "" : "s"}`}
-                className="p-0.5 transition hover:scale-125"
+                className="p-1.5 transition hover:scale-125"
               >
                 <Star
                   className={`h-3 w-3 ${
@@ -928,7 +928,7 @@ function ListView({
             transition={{ delay: Math.min(i, 12) * 0.025 }}
             className="group flex items-center gap-4 px-4 py-3 transition hover:bg-secondary/50"
           >
-            <Link {...href} className="w-10 shrink-0">
+            <Link {...href} className="w-10 shrink-0" aria-label={`Abrir ${e.title}`}>
               {e.cover ? (
                 <img
                   src={e.cover}
