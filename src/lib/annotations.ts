@@ -7,7 +7,7 @@ import { doc, getDoc, onSnapshot, setDoc, type Unsubscribe } from "firebase/fire
 import { getFirebase } from "./firebase";
 import { withDeadline, withFallback } from "./async-utils";
 
-export type HighlightColor = "gold" | "green" | "blue" | "pink";
+export type HighlightColor = "gold" | "green" | "blue" | "pink" | "lilac";
 
 export interface Highlight {
   id: string;

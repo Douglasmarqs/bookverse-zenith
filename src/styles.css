@@ -1156,3 +1156,78 @@
 @media (prefers-reduced-motion: reduce) {
   .lumi-blink, .lumi-bob, .lumi-wave { animation: none; }
 }
+
+/* Reader sliders: ink fill on a soft track, white thumb (mockup 11). */
+.reader-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 24px;
+  background: transparent;
+  cursor: pointer;
+}
+.reader-range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--ink) var(--fill), var(--track) var(--fill));
+}
+.reader-range::-moz-range-track {
+  height: 6px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--ink) var(--fill), var(--track) var(--fill));
+}
+.reader-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  margin-top: -9px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.25);
+}
+.reader-range::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.25);
+}
+
+/* Reader location scrubber: invisible track (drawn behind), white thumb
+   with an accent ring (mockup 09). */
+.scrub-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 22px;
+  background: transparent;
+  cursor: pointer;
+}
+.scrub-range::-webkit-slider-runnable-track { height: 22px; background: transparent; }
+.scrub-range::-moz-range-track { height: 22px; background: transparent; }
+.scrub-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.3), inset 0 0 0 5px var(--scrub-accent, #ff4d1a);
+}
+.scrub-range::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.3), inset 0 0 0 5px var(--scrub-accent, #ff4d1a);
+}
+
+/* The page steps back while the phone controls are up (mockup 09); on
+   desktop the chrome is always there, so the page never dims. */
+.reader-dim {
+  opacity: 0.55;
+}
+@media (min-width: 1024px) {
+  .reader-dim {
+    opacity: 1;
+  }
+}
