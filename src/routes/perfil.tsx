@@ -367,7 +367,10 @@ function PerfilPage({ user }: { user: User }) {
       </Link>
 
       {/* Edit profile */}
-      <section className="mt-10 rounded-2xl border border-border/60 bg-card/40 p-6">
+      <section
+        id="configuracoes"
+        className="mt-10 scroll-mt-24 rounded-2xl border border-border/60 bg-card/40 p-6"
+      >
         <h2 className="font-display text-xl font-medium">Editar perfil</h2>
 
         <form onSubmit={handleSaveProfile} className="mt-5 grid gap-3 sm:grid-cols-2">

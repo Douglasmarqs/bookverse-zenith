@@ -78,7 +78,7 @@ export function InstallPwaBanner() {
   if (dismissed || (!deferred && !showIosTip)) return null;
 
   return (
-    <div className="fixed inset-x-4 bottom-4 z-40 mx-auto flex max-w-sm items-start gap-3 rounded-2xl border border-border/60 bg-card/95 p-4 shadow-2xl backdrop-blur-md sm:inset-x-auto sm:right-4">
+    <div className="fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-40 lg:bottom-4 mx-auto flex max-w-sm items-start gap-3 rounded-2xl border border-border/60 bg-card/95 p-4 shadow-2xl backdrop-blur-md sm:inset-x-auto sm:right-4">
       <LumiMascot size={40} blink={false} />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">Instale o BookVerse</p>

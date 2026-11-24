@@ -1,7 +1,7 @@
 {
-  "name": "BookVerse — Sua biblioteca literária premium",
+  "name": "BookVerse — Leia mais. Leia melhor.",
   "short_name": "BookVerse",
-  "description": "Descubra, leia e organize livros em uma experiência editorial premium, com a Lumi como companhia de leitura.",
+  "description": "Clássicos gratuitos, seus EPUBs e PDFs e um leitor confortável, com a Lumi como companhia de leitura.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

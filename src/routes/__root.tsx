@@ -27,6 +27,8 @@ import { SiteFooter } from "../components/site-footer";
 import { LumiPanel } from "../components/lumi-panel";
 import { InstallPwaBanner } from "../components/install-pwa";
 import { Toaster } from "../components/ui/sonner";
+import { MobileTabBar } from "../components/mobile-tab-bar";
+import { CommandPalette } from "../components/command-palette";
 
 function NotFoundComponent() {
   return (
@@ -94,22 +96,22 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "BookVerse — Sua biblioteca literária premium" },
+      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
+      { title: "BookVerse — Leia mais. Leia melhor." },
       {
         name: "description",
         content:
-          "Descubra, leia e organize livros em uma experiência editorial premium. Leitor imersivo, progresso sincronizado, recomendações inteligentes.",
+          "Clássicos gratuitos, seus EPUBs e PDFs e um leitor confortável com metas, diário e a Lumi, sua IA de leitura.",
       },
       { name: "author", content: "BookVerse" },
-      { name: "theme-color", content: "#4B83D8" },
+      { name: "theme-color", content: "#1769D8" },
       // iOS doesn't read the web manifest for "Add to Home Screen" — these
       // three meta tags are what make it install as a standalone app with
       // the right icon/status bar there instead of just a bookmark.
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
       { name: "apple-mobile-web-app-title", content: "BookVerse" },
-      { property: "og:title", content: "BookVerse — Sua biblioteca literária premium" },
+      { property: "og:title", content: "BookVerse — Leia mais. Leia melhor." },
       {
         property: "og:description",
         content: "Uma experiência editorial de leitura, para todos os seus livros.",
@@ -183,10 +185,15 @@ function RootComponent() {
       <div className="flex min-h-screen flex-col">
         {!isReaderRoute && <ConfigBanner />}
         {!isReaderRoute && <SiteHeader />}
-        <main className="flex-1">
-          <Outlet />
+        <main className={`flex-1 ${isReaderRoute ? "" : "pb-24 lg:pb-0"}`}>
+          {/* Keyed by path so every navigation gets a gentle entrance. */}
+          <div key={pathname} className={isReaderRoute ? "" : "page-enter"}>
+            <Outlet />
+          </div>
         </main>
         {!isReaderRoute && <SiteFooter />}
+        {!isReaderRoute && <MobileTabBar />}
+        <CommandPalette />
         {/* The reader opens Lumi with a book/selection context. It must stay
             mounted there too; only the site chrome itself is suppressed. */}
         <LumiPanel />

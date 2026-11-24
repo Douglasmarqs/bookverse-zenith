@@ -46,6 +46,13 @@
   --color-ink: var(--ink);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
+  --color-warm: var(--warm);
+  --color-success: var(--success);
+  --color-night: var(--night);
+  --color-night-foreground: var(--night-foreground);
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
   --shadow-glow: 0 18px 48px -26px color-mix(in oklab, var(--gold) 58%, transparent);
   --shadow-plate: 0 24px 60px -34px oklch(0.2 0.02 250 / 0.25);
@@ -86,6 +93,13 @@
 
   --ambient-1: oklch(0.84 0.08 235 / 0.42);
   --ambient-2: oklch(0.9 0.04 245 / 0.36);
+
+  /* Warm accent: streaks, goals and celebratory moments. */
+  --warm: oklch(0.7 0.16 55);
+  --success: oklch(0.62 0.14 155);
+  /* Deep "night library" surface used by landing showcase bands. */
+  --night: oklch(0.2 0.04 258);
+  --night-foreground: oklch(0.96 0.01 245);
 }
 
 /*
@@ -123,6 +137,9 @@
   --ring: var(--gold);
   --ambient-1: oklch(0.34 0.09 245 / 0.35);
   --ambient-2: oklch(0.27 0.05 260 / 0.25);
+  --warm: oklch(0.78 0.14 60);
+  --success: oklch(0.72 0.14 155);
+  --night: oklch(0.13 0.03 255);
 }
 
 [data-theme="light"] {
@@ -189,6 +206,9 @@
 
   --ambient-1: oklch(0.75 0.05 65 / 0.4);
   --ambient-2: oklch(0.72 0.045 55 / 0.3);
+  --warm: oklch(0.55 0.14 45);
+  --success: oklch(0.48 0.11 150);
+  --night: oklch(0.26 0.04 45);
 }
 
 [data-theme="paper"] {
@@ -222,6 +242,9 @@
 
   --ambient-1: oklch(0.82 0.015 75 / 0.4);
   --ambient-2: oklch(0.85 0.012 65 / 0.3);
+  --warm: oklch(0.56 0.14 50);
+  --success: oklch(0.5 0.11 150);
+  --night: oklch(0.24 0.012 50);
 }
 
 .dark {
@@ -704,6 +727,253 @@
   }
 }
 
+/* ==========================================================================
+   BookVerse motion & component layer
+   Every animation here is transform/opacity only (GPU friendly) and is
+   neutralised by the prefers-reduced-motion block at the end of the file.
+   ========================================================================== */
+
+/* Scroll reveal — <Reveal> toggles data-revealed once in view. */
+.reveal {
+  opacity: 0;
+  transform: translate3d(0, 22px, 0);
+  transition:
+    opacity 700ms var(--ease-out-expo),
+    transform 800ms var(--ease-out-expo);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+.reveal[data-revealed="true"] {
+  opacity: 1;
+  transform: none;
+}
+.reveal--scale {
+  transform: scale(0.96);
+}
+.reveal--left {
+  transform: translate3d(-28px, 0, 0);
+}
+.reveal--right {
+  transform: translate3d(28px, 0, 0);
+}
+
+/* Route-level entrance, applied to <main> content on each navigation. */
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@utility page-enter {
+  animation: page-enter 520ms var(--ease-out-expo) both;
+}
+
+/* Infinite cover marquee. Content is duplicated so -50% loops seamlessly. */
+@keyframes marquee-x {
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+@utility marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee-x var(--marquee-duration, 48s) linear infinite;
+}
+.marquee-mask {
+  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+}
+.marquee-mask:hover .marquee-track {
+  animation-play-state: paused;
+}
+
+/* Floating hero books — each gets its own --float-delay / --float-rot. */
+@keyframes book-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(var(--float-rot, 0deg));
+  }
+  50% {
+    transform: translate3d(0, -14px, 0) rotate(calc(var(--float-rot, 0deg) * -0.4));
+  }
+}
+@utility book-float {
+  animation: book-float 7s ease-in-out infinite;
+  animation-delay: var(--float-delay, 0s);
+  will-change: transform;
+}
+
+/* Slow drifting colour blobs behind heroes. */
+@keyframes blob-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(30px, -24px, 0) scale(1.08);
+  }
+  66% {
+    transform: translate3d(-22px, 18px, 0) scale(0.95);
+  }
+}
+@utility blob-drift {
+  animation: blob-drift 18s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* Subtle animated sheen across primary CTAs. */
+@keyframes sheen {
+  0% {
+    transform: translateX(-120%) skewX(-18deg);
+  }
+  60%,
+  100% {
+    transform: translateX(260%) skewX(-18deg);
+  }
+}
+.btn-sheen {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.btn-sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.35), transparent);
+  animation: sheen 4.2s ease-in-out infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Blinking text caret used by the live "typing" demos. */
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+@utility caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: -0.12em;
+  background: currentColor;
+  animation: caret-blink 1s steps(1) infinite;
+}
+
+/* Progress ring stroke animation (stroke-dashoffset driven by CSS var). */
+.ring-progress {
+  transition: stroke-dashoffset 1200ms var(--ease-out-expo);
+}
+
+/* Fine film-grain overlay for dark showcase bands. */
+.grain::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* Shared primitives ------------------------------------------------------ */
+@utility eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+@utility btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  background: var(--gold);
+  color: var(--primary-foreground);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  padding: 0.8rem 1.4rem;
+  box-shadow: 0 14px 30px -14px color-mix(in oklab, var(--gold) 75%, transparent);
+  transition:
+    transform 200ms var(--ease-out-expo),
+    box-shadow 200ms ease,
+    filter 200ms ease;
+}
+.btn-primary:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.06);
+  box-shadow: 0 20px 38px -16px color-mix(in oklab, var(--gold) 80%, transparent);
+}
+.btn-primary:active {
+  transform: translateY(0) scale(0.98);
+}
+
+@utility btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--card) 70%, transparent);
+  color: var(--foreground);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  padding: 0.8rem 1.4rem;
+  backdrop-filter: blur(8px);
+  transition:
+    border-color 200ms ease,
+    color 200ms ease,
+    transform 200ms var(--ease-out-expo);
+}
+.btn-ghost:hover {
+  border-color: color-mix(in oklab, var(--gold) 50%, var(--border));
+  color: var(--gold);
+  transform: translateY(-2px);
+}
+
+@utility surface-card {
+  background: color-mix(in oklab, var(--card) 88%, transparent);
+  border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
+  border-radius: 1.5rem;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.04) inset,
+    0 18px 40px -32px oklch(0.2 0.04 250 / 0.45);
+}
+
+@utility lift {
+  transition:
+    transform 260ms var(--ease-out-expo),
+    box-shadow 260ms ease,
+    border-color 260ms ease;
+}
+.lift:hover {
+  transform: translateY(-4px);
+  border-color: color-mix(in oklab, var(--gold) 40%, var(--border));
+  box-shadow: 0 26px 50px -30px color-mix(in oklab, var(--gold) 55%, transparent);
+}
+
+/* Bottom tab bar respects the iOS home indicator. */
+@utility pb-safe {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+/* Hide scrollbars on horizontal rails while keeping them scrollable. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* Skips layout/paint work for offscreen sections (long shelf pages scroll
    noticeably smoother on low-end phones). */
 @utility content-auto {
@@ -721,6 +991,18 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  .reveal {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .marquee-track,
+  .book-float,
+  .blob-drift,
+  .btn-sheen::after {
+    animation: none !important;
   }
 
   /* The reader's explicit “Efeito de folha” switch is the final authority.

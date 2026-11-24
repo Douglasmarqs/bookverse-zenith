@@ -2,7 +2,6 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Trash2,
-  BookOpen,
   BookOpenCheck,
   Loader2,
   UploadCloud,
@@ -17,6 +16,25 @@ import { toast } from "sonner";
 import { describeFirestoreError } from "@/lib/async-utils";
 import { useRequireAuth } from "@/hooks/use-require-auth";
 import { TelegramCard } from "@/components/telegram-card";
+import { FauxCover, fauxBookFor } from "@/components/faux-cover";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   addToLibrary,
   removeFromLibrary,
@@ -103,7 +121,6 @@ function BibliotecaPage({ uid }: { uid: string }) {
   const [filter, setFilter] = useState<FilterTab>("todos");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("recent");
-  const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const coverRecoveryRef = useRef(new Set<string>());
 
@@ -344,12 +361,12 @@ function BibliotecaPage({ uid }: { uid: string }) {
 
       {entries && entries.length > 0 && (
         <div className="mt-8 flex flex-wrap items-center gap-3 border-b border-border/70 pb-4">
-          <div className="flex flex-wrap gap-1.5">
+          <div className="no-scrollbar -mx-5 flex w-[calc(100%+2.5rem)] gap-1.5 overflow-x-auto px-5 sm:mx-0 sm:w-auto sm:flex-wrap sm:px-0">
             {(["todos", "favoritos", ...LIBRARY_STATUSES] as FilterTab[]).map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition ${
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition ${
                   filter === f
                     ? "bg-gold text-primary-foreground shadow-sm shadow-gold/20"
                     : "border border-border/70 bg-card/60 text-foreground/75 hover:border-gold/40 hover:text-gold"
@@ -378,37 +395,24 @@ function BibliotecaPage({ uid }: { uid: string }) {
               )}
             </label>
 
-            <div className="relative shrink-0">
-              <button
-                onClick={() => setSortMenuOpen((v) => !v)}
-                className="flex items-center gap-1.5 rounded-xl border border-border/70 bg-card/70 px-3 py-2 text-xs font-medium text-foreground/75 hover:border-gold/40 hover:text-gold"
-              >
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex shrink-0 items-center gap-1.5 rounded-xl border border-border/70 bg-card/70 px-3 py-2 text-xs font-medium text-foreground/75 outline-none hover:border-gold/40 hover:text-gold">
                 <span className="sm:hidden">Ordenar</span>
                 <span className="hidden sm:inline">{SORT_LABEL[sort]}</span>
                 <ChevronDown className="h-3.5 w-3.5" />
-              </button>
-              {sortMenuOpen && (
-                <div
-                  className="absolute right-0 z-10 mt-2 w-52 max-w-[calc(100vw-2rem)] rounded-xl border border-border/60 bg-background/95 p-1.5 shadow-xl backdrop-blur-xl"
-                  onMouseLeave={() => setSortMenuOpen(false)}
-                >
-                  {(Object.keys(SORT_LABEL) as SortKey[]).map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => {
-                        setSort(s);
-                        setSortMenuOpen(false);
-                      }}
-                      className={`block w-full rounded-lg px-3 py-2 text-left text-xs ${
-                        sort === s ? "bg-gold/10 text-gold" : "hover:bg-secondary"
-                      }`}
-                    >
-                      {SORT_LABEL[s]}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52 rounded-xl p-1.5">
+                {(Object.keys(SORT_LABEL) as SortKey[]).map((k) => (
+                  <DropdownMenuItem
+                    key={k}
+                    onSelect={() => setSort(k)}
+                    className={`rounded-lg text-xs ${sort === k ? "bg-gold/10 text-gold" : ""}`}
+                  >
+                    {SORT_LABEL[k]}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       )}
@@ -488,7 +492,7 @@ function BookCard({
   onToggleFavorite: () => void;
   onRate: (rating: number) => void;
 }) {
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const primaryHref = entry.readerId
     ? { to: "/reader/$bookId" as const, params: { bookId: entry.readerId } }
     : {
@@ -509,9 +513,10 @@ function BookCard({
               className="book-shadow aspect-[2/3] w-full rounded-lg object-cover transition-transform duration-300 group-hover:-translate-y-1 group-hover:shadow-xl"
             />
           ) : (
-            <div className="book-shadow grid aspect-[2/3] w-full place-items-center rounded-lg bg-secondary p-3 text-center transition-transform duration-300 group-hover:-translate-y-1">
-              <BookOpen className="h-6 w-6 text-muted-foreground" />
-            </div>
+            <FauxCover
+              book={fauxBookFor(entry.title, entry.author)}
+              className="!rounded-lg transition-transform duration-300 group-hover:-translate-y-1"
+            />
           )}
 
           <span
@@ -579,51 +584,63 @@ function BookCard({
           </div>
         </div>
 
-        <div className="relative shrink-0">
-          <button
-            onClick={() => setMenuOpen((v) => !v)}
+        <DropdownMenu>
+          <DropdownMenuTrigger
             disabled={busy}
-            aria-label="Mais opções"
-            className="grid h-6 w-6 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-60"
+            aria-label={`Mais opções para ${entry.title}`}
+            className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-muted-foreground outline-none hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-gold/50 disabled:opacity-60"
           >
             {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MoreDots />}
-          </button>
-          {menuOpen && (
-            <div
-              className="absolute right-0 z-10 mt-1 w-40 max-w-[calc(100vw-2rem)] rounded-xl border border-border/60 bg-background/95 p-1.5 text-xs shadow-xl backdrop-blur-xl"
-              onMouseLeave={() => setMenuOpen(false)}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48 rounded-xl p-1.5">
+            <DropdownMenuLabel className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Mover para
+            </DropdownMenuLabel>
+            {(Object.keys(STATUS_LABEL) as LibraryStatus[])
+              .filter((st) => st !== entry.status)
+              .map((st) => (
+                <DropdownMenuItem
+                  key={st}
+                  onSelect={() => onStatusChange(st)}
+                  className="rounded-lg text-xs"
+                >
+                  {STATUS_LABEL[st]}
+                </DropdownMenuItem>
+              ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onSelect={() => setConfirmOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg text-xs text-destructive focus:bg-destructive/10 focus:text-destructive"
             >
-              <p className="px-2.5 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                Mover para
-              </p>
-              {(Object.keys(STATUS_LABEL) as LibraryStatus[])
-                .filter((s) => s !== entry.status)
-                .map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => {
-                      onStatusChange(s);
-                      setMenuOpen(false);
-                    }}
-                    className="block w-full rounded-lg px-2.5 py-1.5 text-left hover:bg-secondary"
-                  >
-                    {STATUS_LABEL[s]}
-                  </button>
-                ))}
-              <div className="my-1 h-px bg-border/60" />
-              <button
-                onClick={() => {
-                  onRemove();
-                  setMenuOpen(false);
-                }}
-                className="flex w-full items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-left text-destructive hover:bg-destructive/10"
-              >
-                <Trash2 className="h-3 w-3" /> Remover
-              </button>
-            </div>
-          )}
-        </div>
+              <Trash2 className="h-3 w-3" /> Remover
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent className="rounded-3xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display text-xl">
+              Remover “{entry.title}”?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {entry.readerId && (isEpubReaderId(entry.readerId) || isPdfReaderId(entry.readerId))
+                ? "O arquivo privado que você importou será apagado da sua conta e de todos os seus dispositivos. Esta ação não pode ser desfeita."
+                : "O livro sai da sua biblioteca. Você pode adicioná-lo de novo a qualquer momento pelo Descobrir."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-full">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={onRemove}
+              className="rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

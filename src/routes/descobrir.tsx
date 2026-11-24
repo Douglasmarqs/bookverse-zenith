@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { FauxCover, fauxBookFor } from "@/components/faux-cover";
 import { useEffect, useMemo, useState } from "react";
 import {
   BookOpenCheck,
@@ -662,9 +663,7 @@ function BookCover({ title, cover }: { title: string; cover: string | null }) {
           className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
         />
       ) : (
-        <span className="grid h-full w-full place-items-center p-2 text-center font-display text-[11px] leading-tight text-foreground/70">
-          {title}
-        </span>
+        <FauxCover book={fauxBookFor(title)} className="h-full w-full rounded-none" />
       )}
     </div>
   );

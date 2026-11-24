@@ -1,7 +1,6 @@
 import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-  BookOpen,
   Mail,
   Lock,
   User as UserIcon,
@@ -23,7 +22,8 @@ import {
   isFirebaseConfigured,
   getFirebaseKeyDebugInfo,
 } from "../lib/firebase";
-import heroImg from "@/assets/hero-library.webp";
+import { LogoMark, Wordmark } from "@/components/brand/logo";
+import { FAUX_BOOKS, FauxCover } from "@/components/faux-cover";
 import { LumiMascot } from "@/components/lumi-mascot";
 
 export const Route = createFileRoute("/auth")({
@@ -172,37 +172,47 @@ function AuthPage() {
   return (
     <div className="mx-auto grid min-h-[calc(100vh-8rem)] max-w-6xl grid-cols-1 items-center gap-0 px-5 py-10 md:px-8 lg:grid-cols-[1.05fr_1fr] lg:gap-10">
       {/* Branding panel — hidden on small screens */}
-      <div className="glass-plate relative hidden overflow-hidden rounded-3xl p-10 lg:flex lg:flex-col lg:justify-between lg:self-stretch">
-        <div className="pointer-events-none absolute inset-0">
-          <img
-            src={heroImg}
-            alt=""
-            width={1920}
-            height={1280}
-            fetchPriority="high"
-            className="h-full w-full object-cover opacity-30"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-background/50 via-background/80 to-background" />
+      <div className="grain relative hidden overflow-hidden rounded-[2rem] bg-night p-10 text-night-foreground lg:flex lg:flex-col lg:justify-between lg:self-stretch">
+        <div
+          aria-hidden
+          className="blob-drift pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-[#1769d8]/45 blur-3xl"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -bottom-24 -left-16 h-72 w-72 rounded-full bg-warm/20 blur-3xl"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -right-6 top-28 flex gap-3 opacity-90"
+        >
+          {[FAUX_BOOKS[0], FAUX_BOOKS[5], FAUX_BOOKS[4]].map((book, i) => (
+            <div
+              key={book.title}
+              className="book-float w-20"
+              style={{
+                ["--float-rot" as string]: `${(i - 1) * 7}deg`,
+                ["--float-delay" as string]: `${-i * 1.6}s`,
+              }}
+            >
+              <FauxCover book={book} />
+            </div>
+          ))}
         </div>
         <div className="relative">
           <Link to="/" className="inline-flex items-center gap-2.5">
-            <span className="grid h-9 w-9 place-items-center rounded-full bg-gold/10 ring-1 ring-gold/40">
-              <BookOpen className="h-4 w-4 text-gold" />
-            </span>
-            <span className="font-display text-xl font-semibold tracking-tight">
-              Book<span className="text-gold">verse</span>
-            </span>
+            <LogoMark size={34} />
+            <Wordmark className="text-xl text-white" />
           </Link>
 
-          <h2 className="mt-14 max-w-sm font-display text-4xl font-medium leading-tight">
-            Toda leitura merece um <span className="text-gradient-gold italic">santuário</span>.
+          <h2 className="mt-40 max-w-sm font-display text-4xl font-medium leading-tight">
+            Toda leitura merece um <span className="italic text-[#7fb6ff]">lugar só seu</span>.
           </h2>
 
-          <ul className="mt-10 space-y-4">
+          <ul className="mt-8 space-y-4">
             {BENEFITS.map(({ icon: Icon, text }) => (
-              <li key={text} className="flex items-start gap-3 text-sm text-foreground/85">
-                <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gold/10 ring-1 ring-gold/30">
-                  <Icon className="h-3.5 w-3.5 text-gold" />
+              <li key={text} className="flex items-start gap-3 text-sm text-white/80">
+                <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/10 ring-1 ring-white/15">
+                  <Icon className="h-3.5 w-3.5 text-[#7fb6ff]" />
                 </span>
                 {text}
               </li>
@@ -210,10 +220,11 @@ function AuthPage() {
           </ul>
         </div>
 
-        <div className="relative flex items-center gap-4">
-          <LumiMascot size={64} />
-          <p className="max-w-[220px] text-xs leading-relaxed text-muted-foreground">
-            "Estou aqui pra ler junto com você." — Lumi, a coruja da BookVerse
+        <div className="relative mt-10 flex items-center gap-4 rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+          <LumiMascot size={56} />
+          <p className="max-w-[240px] text-sm leading-relaxed text-white/75">
+            “Estou aqui pra ler junto com você.”
+            <span className="mt-1 block text-xs text-white/50">Lumi, a coruja do BookVerse</span>
           </p>
         </div>
       </div>
@@ -223,9 +234,7 @@ function AuthPage() {
         <div className="mx-auto w-full max-w-md">
           {mode !== "reset" ? (
             <div className="mb-8 text-center lg:text-left">
-              <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-gold/10 ring-1 ring-gold/40 lg:mx-0">
-                <BookOpen className="h-5 w-5 text-gold" />
-              </span>
+              <LogoMark size={48} className="mx-auto lg:mx-0" />
               <h1 className="mt-4 font-display text-3xl font-semibold">
                 {mode === "signup" ? "Crie sua conta" : "Bem-vindo de volta"}
               </h1>
@@ -261,9 +270,9 @@ function AuthPage() {
 
           {alreadyAuthed && (
             <div className="mb-4 rounded-xl border border-gold/30 bg-gold/5 px-4 py-3 text-sm">
-              Você já está autenticado.{" "}
+              Você já está conectado.{" "}
               <Link to="/" className="text-gold underline underline-offset-4">
-                Voltar à biblioteca
+                Ir para o início
               </Link>
               .
             </div>
@@ -311,6 +320,33 @@ function AuthPage() {
             )
           ) : (
             <>
+              <div
+                role="tablist"
+                aria-label="Entrar ou criar conta"
+                className="mb-6 grid grid-cols-2 rounded-full border border-border bg-card/60 p-1"
+              >
+                {(
+                  [
+                    ["signin", "Entrar"],
+                    ["signup", "Criar conta"],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="tab"
+                    aria-selected={mode === id}
+                    onClick={() => switchMode(id)}
+                    className={`rounded-full py-2 text-sm font-semibold transition ${
+                      mode === id
+                        ? "bg-gold text-primary-foreground shadow"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
               <button
                 onClick={handleGoogle}
                 disabled={loading !== null || configMissing}

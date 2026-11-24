@@ -1,19 +1,26 @@
 import { useCallback, useEffect, useState } from "react";
 import { applyTheme, getStoredTheme, type SiteTheme } from "@/lib/theme";
 
-/** Reactive access to the site-wide theme. Safe to use in multiple
- * components at once — each mounts with the currently-applied theme and
- * stays in sync if another component changes it. */
+// Every mounted consumer (header switcher, ⌘K palette, profile page…) is
+// notified when any one of them changes the theme, so their UI never shows
+// a stale selection.
+const listeners = new Set<(t: SiteTheme) => void>();
+
+/** Reactive access to the site-wide theme, kept in sync across components. */
 export function useSiteTheme(): [SiteTheme, (t: SiteTheme) => void] {
   const [theme, setThemeState] = useState<SiteTheme>("light");
 
   useEffect(() => {
     setThemeState(getStoredTheme());
+    listeners.add(setThemeState);
+    return () => {
+      listeners.delete(setThemeState);
+    };
   }, []);
 
   const setTheme = useCallback((t: SiteTheme) => {
-    setThemeState(t);
     applyTheme(t);
+    listeners.forEach((l) => l(t));
   }, []);
 
   return [theme, setTheme];
