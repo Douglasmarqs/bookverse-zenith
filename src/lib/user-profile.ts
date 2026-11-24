@@ -36,6 +36,8 @@ export interface UserProfile {
    * clobbers a photo the person chose themselves. Takes priority over
    * `photoURL`. */
   customPhotoDataUrl?: string | null;
+  /** Optional emoji avatar chosen in the profile (used by reviews). */
+  avatarEmoji?: string | null;
   xp: number;
   booksCompleted: number;
   /** Total chapters finished across every book — the closest proxy we

@@ -46,4 +46,3 @@ export function applyTheme(theme: SiteTheme): void {
 export function allThemes(): SiteTheme[] {
   return THEMES;
 }
-

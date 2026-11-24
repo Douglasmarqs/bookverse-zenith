@@ -437,6 +437,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   const [annotations, setAnnotations] = useState<BookAnnotations>({
     highlights: [],
     bookmarks: [],
+    pdfRegions: [],
   });
   const [activeHighlightId, setActiveHighlightId] = useState<string | null>(null);
   const [editingNoteFor, setEditingNoteFor] = useState<string | null>(null);

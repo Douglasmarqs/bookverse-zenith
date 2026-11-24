@@ -20,8 +20,7 @@ export type Chapter = {
   blocks?: ChapterBlock[];
 };
 export type ChapterBlock =
-  | { type: "text"; paragraphIndex: number }
-  | { type: "image"; src: string; alt?: string };
+  { type: "text"; paragraphIndex: number } | { type: "image"; src: string; alt?: string };
 export type Book = {
   id: string;
   title: string;

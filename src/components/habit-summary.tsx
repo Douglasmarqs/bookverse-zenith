@@ -28,10 +28,7 @@ export function HabitSummary({ uid }: { uid: string }) {
   }, [uid, year]);
 
   const level = useMemo(() => getLevelInfo(profile?.xp ?? 0), [profile?.xp]);
-  const goal = useMemo(
-    () => computeGoalProgress(entries, target ?? 0),
-    [entries, target],
-  );
+  const goal = useMemo(() => computeGoalProgress(entries, target ?? 0), [entries, target]);
 
   const streak = profile?.currentStreak ?? 0;
   const weekDays = useMemo(() => {

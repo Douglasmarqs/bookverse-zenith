@@ -54,9 +54,10 @@ function GuardedDiaryPage() {
   return <DiaryPage uid={user.uid} />;
 }
 
-const REACTION_LABEL: Record<DiaryReactionId, { emoji: string; label: string }> = Object.fromEntries(
-  DIARY_REACTIONS.map((r) => [r.id, { emoji: r.emoji, label: r.label }]),
-) as Record<DiaryReactionId, { emoji: string; label: string }>;
+const REACTION_LABEL: Record<DiaryReactionId, { emoji: string; label: string }> =
+  Object.fromEntries(
+    DIARY_REACTIONS.map((r) => [r.id, { emoji: r.emoji, label: r.label }]),
+  ) as Record<DiaryReactionId, { emoji: string; label: string }>;
 
 function DiaryPage({ uid }: { uid: string }) {
   const [entries, setEntries] = useState<DiaryEntry[] | null>(null);
@@ -118,7 +119,11 @@ function DiaryPage({ uid }: { uid: string }) {
 
   const grouped = useMemo(() => {
     const list = entries ?? [];
-    const fmt = new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "long", year: "numeric" });
+    const fmt = new Intl.DateTimeFormat("pt-BR", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
     const groups: { day: string; items: DiaryEntry[] }[] = [];
     for (const e of list) {
       const millis = e.createdAt?.toMillis?.();
@@ -209,7 +214,11 @@ function DiaryPage({ uid }: { uid: string }) {
             disabled={saving || !bookId || !note.trim()}
             className="inline-flex w-fit items-center gap-2 rounded-full bg-gold px-6 py-3 text-sm font-medium text-primary-foreground transition enabled:hover:scale-[1.02] disabled:opacity-50"
           >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <BookMarked className="h-4 w-4" />}
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <BookMarked className="h-4 w-4" />
+            )}
             {saving ? "Salvando…" : "Registrar no diário"}
           </button>
         </div>

@@ -34,10 +34,7 @@ async function reauthenticate(currentPassword?: string): Promise<void> {
   await reauthenticateWithCredential(user, credential);
 }
 
-export async function changePassword(
-  currentPassword: string,
-  newPassword: string,
-): Promise<void> {
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
   const fb = getFirebase();
   if (!fb?.auth.currentUser) throw new Error("Você precisa estar logado.");
   await reauthenticate(currentPassword);

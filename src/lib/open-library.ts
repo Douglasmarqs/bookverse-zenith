@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- Open Library responses are untyped external JSON, narrowed field by field below. */
 /**
  * Open Library client — free, keyless catalog API (openlibrary.org).
  *

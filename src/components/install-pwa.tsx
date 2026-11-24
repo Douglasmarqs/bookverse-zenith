@@ -84,8 +84,8 @@ export function InstallPwaBanner() {
         <p className="text-sm font-medium">Instale o BookVerse</p>
         {showIosTip ? (
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            Toque em <Share className="mx-0.5 inline h-3 w-3 align-[-1px]" /> Compartilhar, depois em
-            "Adicionar à Tela de Início".
+            Toque em <Share className="mx-0.5 inline h-3 w-3 align-[-1px]" /> Compartilhar, depois
+            em "Adicionar à Tela de Início".
           </p>
         ) : (
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">

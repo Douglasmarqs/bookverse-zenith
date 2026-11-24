@@ -24,7 +24,11 @@ export function SiteFooter() {
           <h4 className="font-display text-sm font-medium text-foreground">Explorar</h4>
           <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
             <li>
-              <Link to="/descobrir" search={{ q: undefined, categoria: undefined }} className="hover:text-gold">
+              <Link
+                to="/descobrir"
+                search={{ q: undefined, categoria: undefined }}
+                className="hover:text-gold"
+              >
                 Descobrir
               </Link>
             </li>
