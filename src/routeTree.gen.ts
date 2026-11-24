@@ -9,87 +9,27 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as TermosRouteImport } from './routes/termos'
-import { Route as SobreRouteImport } from './routes/sobre'
-import { Route as RankingRouteImport } from './routes/ranking'
-import { Route as PrivacidadeRouteImport } from './routes/privacidade'
-import { Route as PerfilRouteImport } from './routes/perfil'
-import { Route as MetasRouteImport } from './routes/metas'
-import { Route as DiarioRouteImport } from './routes/diario'
-import { Route as DescobrirRouteImport } from './routes/descobrir'
-import { Route as DesafiosRouteImport } from './routes/desafios'
-import { Route as ContatoRouteImport } from './routes/contato'
-import { Route as CatalogoRouteImport } from './routes/catalogo'
-import { Route as BibliotecaRouteImport } from './routes/biblioteca'
-import { Route as BemVindoRouteImport } from './routes/bem-vindo'
-import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ReaderBookIdRouteImport } from './routes/reader.$bookId'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as BemVindoRouteImport } from './routes/bem-vindo'
+import { Route as BibliotecaRouteImport } from './routes/biblioteca'
+import { Route as CatalogoRouteImport } from './routes/catalogo'
+import { Route as ContatoRouteImport } from './routes/contato'
+import { Route as DesafiosRouteImport } from './routes/desafios'
+import { Route as DescobrirRouteImport } from './routes/descobrir'
+import { Route as DiarioRouteImport } from './routes/diario'
+import { Route as MetasRouteImport } from './routes/metas'
+import { Route as PerfilRouteImport } from './routes/perfil'
+import { Route as PrivacidadeRouteImport } from './routes/privacidade'
+import { Route as RankingRouteImport } from './routes/ranking'
+import { Route as SobreRouteImport } from './routes/sobre'
+import { Route as TermosRouteImport } from './routes/termos'
 import { Route as LivroSlugRouteImport } from './routes/livro.$slug'
+import { Route as ReaderBookIdRouteImport } from './routes/reader.$bookId'
 
-const TermosRoute = TermosRouteImport.update({
-  id: '/termos',
-  path: '/termos',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SobreRoute = SobreRouteImport.update({
-  id: '/sobre',
-  path: '/sobre',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RankingRoute = RankingRouteImport.update({
-  id: '/ranking',
-  path: '/ranking',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PrivacidadeRoute = PrivacidadeRouteImport.update({
-  id: '/privacidade',
-  path: '/privacidade',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PerfilRoute = PerfilRouteImport.update({
-  id: '/perfil',
-  path: '/perfil',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MetasRoute = MetasRouteImport.update({
-  id: '/metas',
-  path: '/metas',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DiarioRoute = DiarioRouteImport.update({
-  id: '/diario',
-  path: '/diario',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DescobrirRoute = DescobrirRouteImport.update({
-  id: '/descobrir',
-  path: '/descobrir',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DesafiosRoute = DesafiosRouteImport.update({
-  id: '/desafios',
-  path: '/desafios',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ContatoRoute = ContatoRouteImport.update({
-  id: '/contato',
-  path: '/contato',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CatalogoRoute = CatalogoRouteImport.update({
-  id: '/catalogo',
-  path: '/catalogo',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BibliotecaRoute = BibliotecaRouteImport.update({
-  id: '/biblioteca',
-  path: '/biblioteca',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BemVindoRoute = BemVindoRouteImport.update({
-  id: '/bem-vindo',
-  path: '/bem-vindo',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -97,19 +37,79 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const BemVindoRoute = BemVindoRouteImport.update({
+  id: '/bem-vindo',
+  path: '/bem-vindo',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ReaderBookIdRoute = ReaderBookIdRouteImport.update({
-  id: '/reader/$bookId',
-  path: '/reader/$bookId',
+const BibliotecaRoute = BibliotecaRouteImport.update({
+  id: '/biblioteca',
+  path: '/biblioteca',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CatalogoRoute = CatalogoRouteImport.update({
+  id: '/catalogo',
+  path: '/catalogo',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContatoRoute = ContatoRouteImport.update({
+  id: '/contato',
+  path: '/contato',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DesafiosRoute = DesafiosRouteImport.update({
+  id: '/desafios',
+  path: '/desafios',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DescobrirRoute = DescobrirRouteImport.update({
+  id: '/descobrir',
+  path: '/descobrir',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DiarioRoute = DiarioRouteImport.update({
+  id: '/diario',
+  path: '/diario',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MetasRoute = MetasRouteImport.update({
+  id: '/metas',
+  path: '/metas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PerfilRoute = PerfilRouteImport.update({
+  id: '/perfil',
+  path: '/perfil',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacidadeRoute = PrivacidadeRouteImport.update({
+  id: '/privacidade',
+  path: '/privacidade',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RankingRoute = RankingRouteImport.update({
+  id: '/ranking',
+  path: '/ranking',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SobreRoute = SobreRouteImport.update({
+  id: '/sobre',
+  path: '/sobre',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermosRoute = TermosRouteImport.update({
+  id: '/termos',
+  path: '/termos',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LivroSlugRoute = LivroSlugRouteImport.update({
   id: '/livro/$slug',
   path: '/livro/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReaderBookIdRoute = ReaderBookIdRouteImport.update({
+  id: '/reader/$bookId',
+  path: '/reader/$bookId',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -253,95 +253,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/termos': {
-      id: '/termos'
-      path: '/termos'
-      fullPath: '/termos'
-      preLoaderRoute: typeof TermosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sobre': {
-      id: '/sobre'
-      path: '/sobre'
-      fullPath: '/sobre'
-      preLoaderRoute: typeof SobreRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/ranking': {
-      id: '/ranking'
-      path: '/ranking'
-      fullPath: '/ranking'
-      preLoaderRoute: typeof RankingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/privacidade': {
-      id: '/privacidade'
-      path: '/privacidade'
-      fullPath: '/privacidade'
-      preLoaderRoute: typeof PrivacidadeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/perfil': {
-      id: '/perfil'
-      path: '/perfil'
-      fullPath: '/perfil'
-      preLoaderRoute: typeof PerfilRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/metas': {
-      id: '/metas'
-      path: '/metas'
-      fullPath: '/metas'
-      preLoaderRoute: typeof MetasRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/diario': {
-      id: '/diario'
-      path: '/diario'
-      fullPath: '/diario'
-      preLoaderRoute: typeof DiarioRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/descobrir': {
-      id: '/descobrir'
-      path: '/descobrir'
-      fullPath: '/descobrir'
-      preLoaderRoute: typeof DescobrirRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/desafios': {
-      id: '/desafios'
-      path: '/desafios'
-      fullPath: '/desafios'
-      preLoaderRoute: typeof DesafiosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/contato': {
-      id: '/contato'
-      path: '/contato'
-      fullPath: '/contato'
-      preLoaderRoute: typeof ContatoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/catalogo': {
-      id: '/catalogo'
-      path: '/catalogo'
-      fullPath: '/catalogo'
-      preLoaderRoute: typeof CatalogoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/biblioteca': {
-      id: '/biblioteca'
-      path: '/biblioteca'
-      fullPath: '/biblioteca'
-      preLoaderRoute: typeof BibliotecaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/bem-vindo': {
-      id: '/bem-vindo'
-      path: '/bem-vindo'
-      fullPath: '/bem-vindo'
-      preLoaderRoute: typeof BemVindoRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -351,18 +267,95 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/bem-vindo': {
+      id: '/bem-vindo'
+      path: '/bem-vindo'
+      fullPath: '/bem-vindo'
+      preLoaderRoute: typeof BemVindoRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/reader/$bookId': {
-      id: '/reader/$bookId'
-      path: '/reader/$bookId'
-      fullPath: '/reader/$bookId'
-      preLoaderRoute: typeof ReaderBookIdRouteImport
+    '/biblioteca': {
+      id: '/biblioteca'
+      path: '/biblioteca'
+      fullPath: '/biblioteca'
+      preLoaderRoute: typeof BibliotecaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/catalogo': {
+      id: '/catalogo'
+      path: '/catalogo'
+      fullPath: '/catalogo'
+      preLoaderRoute: typeof CatalogoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contato': {
+      id: '/contato'
+      path: '/contato'
+      fullPath: '/contato'
+      preLoaderRoute: typeof ContatoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/desafios': {
+      id: '/desafios'
+      path: '/desafios'
+      fullPath: '/desafios'
+      preLoaderRoute: typeof DesafiosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/descobrir': {
+      id: '/descobrir'
+      path: '/descobrir'
+      fullPath: '/descobrir'
+      preLoaderRoute: typeof DescobrirRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/diario': {
+      id: '/diario'
+      path: '/diario'
+      fullPath: '/diario'
+      preLoaderRoute: typeof DiarioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/metas': {
+      id: '/metas'
+      path: '/metas'
+      fullPath: '/metas'
+      preLoaderRoute: typeof MetasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/perfil': {
+      id: '/perfil'
+      path: '/perfil'
+      fullPath: '/perfil'
+      preLoaderRoute: typeof PerfilRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacidade': {
+      id: '/privacidade'
+      path: '/privacidade'
+      fullPath: '/privacidade'
+      preLoaderRoute: typeof PrivacidadeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ranking': {
+      id: '/ranking'
+      path: '/ranking'
+      fullPath: '/ranking'
+      preLoaderRoute: typeof RankingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sobre': {
+      id: '/sobre'
+      path: '/sobre'
+      fullPath: '/sobre'
+      preLoaderRoute: typeof SobreRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/termos': {
+      id: '/termos'
+      path: '/termos'
+      fullPath: '/termos'
+      preLoaderRoute: typeof TermosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/livro/$slug': {
@@ -370,6 +363,13 @@ declare module '@tanstack/react-router' {
       path: '/livro/$slug'
       fullPath: '/livro/$slug'
       preLoaderRoute: typeof LivroSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reader/$bookId': {
+      id: '/reader/$bookId'
+      path: '/reader/$bookId'
+      fullPath: '/reader/$bookId'
+      preLoaderRoute: typeof ReaderBookIdRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
