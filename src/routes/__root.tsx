@@ -33,6 +33,7 @@ import { Dock } from "../components/shell/dock";
 import { MemberTopBar, VisitorHeader } from "../components/shell/top-bar";
 import { SESSION_HINT_KEY, useAuthState } from "../hooks/use-auth-user";
 import { THEME_BOOT_SCRIPT, applyTheme, getStoredTheme } from "../lib/theme";
+import { useSiteTheme } from "../hooks/use-site-theme";
 
 function NotFoundComponent() {
   return (
@@ -228,10 +229,17 @@ function RootComponent() {
             mounted there too; only the site chrome itself is suppressed. */}
         <LumiPanel />
         {!isReaderRoute && <InstallPwaBanner />}
-        <Toaster position="bottom-center" theme="system" richColors />
+        <AppToaster />
       </div>
     </QueryClientProvider>
   );
+}
+
+/** Toasts follow the resolved ambience (dark ambiences get dark toasts). */
+function AppToaster() {
+  const [, , resolved] = useSiteTheme();
+  const light = resolved === "papel" || resolved === "sepia";
+  return <Toaster position="bottom-center" theme={light ? "light" : "dark"} richColors />;
 }
 
 /** Member shell (rail + dock) vs visitor shell (header + footer). A returning

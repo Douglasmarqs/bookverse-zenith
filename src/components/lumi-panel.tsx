@@ -53,6 +53,16 @@ export function LumiPanel() {
 
   useEffect(() => subscribeAuth(setUser), []);
 
+  // Esc closes the panel, like every other sheet in the app.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeLumiPanel();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
   // Load this context's saved thread (if any) once per open+context+account.
   useEffect(() => {
     if (!open) return;
@@ -138,11 +148,11 @@ export function LumiPanel() {
         className="absolute inset-0 cursor-default"
         onClick={closeLumiPanel}
       />
-      <div className="relative flex h-full w-full max-w-md flex-col border-l border-border/60 bg-background shadow-2xl animate-in slide-in-from-right duration-300">
+      <div className="relative flex h-full w-full max-w-md flex-col border-l border-border bg-background/95 shadow-2xl backdrop-blur-xl animate-in slide-in-from-right duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]">
         <div className="flex items-center gap-3 border-b border-border/60 px-5 py-4">
           <LumiMascot size={36} />
           <div className="min-w-0 flex-1">
-            <p className="font-display text-base font-semibold">Lumi</p>
+            <p className="font-display text-2xl leading-none">Lumi</p>
             <p className="truncate text-xs text-muted-foreground">
               {context?.bookTitle
                 ? `${context.positionLabel ? `${context.positionLabel} · ` : ""}${context.bookTitle}`

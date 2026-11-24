@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { PageHeader } from "@/components/page-header";
 import { useEffect, useState } from "react";
 import {
   Loader2,
@@ -257,12 +258,15 @@ function PerfilPage({ user }: { user: User }) {
   const memberSince = formatMemberSince(profile?.createdAt);
 
   return (
-    <div className="mx-auto max-w-4xl px-5 py-12 md:px-8">
-      <p className="text-[11px] uppercase tracking-[0.28em] text-gold">Minha conta</p>
-      <h1 className="mt-2 font-display text-4xl font-medium md:text-5xl">Meu perfil</h1>
+    <div className="relative mx-auto max-w-4xl px-5 pb-12 pt-8 md:px-10 md:pt-10">
+      <PageHeader
+        eyebrow="Minha conta"
+        title="Ex libris"
+        accent={profile?.displayName || user.displayName || ""}
+      />
 
       {/* Summary header */}
-      <div className="mt-8 flex flex-wrap items-center gap-5 rounded-2xl border border-border/60 bg-card/40 p-6">
+      <div className="mt-8 flex flex-wrap items-center gap-5 rounded-[1.75rem] border border-border bg-card/60 backdrop-blur p-6">
         <div className="group relative shrink-0">
           <UserAvatar
             profile={profile}
@@ -299,7 +303,7 @@ function PerfilPage({ user }: { user: User }) {
           )}
         </div>
         <div className="min-w-0">
-          <p className="truncate font-display text-xl font-medium">
+          <p className="truncate font-display text-3xl">
             {profile?.displayName || user.displayName || "Leitor"}
           </p>
           {profile?.username && <p className="mt-0.5 text-sm text-gold">@{profile.username}</p>}
@@ -367,9 +371,9 @@ function PerfilPage({ user }: { user: User }) {
       {/* Edit profile */}
       <section
         id="configuracoes"
-        className="mt-10 scroll-mt-24 rounded-2xl border border-border/60 bg-card/40 p-6"
+        className="mt-10 scroll-mt-24 rounded-[1.75rem] border border-border bg-card/60 backdrop-blur p-6"
       >
-        <h2 className="font-display text-xl font-medium">Editar perfil</h2>
+        <h2 className="font-display text-3xl">Editar perfil</h2>
 
         <form onSubmit={handleSaveProfile} className="mt-5 grid gap-3 sm:grid-cols-2">
           <label>
@@ -424,9 +428,9 @@ function PerfilPage({ user }: { user: User }) {
       {/* Appearance */}
       <section
         id="aparencia"
-        className="mt-6 scroll-mt-24 rounded-2xl border border-border/60 bg-card/40 p-6"
+        className="mt-6 scroll-mt-24 rounded-[1.75rem] border border-border bg-card/60 backdrop-blur p-6"
       >
-        <h2 className="flex items-center gap-2 font-display text-xl font-medium">
+        <h2 className="flex items-center gap-2 font-display text-3xl">
           <Palette className="h-4 w-4 text-gold" /> Aparência
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -439,8 +443,8 @@ function PerfilPage({ user }: { user: User }) {
       </section>
 
       {/* Reading reminders */}
-      <section className="mt-6 rounded-2xl border border-border/60 bg-card/40 p-6">
-        <h2 className="flex items-center gap-2 font-display text-xl font-medium">
+      <section className="mt-6 rounded-[1.75rem] border border-border bg-card/60 backdrop-blur p-6">
+        <h2 className="flex items-center gap-2 font-display text-3xl">
           <BellRing className="h-4 w-4 text-gold" /> Lembretes de leitura
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -470,8 +474,8 @@ function PerfilPage({ user }: { user: User }) {
       </section>
 
       {/* Security */}
-      <section className="mt-6 rounded-2xl border border-border/60 bg-card/40 p-6">
-        <h2 className="flex items-center gap-2 font-display text-xl font-medium">
+      <section className="mt-6 rounded-[1.75rem] border border-border bg-card/60 backdrop-blur p-6">
+        <h2 className="flex items-center gap-2 font-display text-3xl">
           <KeyRound className="h-4 w-4 text-gold" /> Segurança
         </h2>
 
@@ -529,7 +533,7 @@ function PerfilPage({ user }: { user: User }) {
 
       {/* Danger zone */}
       <section className="mt-6 rounded-2xl border border-destructive/30 bg-destructive/5 p-6">
-        <h2 className="flex items-center gap-2 font-display text-xl font-medium text-destructive">
+        <h2 className="flex items-center gap-2 font-display text-3xl text-destructive">
           <ShieldAlert className="h-4 w-4" /> Zona de perigo
         </h2>
         <p className="mt-2 text-sm text-muted-foreground">
@@ -611,7 +615,7 @@ function StatCard({
   suffix?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-border/60 bg-card/40 p-5">
+    <div className="rounded-[1.75rem] border border-border bg-card/60 backdrop-blur p-5">
       <Icon className="h-5 w-5 text-gold" />
       <p className="mt-3 font-display text-3xl font-medium">
         {value}

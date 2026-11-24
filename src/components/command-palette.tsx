@@ -28,7 +28,7 @@ import { useAuthUser } from "@/hooks/use-auth-user";
 import { useSiteTheme } from "@/hooks/use-site-theme";
 import { onOpenCommandPalette } from "@/lib/command-palette-store";
 import { subscribeLibrary, type LibraryEntry } from "@/lib/library";
-import { openLumiPanel } from "@/lib/lumi-panel-store";
+import { closeLumiPanel, openLumiPanel } from "@/lib/lumi-panel-store";
 import { THEME_LABEL, allThemes } from "@/lib/theme";
 
 /**
@@ -44,12 +44,20 @@ export function CommandPalette() {
   const signedIn = !!user && !user.isAnonymous;
   const [, setTheme] = useSiteTheme();
 
-  useEffect(() => onOpenCommandPalette(() => setOpen(true)), []);
+  useEffect(
+    () =>
+      onOpenCommandPalette(() => {
+        closeLumiPanel();
+        setOpen(true);
+      }),
+    [],
+  );
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
+        closeLumiPanel();
         setOpen((v) => !v);
       }
     }

@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { PageHeader } from "@/components/page-header";
 import { useEffect, useMemo, useState } from "react";
 import {
   Trophy,
@@ -97,13 +98,21 @@ function DesafiosPage() {
   const categories = Object.keys(CATEGORY_LABEL) as AchievementCategory[];
 
   return (
-    <div className="mx-auto max-w-5xl px-5 py-12 md:px-8">
-      <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-gold">
-        <Trophy className="h-4 w-4" /> Desafios
-      </div>
-      <h1 className="mt-2 font-display text-4xl font-medium md:text-5xl">
-        Metas que valem uma medalha
-      </h1>
+    <div className="relative mx-auto max-w-5xl px-5 pb-12 pt-8 md:px-10 md:pt-10">
+      <PageHeader
+        eyebrow={
+          <>
+            <Trophy className="h-3.5 w-3.5" /> Jornada · desafios
+          </>
+        }
+        title="Metas que valem"
+        accent="um selo"
+        aside={
+          <Link to="/metas" className="btn-ghost text-sm">
+            Meta anual
+          </Link>
+        }
+      />
 
       {!signedIn ? (
         <div className="mt-8 rounded-2xl border border-dashed border-border/60 p-8 text-center">
@@ -179,7 +188,7 @@ function DesafiosPage() {
           <div className="mt-10">
             <div className="flex items-center gap-2">
               <Target className="h-4 w-4 text-gold" />
-              <h2 className="font-display text-xl font-medium">Missões da semana</h2>
+              <h2 className="font-display text-3xl">Missões da semana</h2>
               <span className="text-xs text-muted-foreground">· renova toda segunda-feira</span>
             </div>
             <div className="mt-4 grid gap-4 md:grid-cols-3">
@@ -215,7 +224,7 @@ function DesafiosPage() {
           <div className="mt-12">
             <div className="flex items-center gap-2">
               <Compass className="h-4 w-4 text-gold" />
-              <h2 className="font-display text-xl font-medium">Trilhas temáticas</h2>
+              <h2 className="font-display text-3xl">Trilhas temáticas</h2>
               <span className="text-xs text-muted-foreground">· desafios com tema</span>
             </div>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -225,7 +234,7 @@ function DesafiosPage() {
                 return (
                   <div
                     key={t.id}
-                    className="rounded-2xl border border-border/60 bg-card/40 p-5 transition-colors hover:border-gold/30"
+                    className="rounded-[1.75rem] border border-border bg-card/60 backdrop-blur p-5 transition-colors hover:border-gold/30"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <h3 className="font-display text-base font-medium leading-snug">{t.title}</h3>
@@ -262,7 +271,7 @@ function DesafiosPage() {
 
           {/* Achievements */}
           <div className="mt-12">
-            <h2 className="font-display text-xl font-medium">Conquistas</h2>
+            <h2 className="font-display text-3xl">Conquistas</h2>
 
             {categories.map((cat) => {
               const items = ACHIEVEMENTS.filter((a) => a.category === cat);

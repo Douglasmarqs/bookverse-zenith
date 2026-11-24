@@ -44,6 +44,8 @@ function AuthPage() {
   const [mode, setMode] = useState<Mode>(search.modo === "criar" ? "signup" : "signin");
   // A brand-new account goes through the short onboarding before the app.
   const justSignedUp = useRef(false);
+  // Leave /auth exactly once, however many auth events arrive.
+  const leavingRef = useRef(false);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -64,12 +66,17 @@ function AuthPage() {
     return subscribeAuth((u) => {
       const authed = !!u && !u.isAnonymous;
       setAlreadyAuthed(authed);
-      if (authed) {
-        router.invalidate();
+      if (authed && !leavingRef.current) {
+        leavingRef.current = true;
         if (justSignedUp.current) {
-          navigate({ to: "/bem-vindo", search: { redirect: redirectTo }, replace: true });
+          navigate({
+            to: "/bem-vindo",
+            search: { redirect: redirectTo },
+            replace: true,
+            viewTransition: false,
+          });
         } else {
-          navigate({ to: redirectTo, replace: true });
+          navigate({ to: redirectTo, replace: true, viewTransition: false });
         }
       }
     });
@@ -112,11 +119,16 @@ function AuthPage() {
         justSignedUp.current = true;
         await signUpWithEmail(email, password, name);
         router.invalidate();
-        navigate({ to: "/bem-vindo", search: { redirect: redirectTo }, replace: true });
+        navigate({
+          to: "/bem-vindo",
+          search: { redirect: redirectTo },
+          replace: true,
+          viewTransition: false,
+        });
       } else {
         await signInWithEmail(email, password);
         router.invalidate();
-        navigate({ to: redirectTo, replace: true });
+        navigate({ to: redirectTo, replace: true, viewTransition: false });
       }
     } catch (err: unknown) {
       justSignedUp.current = false;
@@ -135,7 +147,7 @@ function AuthPage() {
     try {
       await signInWithGoogle();
       router.invalidate();
-      navigate({ to: redirectTo, replace: true });
+      navigate({ to: redirectTo, replace: true, viewTransition: false });
     } catch (err: unknown) {
       setError(friendlyError(err));
       setInvalidKey(isInvalidKeyError(err));

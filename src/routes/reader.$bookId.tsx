@@ -1722,11 +1722,11 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
           </>
         )}
 
-        {settings.mode === "paginated" && showPageGestureHint && (
+        {settings.mode === "paginated" && showPageGestureHint && !panelOpen && !tocOpen && (
           <button
             type="button"
             onClick={dismissPageGestureHint}
-            className="fixed bottom-[max(4.75rem,calc(env(safe-area-inset-bottom)+4.75rem))] left-1/2 z-[60] max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-full border px-4 py-2 text-center text-xs shadow-lg backdrop-blur-md transition hover:opacity-80"
+            className="fixed bottom-[max(5.5rem,calc(env(safe-area-inset-bottom)+5.5rem))] left-1/2 z-[38] max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-full border px-4 py-2 text-center text-xs shadow-lg backdrop-blur-md transition hover:opacity-80"
             style={{
               borderColor: theme.rule,
               color: theme.fg,
@@ -1734,7 +1734,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
               fontFamily: "var(--font-sans)",
             }}
           >
-            Deslize à direita para avançar a página
+            Toque na borda ou deslize para virar a página
           </button>
         )}
 
