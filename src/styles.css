@@ -3,16 +3,18 @@
 @import "tw-animate-css";
 
 /*
- * BookVerse — social reading, with room to breathe.
- * The warm reading surface lives alongside a clear blue navigation system.
- * `gold` is retained as the semantic accent name so existing features keep
- * working, but now resolves to the BookVerse blue rather than a metallic hue.
+ * BookVerse — "capa viva".
+ * A bright, editorial reading app: ink, paper and one vermilion accent, while
+ * each book's own cover colour tints the screens that belong to it.
+ * `gold` is kept as the semantic accent name so older components keep
+ * working; it now resolves to the BookVerse vermilion.
  */
 
 @theme inline {
-  --font-display: "Instrument Serif", "Iowan Old Style", Georgia, serif;
-  --font-sans: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-book: "Newsreader Variable", "Literata Variable", Georgia, serif;
+  --font-display: "Bricolage Grotesque Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-book: "Literata Variable", Georgia, serif;
+  --font-cover: "Instrument Serif", Georgia, serif;
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -40,8 +42,6 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
-  /* `gold` is the historical name of the accent; it now resolves to each
-     ambience's own accent (brass, silver-blue, rose gold, signal yellow…). */
   --color-gold: var(--gold);
   --color-gold-soft: var(--gold-soft);
   --color-oxide: var(--oxide);
@@ -55,181 +55,98 @@
   --color-night-foreground: var(--night-foreground);
   --color-paper: var(--paper);
   --color-paper-ink: var(--paper-ink);
+  --color-faint: var(--faint);
+  --color-accent-soft: var(--accent-soft);
+  --color-lilac: var(--lilac);
+  --color-mint: var(--mint);
+  --color-sky: var(--sky);
+  --color-rose: var(--rose);
+  --color-butter: var(--butter);
 
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
-  --shadow-glow: 0 18px 48px -22px color-mix(in oklab, var(--gold) 60%, transparent);
-  --shadow-plate: 0 30px 70px -40px rgb(0 0 0 / 0.65);
+  --shadow-glow: 0 14px 30px -14px color-mix(in oklab, var(--gold) 70%, transparent);
+  --shadow-plate: 0 30px 60px -30px rgb(0 0 0 / 0.35);
+  --shadow-book: 0 1px 1px rgb(0 0 0 / 0.08), 0 10px 22px -10px rgb(0 0 0 / 0.35);
+  --shadow-book-lift: 0 2px 2px rgb(0 0 0 / 0.06), 0 30px 50px -18px rgb(0 0 0 / 0.45),
+    0 14px 24px -14px rgb(0 0 0 / 0.35);
   --gradient-gold: linear-gradient(180deg, var(--gold-soft), var(--gold));
   --gradient-ember: radial-gradient(
     ellipse at top,
-    color-mix(in oklab, var(--gold) 22%, transparent),
+    color-mix(in oklab, var(--gold) 14%, transparent),
     transparent 62%
   );
 }
 
-/*
- * BookVerse ambiences. `data-theme` on <html> always holds the *resolved*
- * ambience (lib/theme.ts maps "automático" to Noturna or Papel following the
- * OS). Every pair was checked for WCAG AA contrast on body text.
- */
+/* App appearance. `data-theme` on <html> holds the resolved value; see
+   lib/theme.ts. Both pairs were checked for WCAG AA on body text. */
 :root,
-[data-theme="noturna"] {
-  --radius: 1rem;
-  color-scheme: dark;
-  --ink: #0b0f0d;
-  --surface: #121915;
-  --surface-2: #19221d;
-  --parchment: #efe6d2;
-  --gold: #d9a54e;
-  --gold-soft: #f0c77a;
-  --oxide: #9c6f27;
-  --warm: #e0703f;
-  --success: #8db49a;
-  --night: #070a09;
-  --night-foreground: #efe6d2;
-  --paper: #f3ead8;
-  --paper-ink: #2a241b;
-  --muted-foreground: #a9a291;
-  --border: rgb(239 230 210 / 0.11);
-  --input: rgb(239 230 210 / 0.16);
-  --primary-foreground: #1a1208;
-  --destructive: #e5675c;
-  --ambient-1: rgb(217 165 78 / 0.13);
-  --ambient-2: rgb(47 74 60 / 0.38);
-  --shelf: #3a2a19;
-  --shelf-2: #22170d;
-}
-
-[data-theme="papel"] {
+[data-theme="claro"] {
+  --radius: 1.25rem;
   color-scheme: light;
-  --ink: #f5efe3;
-  --surface: #fbf8f1;
-  --surface-2: #ece4d4;
-  --parchment: #1f231f;
-  --gold: #94641b;
-  --gold-soft: #b8842f;
-  --oxide: #7a5216;
-  --warm: #c2552b;
-  --success: #3e7a55;
-  --night: #16201b;
-  --night-foreground: #f3ead8;
+  --ink: #f4f3ef;
+  --surface: #ffffff;
+  --surface-2: #ecebe6;
+  --parchment: #131313;
+  --muted-foreground: #5c5b56;
+  --faint: #8d8c86;
+  --gold: #ff4d1a;
+  --gold-soft: #ff7a4d;
+  --oxide: #d93d0f;
+  --accent-soft: #ffe7dd;
+  --warm: #ff4d1a;
+  --success: #1f8a52;
+  --night: #141416;
+  --night-foreground: #f4f3ef;
   --paper: #fffdf8;
-  --paper-ink: #2a241b;
-  --muted-foreground: #645e52;
-  --border: rgb(31 35 31 / 0.12);
-  --input: rgb(31 35 31 / 0.18);
-  --primary-foreground: #fff8ea;
-  --destructive: #b8382c;
-  --ambient-1: rgb(243 205 132 / 0.38);
-  --ambient-2: rgb(170 195 160 / 0.22);
-  --shelf: #c9a77a;
-  --shelf-2: #a5824f;
-}
-
-[data-theme="sepia"] {
-  color-scheme: light;
-  --ink: #eadcbf;
-  --surface: #f2e7cf;
-  --surface-2: #dfceab;
-  --parchment: #3a2a1b;
-  --gold: #8a4b17;
-  --gold-soft: #a8642a;
-  --oxide: #6e3a10;
-  --warm: #b2481f;
-  --success: #4f6f3a;
-  --night: #2b1f14;
-  --night-foreground: #f3e6cc;
-  --paper: #f6ecd6;
-  --paper-ink: #3a2a1b;
-  --muted-foreground: #6f5a3c;
-  --border: rgb(58 42 27 / 0.16);
-  --input: rgb(58 42 27 / 0.22);
-  --primary-foreground: #fbf3e2;
-  --destructive: #a83226;
-  --ambient-1: rgb(205 150 80 / 0.3);
-  --ambient-2: rgb(150 110 60 / 0.18);
-  --shelf: #8a6238;
-  --shelf-2: #5e3f20;
-}
-
-[data-theme="meia-noite"] {
-  color-scheme: dark;
-  --ink: #0a0f1c;
-  --surface: #111829;
-  --surface-2: #182137;
-  --parchment: #e6ecf8;
-  --gold: #8fb4ff;
-  --gold-soft: #bcd1ff;
-  --oxide: #5b7fd1;
-  --warm: #ff9466;
-  --success: #7fd3a8;
-  --night: #060914;
-  --night-foreground: #e6ecf8;
-  --paper: #eef2fa;
-  --paper-ink: #1b2233;
-  --muted-foreground: #96a3be;
-  --border: rgb(230 236 248 / 0.1);
-  --input: rgb(230 236 248 / 0.16);
-  --primary-foreground: #0a0f1c;
-  --destructive: #ff7a70;
-  --ambient-1: rgb(110 150 255 / 0.16);
-  --ambient-2: rgb(90 60 190 / 0.2);
-  --shelf: #26314a;
-  --shelf-2: #151c2d;
-}
-
-[data-theme="bordo"] {
-  color-scheme: dark;
-  --ink: #150a0d;
-  --surface: #1f0f14;
-  --surface-2: #2a161c;
-  --parchment: #f4e4df;
-  --gold: #e7a17a;
-  --gold-soft: #f6c4a6;
-  --oxide: #b86a4c;
-  --warm: #ff8a5c;
-  --success: #9cc9a5;
-  --night: #0c0507;
-  --night-foreground: #f4e4df;
-  --paper: #f7ebe4;
-  --paper-ink: #2b1a1a;
-  --muted-foreground: #bc9e97;
-  --border: rgb(244 228 223 / 0.11);
-  --input: rgb(244 228 223 / 0.17);
-  --primary-foreground: #1d0c10;
-  --destructive: #ff7b70;
-  --ambient-1: rgb(231 161 122 / 0.14);
-  --ambient-2: rgb(130 30 55 / 0.38);
-  --shelf: #4a2520;
-  --shelf-2: #2a1310;
-}
-
-[data-theme="contraste"] {
-  color-scheme: dark;
-  --ink: #000000;
-  --surface: #0c0c0c;
-  --surface-2: #1a1a1a;
-  --parchment: #ffffff;
-  --gold: #ffd60a;
-  --gold-soft: #ffe45c;
-  --oxide: #ffd60a;
-  --warm: #ff9f1c;
-  --success: #5cff9d;
-  --night: #000000;
-  --night-foreground: #ffffff;
-  --paper: #ffffff;
-  --paper-ink: #000000;
-  --muted-foreground: #dcdcdc;
-  --border: rgb(255 255 255 / 0.42);
-  --input: rgb(255 255 255 / 0.6);
-  --primary-foreground: #000000;
-  --destructive: #ff5c5c;
+  --paper-ink: #1b1b1b;
+  --border: #e4e2dc;
+  --input: #d9d7d0;
+  --primary-foreground: #ffffff;
+  --destructive: #d93025;
+  --lilac: #e3e0ff;
+  --mint: #d8efe2;
+  --sky: #dbe8ff;
+  --rose: #fbe0e6;
+  --butter: #fff0bf;
   --ambient-1: transparent;
   --ambient-2: transparent;
-  --shelf: #555555;
-  --shelf-2: #333333;
+  --shelf: #e2dfd7;
+  --shelf-2: #cfcbc1;
+}
+
+[data-theme="escuro"] {
+  color-scheme: dark;
+  --ink: #0c0c0e;
+  --surface: #18181b;
+  --surface-2: #232327;
+  --parchment: #f3f2ee;
+  --muted-foreground: #a8a7a1;
+  --faint: #76756f;
+  --gold: #ff6436;
+  --gold-soft: #ff8a62;
+  --oxide: #ff4d1a;
+  --accent-soft: #3a1d13;
+  --warm: #ff6436;
+  --success: #4fd08b;
+  --night: #1f1f24;
+  --night-foreground: #f3f2ee;
+  --paper: #fffdf8;
+  --paper-ink: #1b1b1b;
+  --border: #2a2a2f;
+  --input: #3a3a40;
+  --primary-foreground: #ffffff;
+  --destructive: #ff6b60;
+  --lilac: #26234a;
+  --mint: #15302a;
+  --sky: #172640;
+  --rose: #3a1b24;
+  --butter: #3a3317;
+  --ambient-1: transparent;
+  --ambient-2: transparent;
+  --shelf: #2a2a2f;
+  --shelf-2: #1c1c20;
 }
 
 :root,
@@ -257,8 +174,6 @@
 
   html {
     scroll-behavior: smooth;
-    /* Decorative glows bleed past the edges on purpose; never let them
-       create a sideways scroll. `clip` keeps position: sticky working. */
     overflow-x: clip;
   }
 
@@ -267,12 +182,8 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
-    font-feature-settings: "kern", "liga";
+    font-feature-settings: "cv11", "ss01";
     -webkit-font-smoothing: antialiased;
-    background-image:
-      radial-gradient(ellipse 75% 45% at 50% -8%, var(--ambient-1), transparent 62%),
-      radial-gradient(ellipse 60% 40% at 95% 100%, var(--ambient-2), transparent 62%);
-    background-attachment: fixed;
     transition:
       background-color 0.25s ease,
       color 0.25s ease;
@@ -281,26 +192,26 @@
   h1,
   h2,
   h3,
-  h4 {
+  h4,
+  .font-display {
     font-family: var(--font-display);
-    font-weight: 400;
-    letter-spacing: -0.01em;
-  }
-
-  /* Instrument Serif ships a single weight: never let the browser fake a
-     bold version of it. */
-  * {
-    font-synthesis-weight: none;
+    font-weight: 720;
+    letter-spacing: -0.035em;
   }
 
   ::selection {
-    background: color-mix(in oklab, var(--gold) 26%, transparent);
+    background: color-mix(in oklab, var(--gold) 22%, transparent);
     color: var(--foreground);
   }
 
   :focus-visible {
     outline: 3px solid color-mix(in oklab, var(--gold) 55%, transparent);
     outline-offset: 3px;
+  }
+
+  button,
+  [role="button"] {
+    cursor: pointer;
   }
 }
 
@@ -892,10 +803,10 @@
 /* Shared primitives ------------------------------------------------------ */
 @utility eyebrow {
   font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.22em;
+  font-weight: 650;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--gold);
+  color: var(--faint);
 }
 
 @utility btn-primary {
@@ -904,25 +815,19 @@
   justify-content: center;
   gap: 0.5rem;
   border-radius: 999px;
-  background: linear-gradient(180deg, var(--gold-soft), var(--gold));
-  color: var(--primary-foreground);
-  font-weight: 600;
+  background: var(--parchment);
+  color: var(--ink);
+  font-weight: 650;
   font-size: 0.9375rem;
-  padding: 0.8rem 1.4rem;
+  letter-spacing: -0.01em;
+  padding: 0.85rem 1.4rem;
   white-space: nowrap;
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.4),
-    0 14px 30px -14px color-mix(in oklab, var(--gold) 80%, transparent);
   transition:
-    transform 220ms var(--ease-out-expo),
-    box-shadow 220ms ease,
-    filter 220ms ease;
+    transform 200ms var(--ease-out-expo),
+    opacity 200ms ease;
 }
 .btn-primary:hover {
-  filter: brightness(1.06);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.45),
-    0 20px 40px -16px color-mix(in oklab, var(--gold) 90%, transparent);
+  opacity: 0.9;
 }
 .btn-primary:active {
   transform: scale(0.97);
@@ -934,33 +839,29 @@
   justify-content: center;
   gap: 0.5rem;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  background: color-mix(in oklab, var(--card) 70%, transparent);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--border);
   color: var(--foreground);
-  font-weight: 600;
+  font-weight: 650;
   font-size: 0.9375rem;
-  padding: 0.8rem 1.4rem;
-  backdrop-filter: blur(8px);
+  letter-spacing: -0.01em;
+  padding: 0.85rem 1.4rem;
+  white-space: nowrap;
   transition:
-    border-color 200ms ease,
-    color 200ms ease,
+    background-color 200ms ease,
     transform 200ms var(--ease-out-expo);
 }
 .btn-ghost:hover {
-  border-color: color-mix(in oklab, var(--gold) 50%, var(--border));
-  color: var(--gold);
+  background: var(--surface-2);
 }
 .btn-ghost:active {
   transform: scale(0.97);
 }
 
 @utility surface-card {
-  background: color-mix(in oklab, var(--card) 88%, transparent);
-  border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
-  border-radius: 1.5rem;
-  box-shadow:
-    0 1px 0 rgb(255 255 255 / 0.04) inset,
-    0 18px 40px -32px oklch(0.2 0.04 250 / 0.45);
+  background: var(--card);
+  border-radius: 1.6rem;
+  box-shadow: inset 0 0 0 1px var(--border);
 }
 
 @utility lift {
@@ -970,9 +871,7 @@
     border-color 260ms ease;
 }
 .lift:hover {
-  transform: translateY(-4px);
-  border-color: color-mix(in oklab, var(--gold) 40%, var(--border));
-  box-shadow: 0 26px 50px -30px color-mix(in oklab, var(--gold) 55%, transparent);
+  transform: translateY(-3px);
 }
 
 /* Bottom tab bar respects the iOS home indicator. */
@@ -1035,14 +934,7 @@
 
 /* Warm lamp glow blob — position it with absolute utilities. */
 @utility lamp-glow {
-  pointer-events: none;
-  border-radius: 999px;
-  background: radial-gradient(
-    circle,
-    color-mix(in oklab, var(--gold-soft) 30%, transparent),
-    color-mix(in oklab, var(--gold) 8%, transparent) 40%,
-    transparent 68%
-  );
+  display: none;
 }
 
 /* Hairline that catches the light. */
@@ -1058,7 +950,8 @@
 
 @utility num {
   font-family: var(--font-display);
-  font-style: italic;
+  font-weight: 720;
+  letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1172,4 +1065,94 @@
   .pdf-page-turn__sheet::after {
     animation-duration: 680ms !important;
   }
+}
+
+/* ==========================================================================
+   Capa viva — new primitives
+   ========================================================================== */
+@utility btn-accent {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  background: var(--gold);
+  color: #fff;
+  font-weight: 650;
+  font-size: 0.9375rem;
+  letter-spacing: -0.01em;
+  padding: 0.85rem 1.4rem;
+  white-space: nowrap;
+  box-shadow: 0 14px 30px -14px var(--gold);
+  transition: transform 200ms var(--ease-out-expo), filter 200ms ease;
+}
+.btn-accent:hover {
+  filter: brightness(1.05);
+}
+.btn-accent:active {
+  transform: scale(0.97);
+}
+
+@utility chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 2.25rem;
+  padding: 0 0.9rem;
+  border-radius: 999px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--surface);
+  color: var(--foreground);
+  box-shadow: inset 0 0 0 1px var(--border);
+  transition: background-color 160ms ease, color 160ms ease;
+}
+.chip[data-on="true"] {
+  background: var(--parchment);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+@utility book-shadow {
+  box-shadow: var(--shadow-book);
+}
+@utility book-shadow-lift {
+  box-shadow: var(--shadow-book-lift);
+}
+
+@utility glass-bar {
+  background: color-mix(in oklab, var(--surface) 86%, transparent);
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  box-shadow: inset 0 0 0 1px var(--border), 0 20px 40px -20px rgb(0 0 0 / 0.35);
+}
+
+@keyframes lumi-blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95% { transform: scaleY(0.1); }
+}
+.lumi-blink {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: lumi-blink 5.5s ease-in-out infinite;
+}
+@keyframes lumi-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+.lumi-bob {
+  animation: lumi-bob 3.6s ease-in-out infinite;
+}
+@keyframes lumi-wave {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-14deg); }
+}
+.lumi-wave {
+  transform-box: view-box;
+  transform-origin: 296px 220px;
+  animation: lumi-wave 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lumi-blink, .lumi-bob, .lumi-wave { animation: none; }
 }

@@ -1,19 +1,12 @@
-import {
-  Compass,
-  Feather,
-  Flame,
-  LampDesk,
-  LibraryBig,
-  Users,
-  type LucideIcon,
-} from "lucide-react";
+import { CircleUserRound, Compass, House, LibraryBig, type LucideIcon } from "lucide-react";
+import { useEffect, useState } from "react";
 
 /** Single source of truth for the app's navigation destinations. */
 export const DISCOVER_SEARCH = { q: undefined, categoria: undefined } as const;
 
-export type MemberDestination =
-  "/" | "/descobrir" | "/biblioteca" | "/diario" | "/metas" | "/ranking";
+export type MemberDestination = "/" | "/descobrir" | "/biblioteca" | "/perfil";
 
+/** The four tabs: Início · Explorar · Biblioteca · Você. */
 export const MEMBER_NAV: {
   label: string;
   to: MemberDestination;
@@ -21,12 +14,15 @@ export const MEMBER_NAV: {
   /** Extra paths that also light this item up. */
   also?: string[];
 }[] = [
-  { label: "Início", to: "/", icon: LampDesk },
-  { label: "Descobrir", to: "/descobrir", icon: Compass, also: ["/livro", "/catalogo"] },
-  { label: "Estante", to: "/biblioteca", icon: LibraryBig },
-  { label: "Diário", to: "/diario", icon: Feather },
-  { label: "Jornada", to: "/metas", icon: Flame, also: ["/desafios"] },
-  { label: "Clube", to: "/ranking", icon: Users },
+  { label: "Início", to: "/", icon: House },
+  { label: "Explorar", to: "/descobrir", icon: Compass, also: ["/livro", "/catalogo"] },
+  { label: "Biblioteca", to: "/biblioteca", icon: LibraryBig },
+  {
+    label: "Você",
+    to: "/perfil",
+    icon: CircleUserRound,
+    also: ["/metas", "/desafios", "/ranking", "/diario"],
+  },
 ];
 
 export function isNavActive(
@@ -53,7 +49,17 @@ export interface LastBook {
   id: string;
   title?: string;
   author?: string;
+  /** 0–1 through the whole book. */
+  progress?: number;
+  /** e.g. "Cap. 32". */
+  chapter?: string;
+  /** Minutes left in the current chapter, when known. */
+  chapterMinutesLeft?: number;
+  cover?: string;
+  updatedAt?: number;
 }
+
+const LAST_BOOK_EVENT = "bookverse:last-book";
 
 export function getLastBookInfo(): LastBook | null {
   try {
@@ -72,10 +78,51 @@ export function getLastBook(): string | null {
   return getLastBookInfo()?.id ?? null;
 }
 
-export function rememberLastBook(readerId: string, title?: string, author?: string) {
+/** Records the book being read (merging with what is already known about it). */
+export function rememberLastBook(
+  readerId: string,
+  title?: string,
+  author?: string,
+  extra: Partial<Omit<LastBook, "id" | "title" | "author">> = {},
+) {
   try {
-    localStorage.setItem(LAST_BOOK_KEY, JSON.stringify({ id: readerId, title, author }));
+    const prev = getLastBookInfo();
+    const base = prev?.id === readerId ? prev : { id: readerId };
+    const next: LastBook = {
+      ...base,
+      ...(title ? { title } : {}),
+      ...(author ? { author } : {}),
+      ...extra,
+      updatedAt: Date.now(),
+    };
+    localStorage.setItem(LAST_BOOK_KEY, JSON.stringify(next));
+    window.dispatchEvent(new Event(LAST_BOOK_EVENT));
   } catch {
-    // storage unavailable — "Ler" falls back to Descobrir
+    // storage unavailable — "Lendo agora" just stays hidden
   }
+}
+
+export function forgetLastBook() {
+  try {
+    localStorage.removeItem(LAST_BOOK_KEY);
+    window.dispatchEvent(new Event(LAST_BOOK_EVENT));
+  } catch {
+    // ignore
+  }
+}
+
+/** Live view of the book being read — powers the "Lendo agora" bar. */
+export function useLastBook(): LastBook | null {
+  const [book, setBook] = useState<LastBook | null>(null);
+  useEffect(() => {
+    const sync = () => setBook(getLastBookInfo());
+    sync();
+    window.addEventListener(LAST_BOOK_EVENT, sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener(LAST_BOOK_EVENT, sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
+  return book;
 }

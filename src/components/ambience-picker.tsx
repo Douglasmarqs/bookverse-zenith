@@ -3,7 +3,6 @@ import { Check } from "lucide-react";
 
 import { useSiteTheme } from "@/hooks/use-site-theme";
 import {
-  THEME_DESCRIPTION,
   THEME_LABEL,
   THEME_PREVIEW,
   allThemes,
@@ -11,52 +10,39 @@ import {
   type SiteTheme,
 } from "@/lib/theme";
 
-/** A tiny scene of the ambience: a lamp glow, a page and a shelf of spines. */
-function Swatch({ theme }: { theme: ResolvedTheme }) {
+/** A tiny phone screen in the given appearance. */
+function Swatch({ theme, half }: { theme: ResolvedTheme; half?: "left" | "right" }) {
   const c = THEME_PREVIEW[theme];
   return (
-    <span className="absolute inset-0 overflow-hidden" style={{ background: c.bg }}>
+    <span
+      className="absolute inset-0 overflow-hidden"
+      style={{
+        background: c.bg,
+        clipPath:
+          half === "left" ? "inset(0 50% 0 0)" : half === "right" ? "inset(0 0 0 50%)" : undefined,
+      }}
+    >
       <span
-        className="absolute -right-6 -top-8 h-24 w-24 rounded-full opacity-40 blur-xl"
-        style={{ background: c.accent }}
+        className="absolute left-2.5 top-2.5 h-1.5 w-8 rounded-full"
+        style={{ background: c.fg, opacity: 0.8 }}
       />
       <span
-        className="absolute left-2.5 top-2.5 h-1.5 w-7 rounded-full"
-        style={{ background: c.accent }}
+        className="absolute inset-x-2.5 top-6 h-8 rounded-[8px]"
+        style={{ background: "#1D4A37", boxShadow: "0 4px 10px -6px rgb(0 0 0 / .5)" }}
       />
-      <span
-        className="absolute left-2.5 top-5 h-1 w-11 rounded-full opacity-50"
-        style={{ background: c.fg }}
-      />
-      <span className="absolute bottom-2.5 left-2.5 flex items-end gap-[3px]">
-        {[0.9, 0.7, 1, 0.8, 0.6].map((h, i) => (
+      <span className="absolute bottom-2.5 left-2.5 right-2.5 flex gap-1.5">
+        {[0, 1].map((i) => (
           <span
             key={i}
-            className="w-[7px] rounded-t-[1px]"
-            style={{
-              height: `${h * 26}px`,
-              background: i === 2 ? c.accent : c.surface,
-              boxShadow: `inset 0 0 0 1px ${c.fg}22`,
-            }}
+            className="h-5 flex-1 rounded-[6px]"
+            style={{ background: c.surface, boxShadow: `inset 0 0 0 1px ${c.fg}18` }}
           />
         ))}
       </span>
       <span
-        className="absolute bottom-2.5 right-2.5 top-7 flex w-[46%] flex-col gap-[5px] rounded-[4px] p-2"
-        style={{ background: c.surface, boxShadow: `0 6px 14px -8px rgb(0 0 0 / 0.5)` }}
-      >
-        {[1, 0.86, 0.94, 0.6].map((w, i) => (
-          <span
-            key={i}
-            className="h-[3px] rounded-full"
-            style={{
-              width: `${w * 100}%`,
-              background: i === 1 ? c.accent : c.fg,
-              opacity: i === 1 ? 0.9 : 0.35,
-            }}
-          />
-        ))}
-      </span>
+        className="absolute bottom-9 left-2.5 h-1.5 w-1.5 rounded-full"
+        style={{ background: c.accent }}
+      />
     </span>
   );
 }
@@ -72,8 +58,8 @@ export function AmbiencePicker({
   return (
     <div
       role="radiogroup"
-      aria-label="Ambiente do aplicativo"
-      className={`grid gap-2.5 ${compact ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-4"}`}
+      aria-label="Aparência do aplicativo"
+      className={`grid grid-cols-3 ${compact ? "gap-2" : "gap-3"}`}
     >
       {allThemes().map((t) => {
         const selected = theme === t;
@@ -87,52 +73,35 @@ export function AmbiencePicker({
               setTheme(t);
               onPicked?.(t);
             }}
-            className="press group relative rounded-2xl border border-border p-1.5 text-left transition-colors hover:border-gold/50"
+            className="press group flex flex-col items-center gap-2 text-center"
           >
-            <span className="relative block aspect-[16/10] overflow-hidden rounded-xl ring-1 ring-black/10 transition-transform duration-300 group-hover:scale-[1.02]">
+            <span
+              className={`relative block w-full overflow-hidden rounded-2xl ${compact ? "h-20" : "h-28"} ${
+                selected ? "ring-[2.5px] ring-gold" : "ring-1 ring-border"
+              }`}
+            >
               {t === "auto" ? (
                 <>
-                  <span
-                    className="absolute inset-0"
-                    style={{ clipPath: "polygon(0 0, 100% 0, 0 100%)" }}
-                  >
-                    <Swatch theme="papel" />
-                  </span>
-                  <span
-                    className="absolute inset-0"
-                    style={{ clipPath: "polygon(100% 0, 100% 100%, 0 100%)" }}
-                  >
-                    <Swatch theme="noturna" />
-                  </span>
+                  <Swatch theme="claro" half="left" />
+                  <Swatch theme="escuro" half="right" />
                 </>
               ) : (
                 <Swatch theme={t} />
               )}
-            </span>
-            <span className="mt-2 flex items-center justify-between gap-2 px-1 pb-0.5">
-              <span className="text-[13px] font-semibold">{THEME_LABEL[t]}</span>
               {selected && (
                 <motion.span
                   layoutId="ambience-check"
-                  className="grid h-5 w-5 place-items-center rounded-full bg-gold text-primary-foreground"
-                  transition={{ type: "spring", stiffness: 500, damping: 32 }}
+                  className="absolute right-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-gold text-white"
                 >
-                  <Check className="h-3 w-3" />
+                  <Check className="h-3 w-3" strokeWidth={3} />
                 </motion.span>
               )}
             </span>
-            {!compact && (
-              <span className="block px-1 pb-1 text-[11px] leading-snug text-muted-foreground">
-                {THEME_DESCRIPTION[t]}
-              </span>
-            )}
-            {selected && (
-              <motion.span
-                layoutId="ambience-ring"
-                className="pointer-events-none absolute inset-0 rounded-2xl ring-2 ring-gold"
-                transition={{ type: "spring", stiffness: 500, damping: 36 }}
-              />
-            )}
+            <span
+              className={`text-xs font-semibold ${selected ? "text-foreground" : "text-muted-foreground"}`}
+            >
+              {THEME_LABEL[t]}
+            </span>
           </button>
         );
       })}

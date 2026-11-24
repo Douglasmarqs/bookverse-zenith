@@ -2,13 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useLayoutEffect, useState } from "react";
 
 import { LandingPage } from "@/components/landing/landing-page";
-import { ReaderDashboard } from "@/components/home/reader-dashboard";
+import { HomeScreen } from "@/components/home/home-screen";
 import { SESSION_HINT_KEY, useAuthState } from "@/hooks/use-auth-user";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "BookVerse — Leia mais. Leia melhor." },
+      { title: "BookVerse — todo livro, a um toque" },
       {
         name: "description",
         content:
@@ -33,19 +33,23 @@ function Home() {
     }
   }, []);
 
-  if (signedIn && user) return <ReaderDashboard user={user} />;
+  if (signedIn && user) return <HomeScreen user={user} />;
   if (!ready && expectSession) return <DashboardSkeleton />;
   return <LandingPage />;
 }
 
 function DashboardSkeleton() {
   return (
-    <div className="mx-auto max-w-7xl px-5 pt-10 md:px-8" aria-busy="true" aria-live="polite">
+    <div
+      className="mx-auto max-w-6xl px-5 pt-6 lg:px-10 lg:pt-10"
+      aria-busy="true"
+      aria-live="polite"
+    >
       <div className="h-4 w-40 animate-pulse rounded bg-secondary" />
       <div className="mt-3 h-9 w-72 animate-pulse rounded-lg bg-secondary" />
-      <div className="mt-8 grid gap-5 lg:grid-cols-[1.6fr_1fr]">
-        <div className="h-60 animate-pulse rounded-3xl bg-secondary/70" />
-        <div className="h-60 animate-pulse rounded-3xl bg-secondary/50" />
+      <div className="mt-6 grid gap-3 lg:grid-cols-[1.6fr_1fr] lg:gap-5">
+        <div className="h-72 animate-pulse rounded-[30px] bg-secondary/70" />
+        <div className="h-72 animate-pulse rounded-[30px] bg-secondary/50" />
       </div>
       <span className="sr-only">Carregando sua estante…</span>
     </div>

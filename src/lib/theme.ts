@@ -1,51 +1,40 @@
 /**
- * Site-wide ambiences — the whole app's look (Home, Estante, Perfil…). The
- * reading surface has its own, independent theme in reader-store.ts.
+ * App appearance — the whole app's look (Início, Biblioteca, Você…). The
+ * reading surface has its own, independent themes in reader-store.ts.
  *
- * The preference is stored per device. "auto" follows the operating system:
- * Noturna when it is dark, Papel when it is light, switching live.
+ * The preference is stored per device. "auto" follows the operating system
+ * and switches live.
  */
 
-export type ResolvedTheme = "noturna" | "papel" | "sepia" | "meia-noite" | "bordo" | "contraste";
+export type ResolvedTheme = "claro" | "escuro";
 export type SiteTheme = "auto" | ResolvedTheme;
 
 const STORAGE_KEY = "bookverse:theme";
-const THEMES: SiteTheme[] = [
-  "auto",
-  "noturna",
-  "papel",
-  "sepia",
-  "meia-noite",
-  "bordo",
-  "contraste",
-];
+const THEMES: SiteTheme[] = ["auto", "claro", "escuro"];
 
-/** Preferences saved by earlier versions of the app. */
+/** Preferences saved by earlier versions of the app (the old ambiences). */
 const LEGACY: Record<string, SiteTheme> = {
-  dark: "noturna",
-  light: "papel",
-  paper: "papel",
-  sepia: "sepia",
+  dark: "escuro",
+  noturna: "escuro",
+  "meia-noite": "escuro",
+  bordo: "escuro",
+  contraste: "escuro",
+  light: "claro",
+  paper: "claro",
+  papel: "claro",
+  sepia: "claro",
 };
 
 export const THEME_LABEL: Record<SiteTheme, string> = {
   auto: "Automático",
-  noturna: "Noturna",
-  papel: "Papel",
-  sepia: "Sépia",
-  "meia-noite": "Meia-noite",
-  bordo: "Bordô",
-  contraste: "Alto contraste",
+  claro: "Claro",
+  escuro: "Escuro",
 };
 
 export const THEME_DESCRIPTION: Record<SiteTheme, string> = {
   auto: "Segue o claro ou escuro do seu aparelho",
-  noturna: "Verde-noite e latão, para ler à luz do abajur",
-  papel: "Papel claro e tinta, confortável de dia",
-  sepia: "Tons quentes de livro antigo",
-  "meia-noite": "Azul profundo com prata",
-  bordo: "Vinho escuro com ouro rosé",
-  contraste: "Preto, branco e amarelo para máxima legibilidade",
+  claro: "Branco e limpo, ótimo de dia",
+  escuro: "Confortável à noite",
 };
 
 /** Representative colours for swatches: background, surface, text, accent. */
@@ -53,21 +42,13 @@ export const THEME_PREVIEW: Record<
   ResolvedTheme,
   { bg: string; surface: string; fg: string; accent: string }
 > = {
-  noturna: { bg: "#0b0f0d", surface: "#19221d", fg: "#efe6d2", accent: "#d9a54e" },
-  papel: { bg: "#f5efe3", surface: "#fbf8f1", fg: "#1f231f", accent: "#94641b" },
-  sepia: { bg: "#eadcbf", surface: "#f2e7cf", fg: "#3a2a1b", accent: "#8a4b17" },
-  "meia-noite": { bg: "#0a0f1c", surface: "#182137", fg: "#e6ecf8", accent: "#8fb4ff" },
-  bordo: { bg: "#150a0d", surface: "#2a161c", fg: "#f4e4df", accent: "#e7a17a" },
-  contraste: { bg: "#000000", surface: "#1a1a1a", fg: "#ffffff", accent: "#ffd60a" },
+  claro: { bg: "#f4f3ef", surface: "#ffffff", fg: "#131313", accent: "#ff4d1a" },
+  escuro: { bg: "#0c0c0e", surface: "#18181b", fg: "#f3f2ee", accent: "#ff6436" },
 };
 
 export const THEME_COLOR: Record<ResolvedTheme, string> = {
-  noturna: "#0b0f0d",
-  papel: "#f5efe3",
-  sepia: "#eadcbf",
-  "meia-noite": "#0a0f1c",
-  bordo: "#150a0d",
-  contraste: "#000000",
+  claro: "#f4f3ef",
+  escuro: "#0c0c0e",
 };
 
 function normalise(value: string | null): SiteTheme {
@@ -86,13 +67,13 @@ export function getStoredTheme(): SiteTheme {
 }
 
 export function systemPrefersDark(): boolean {
-  if (typeof window === "undefined" || !window.matchMedia) return true;
+  if (typeof window === "undefined" || !window.matchMedia) return false;
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
 
 export function resolveTheme(theme: SiteTheme): ResolvedTheme {
   if (theme !== "auto") return theme;
-  return systemPrefersDark() ? "noturna" : "papel";
+  return systemPrefersDark() ? "escuro" : "claro";
 }
 
 export function applyTheme(theme: SiteTheme, persist = true): ResolvedTheme {
@@ -106,7 +87,6 @@ export function applyTheme(theme: SiteTheme, persist = true): ResolvedTheme {
       .querySelector('meta[name="theme-color"]')
       ?.setAttribute("content", THEME_COLOR[resolved]);
   };
-  // A soft cross-fade between ambiences where the browser supports it.
   const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
   const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   if (
@@ -123,7 +103,7 @@ export function applyTheme(theme: SiteTheme, persist = true): ResolvedTheme {
     try {
       localStorage.setItem(STORAGE_KEY, theme);
     } catch {
-      // storage unavailable — the ambience just won't persist across reloads
+      // storage unavailable — the choice just won't persist across reloads
     }
   }
   return resolved;
@@ -134,7 +114,7 @@ export function allThemes(): SiteTheme[] {
 }
 
 /**
- * Inline, render-blocking script for <head>: applies the stored ambience
+ * Inline, render-blocking script for <head>: applies the stored appearance
  * before first paint (no flash), migrating old values on the way.
  */
-export const THEME_BOOT_SCRIPT = `(function(){try{var L={dark:'noturna',light:'papel',paper:'papel',sepia:'sepia'};var v=localStorage.getItem('${STORAGE_KEY}')||'auto';if(L[v])v=L[v];var ok=['auto','noturna','papel','sepia','meia-noite','bordo','contraste'];if(ok.indexOf(v)<0)v='auto';var r=v==='auto'?(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'papel':'noturna'):v;var d=document.documentElement;d.setAttribute('data-theme',r);d.setAttribute('data-theme-pref',v);}catch(e){}})();`;
+export const THEME_BOOT_SCRIPT = `(function(){try{var L=${JSON.stringify(LEGACY)};var v=localStorage.getItem('${STORAGE_KEY}')||'auto';if(L[v])v=L[v];if(['auto','claro','escuro'].indexOf(v)<0)v='auto';var r=v==='auto'?(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'escuro':'claro'):v;var d=document.documentElement;d.setAttribute('data-theme',r);d.setAttribute('data-theme-pref',v);}catch(e){}})();`;

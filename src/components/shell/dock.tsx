@@ -1,189 +1,57 @@
-import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { motion } from "motion/react";
-import { useEffect, useState } from "react";
-import {
-  BookOpen,
-  Compass,
-  Feather,
-  Flame,
-  LampDesk,
-  LibraryBig,
-  LogIn,
-  Menu,
-  Sparkles,
-  UserRound,
-  Users,
-} from "lucide-react";
 
 import { haptic } from "@/components/motion/interactive";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { openLumiPanel } from "@/lib/lumi-panel-store";
-import { DISCOVER_SEARCH, getLastBook, isNavActive } from "@/lib/nav";
-
-const MORE = [
-  { to: "/diario", label: "Diário", icon: Feather },
-  { to: "/metas", label: "Jornada", icon: Flame, also: ["/desafios"] },
-  { to: "/ranking", label: "Clube", icon: Users },
-  { to: "/perfil", label: "Perfil", icon: UserRound },
-] as const;
-
-function DockItem({
-  active,
-  label,
-  icon: Icon,
-}: {
-  active: boolean;
-  label: string;
-  icon: typeof Compass;
-}) {
-  return (
-    <>
-      <span className="relative grid h-8 w-12 place-items-center">
-        {active && (
-          <motion.span
-            layoutId="dock-active"
-            className="absolute inset-0 rounded-full bg-gold/15"
-            transition={{ type: "spring", stiffness: 500, damping: 34 }}
-          />
-        )}
-        <Icon className="relative h-[20px] w-[20px]" />
-      </span>
-      {label}
-    </>
-  );
-}
+import { MiniPlayer } from "@/components/shell/mini-player";
+import { DISCOVER_SEARCH, MEMBER_NAV, isNavActive } from "@/lib/nav";
 
 /**
- * Thumb-reachable navigation on phones and tablets. The raised centre
- * button reopens the last book — reading is always one tap away.
+ * Phone and tablet navigation: four thumb-reachable tabs, with the
+ * "Lendo agora" bar stacked on top so the book is always one tap away.
  */
-export function Dock({ signedIn }: { signedIn: boolean }) {
+export function Dock({ showMini = true }: { showMini?: boolean }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const navigate = useNavigate();
-  const [moreOpen, setMoreOpen] = useState(false);
-  const item = (active: boolean) =>
-    `press flex flex-1 flex-col items-center gap-0.5 py-1 text-[10.5px] font-medium transition-colors ${
-      active ? "text-gold" : "text-muted-foreground"
-    }`;
-
-  function openReader() {
-    haptic();
-    const last = getLastBook();
-    if (last) void navigate({ to: "/reader/$bookId", params: { bookId: last } });
-    else void navigate({ to: "/descobrir", search: DISCOVER_SEARCH });
-  }
-
-  const moreActive = MORE.some((m) => isNavActive(pathname, m));
-  const [hasLastBook, setHasLastBook] = useState(false);
-  useEffect(() => setHasLastBook(!!getLastBook()), [pathname]);
-
   return (
-    <>
-      <nav
-        aria-label="Navegação"
-        className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 rounded-[1.6rem] border border-border bg-background/85 px-1 shadow-[0_20px_50px_-20px_rgb(0_0_0/0.7)] backdrop-blur-xl lg:hidden"
-      >
-        <div className="mx-auto flex h-16 max-w-md items-center">
-          <Link to="/" className={item(pathname === "/")} onClick={() => haptic(5)}>
-            <DockItem active={pathname === "/"} label="Início" icon={LampDesk} />
-          </Link>
-          <Link
-            to="/descobrir"
-            search={DISCOVER_SEARCH}
-            className={item(isNavActive(pathname, { to: "/descobrir", also: ["/livro"] }))}
-            onClick={() => haptic(5)}
-          >
-            <DockItem
-              active={isNavActive(pathname, { to: "/descobrir", also: ["/livro"] })}
-              label="Descobrir"
-              icon={Compass}
-            />
-          </Link>
-          <div className="flex flex-1 justify-center">
-            <button
-              type="button"
-              onClick={openReader}
-              aria-label={hasLastBook ? "Continuar lendo" : "Escolher um livro para ler"}
-              className="press -mt-8 grid h-14 w-14 place-items-center rounded-full border-4 border-background bg-[linear-gradient(160deg,var(--gold-soft),var(--oxide))] text-primary-foreground shadow-[0_12px_26px_-8px_color-mix(in_oklab,var(--gold)_80%,transparent)]"
-            >
-              <BookOpen className="h-6 w-6" />
-            </button>
-          </div>
-          {signedIn ? (
-            <>
-              <Link
-                to="/biblioteca"
-                className={item(pathname.startsWith("/biblioteca"))}
-                onClick={() => haptic(5)}
-              >
-                <DockItem
-                  active={pathname.startsWith("/biblioteca")}
-                  label="Estante"
-                  icon={LibraryBig}
-                />
-              </Link>
-              <button type="button" onClick={() => setMoreOpen(true)} className={item(moreActive)}>
-                <DockItem active={moreActive} label="Mais" icon={Menu} />
-              </button>
-            </>
-          ) : (
-            <>
-              <button type="button" onClick={() => openLumiPanel()} className={item(false)}>
-                <DockItem active={false} label="Lumi" icon={Sparkles} />
-              </button>
-              <Link
-                to="/auth"
-                search={{ redirect: undefined }}
-                className={item(pathname === "/auth")}
-              >
-                <DockItem active={pathname === "/auth"} label="Entrar" icon={LogIn} />
-              </Link>
-            </>
-          )}
-        </div>
-      </nav>
-
-      <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
-        <SheetContent
-          side="bottom"
-          className="rounded-t-[2rem] border-border bg-background/95 pb-[max(1.5rem,env(safe-area-inset-bottom))] backdrop-blur-xl"
+    <div className="pointer-events-none fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 lg:hidden">
+      {/* Fades the page out under the bar so text never collides with it. */}
+      <div className="absolute inset-x-[-12px] -bottom-6 -top-16 -z-10 bg-gradient-to-b from-transparent via-background/85 to-background" />
+      <div className="pointer-events-auto mx-auto flex max-w-md flex-col gap-2">
+        {showMini && <MiniPlayer />}
+        <nav
+          aria-label="Navegação"
+          className="glass-bar flex h-[66px] items-center justify-around rounded-[26px] px-2"
         >
-          <SheetHeader>
-            <SheetTitle className="font-display text-3xl font-normal">Mais</SheetTitle>
-          </SheetHeader>
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {MORE.map((m, i) => (
-              <motion.div
-                key={m.to}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.04 * i, type: "spring", stiffness: 400, damping: 30 }}
+          {MEMBER_NAV.map((item) => {
+            const active = isNavActive(pathname, item);
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                search={item.to === "/descobrir" ? DISCOVER_SEARCH : undefined}
+                onClick={() => haptic(5)}
+                aria-current={active ? "page" : undefined}
+                className={`press relative flex w-[76px] flex-col items-center gap-1 py-2 text-[10.5px] font-semibold transition-colors ${
+                  active ? "text-foreground" : "text-faint"
+                }`}
               >
-                <Link
-                  to={m.to}
-                  onClick={() => setMoreOpen(false)}
-                  className="press flex flex-col items-center gap-2 rounded-2xl border border-border bg-card p-4 text-sm font-medium transition hover:border-gold/40"
-                >
-                  <span className="grid h-11 w-11 place-items-center rounded-xl bg-gold/12 text-gold">
-                    <m.icon className="h-5 w-5" />
-                  </span>
-                  {m.label}
-                </Link>
-              </motion.div>
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              setMoreOpen(false);
-              openLumiPanel();
-            }}
-            className="press mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-gold/30 bg-gold/10 py-3 text-sm font-semibold text-gold"
-          >
-            <Sparkles className="h-4 w-4" /> Falar com a Lumi
-          </button>
-        </SheetContent>
-      </Sheet>
-    </>
+                {active && (
+                  <motion.span
+                    layoutId="dock-active"
+                    className="absolute inset-x-2 inset-y-0 rounded-[18px] bg-accent-soft"
+                    transition={{ type: "spring", stiffness: 500, damping: 36 }}
+                  />
+                )}
+                <Icon
+                  className={`relative h-[21px] w-[21px] ${active ? "text-gold" : ""}`}
+                  strokeWidth={active ? 2.2 : 1.8}
+                />
+                <span className="relative">{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
+    </div>
   );
 }

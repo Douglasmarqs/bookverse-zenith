@@ -1,0 +1,523 @@
+import { Link } from "@tanstack/react-router";
+import { motion, useReducedMotion } from "motion/react";
+import { useEffect, useMemo, useState } from "react";
+import type { User } from "firebase/auth";
+import { ArrowRight, BookOpen, Compass, FileUp, Flame, Headphones, Search } from "lucide-react";
+
+import { BookArt } from "@/components/book-art";
+import { Lumi } from "@/components/brand/lumi";
+import { AccountMenu } from "@/components/shell/account-menu";
+import { openCommandPalette } from "@/lib/command-palette-store";
+import { LUMI_PICKS } from "@/lib/editorial";
+import { bookPalette } from "@/lib/faux-books";
+import { computeGoalProgress, currentYear, subscribeReadingGoal } from "@/lib/goals";
+import { subscribeLibrary, type LibraryEntry } from "@/lib/library";
+import { DISCOVER_SEARCH } from "@/lib/nav";
+import { getLocalOnboarding, loadOnboarding } from "@/lib/onboarding";
+import { gutenbergReaderId } from "@/lib/public-domain";
+import { subscribeReadingProgress, type StoredReadingProgress } from "@/lib/reader-store";
+import { useRitual } from "@/lib/ritual";
+import { subscribeUserProfile, type UserProfile } from "@/lib/user-profile";
+
+const EASE = [0.16, 1, 0.3, 1] as const;
+
+function greeting(date: Date) {
+  const h = date.getHours();
+  if (h < 5) return "Boa madrugada";
+  if (h < 12) return "Bom dia";
+  if (h < 18) return "Boa tarde";
+  return "Boa noite";
+}
+
+function progressRatio(progress?: StoredReadingProgress): number {
+  if (!progress) return 0;
+  const ratio =
+    progress.overallRatio ??
+    ((progress.chapterIndex ?? 0) + (progress.scrollRatio ?? 0)) /
+      Math.max(1, progress.chapterCount ?? 1);
+  return Math.max(0, Math.min(1, Number.isFinite(ratio) ? ratio : 0));
+}
+
+export function formatMinutes(min: number): string {
+  const m = Math.max(1, Math.round(min));
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  return r ? `${h}h ${String(r).padStart(2, "0")}min` : `${h}h`;
+}
+
+function Ring({ ratio, size = 52, stroke = 6 }: { ratio: number; size?: number; stroke?: number }) {
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox={`0 0 ${size} ${size}`}
+      className="-rotate-90"
+      aria-hidden
+    >
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        fill="none"
+        stroke="var(--surface-2)"
+        strokeWidth={stroke}
+      />
+      <motion.circle
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        fill="none"
+        stroke="var(--gold)"
+        strokeWidth={stroke}
+        strokeLinecap="round"
+        strokeDasharray={c}
+        initial={{ strokeDashoffset: c }}
+        animate={{ strokeDashoffset: c * (1 - ratio) }}
+        transition={{ duration: 1.1, ease: EASE, delay: 0.2 }}
+      />
+    </svg>
+  );
+}
+
+export function HomeScreen({ user }: { user: User }) {
+  const reduce = useReducedMotion();
+  const year = currentYear();
+  const [now, setNow] = useState(() => new Date());
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [library, setLibrary] = useState<LibraryEntry[] | null>(null);
+  const [progress, setProgress] = useState<StoredReadingProgress[]>([]);
+  const [goalTarget, setGoalTarget] = useState<number | null>(null);
+  const [onboarded, setOnboarded] = useState<boolean | null>(() =>
+    getLocalOnboarding(user.uid) ? true : null,
+  );
+  const ritual = useRitual(user.uid);
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const unsubs = [
+      subscribeUserProfile(user.uid, setProfile),
+      subscribeLibrary(user.uid, setLibrary),
+      subscribeReadingProgress(user.uid, setProgress),
+      subscribeReadingGoal(user.uid, year, (g) => setGoalTarget(g?.books ?? null)),
+    ];
+    const timer = setTimeout(() => setLibrary((l) => l ?? []), 10000);
+    return () => {
+      unsubs.forEach((u) => u());
+      clearTimeout(timer);
+    };
+  }, [user.uid, year]);
+
+  useEffect(() => {
+    if (onboarded) return;
+    let alive = true;
+    void loadOnboarding(user.uid).then((p) => alive && setOnboarded(!!p));
+    return () => {
+      alive = false;
+    };
+  }, [user.uid, onboarded]);
+
+  const progressByReader = useMemo(() => new Map(progress.map((p) => [p.bookId, p])), [progress]);
+  const reading = useMemo(
+    () =>
+      (library ?? [])
+        .filter((e) => (e.status === "lendo" || e.status === "relendo") && e.readerId)
+        .map((entry) => ({ entry, progress: progressByReader.get(entry.readerId!) }))
+        .sort((a, b) => (b.progress?.updatedAt ?? 0) - (a.progress?.updatedAt ?? 0)),
+    [library, progressByReader],
+  );
+  const current = reading[0];
+  const shelf = useMemo(
+    () =>
+      (library ?? [])
+        .filter((e) => e.status !== "abandonado" && e.id !== current?.entry.id)
+        .slice(0, 12),
+    [library, current],
+  );
+  const picks = useMemo(() => {
+    const owned = new Set((library ?? []).map((e) => e.title.toLowerCase()));
+    return LUMI_PICKS.filter((p) => !owned.has(p.title.toLowerCase())).slice(0, 10);
+  }, [library]);
+
+  const goal = computeGoalProgress(library ?? [], goalTarget ?? 0);
+  const streak = profile?.currentStreak ?? 0;
+  const firstName =
+    (profile?.displayName || user.displayName || "").trim().split(/\s+/)[0] || "leitor";
+  const ritualRatio = Math.min(1, ritual.todayMinutes / Math.max(1, ritual.goal));
+
+  const rise = (delay = 0) =>
+    reduce
+      ? {}
+      : {
+          initial: { opacity: 0, y: 14 },
+          animate: { opacity: 1, y: 0 },
+          transition: { duration: 0.6, ease: EASE, delay },
+        };
+
+  return (
+    <div className="mx-auto max-w-6xl px-4 pb-10 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6 lg:px-10 lg:pt-10">
+      {/* Header */}
+      <motion.header {...rise()} className="flex items-start justify-between gap-4 px-1">
+        <div className="min-w-0">
+          <p className="text-[13px] font-semibold text-faint first-letter:uppercase">
+            {now.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })}
+          </p>
+          <h1 className="mt-1.5 truncate text-[32px] leading-none lg:text-[44px]">
+            {greeting(now)}, {firstName}
+          </h1>
+        </div>
+        <div className="flex shrink-0 items-center gap-2 lg:hidden">
+          <button
+            type="button"
+            onClick={openCommandPalette}
+            aria-label="Buscar"
+            className="press grid h-[42px] w-[42px] place-items-center rounded-full bg-card shadow-[inset_0_0_0_1px_var(--border)]"
+          >
+            <Search className="h-[19px] w-[19px]" />
+          </button>
+          <AccountMenu />
+        </div>
+        {streak > 0 && (
+          <span className="hidden h-11 shrink-0 items-center gap-2 rounded-full bg-card px-4 text-sm font-bold shadow-[inset_0_0_0_1px_var(--border)] lg:inline-flex">
+            <Flame className="h-[18px] w-[18px] text-gold" /> {streak}{" "}
+            {streak === 1 ? "dia" : "dias"}
+          </span>
+        )}
+      </motion.header>
+
+      {onboarded === false && (
+        <motion.div {...rise(0.04)}>
+          <Link
+            to="/bem-vindo"
+            className="press mt-5 flex items-center gap-4 rounded-[26px] bg-accent-soft p-4 pr-5"
+          >
+            <Lumi pose="hello" size={64} shadow={false} />
+            <div className="min-w-0 flex-1">
+              <p className="font-display text-lg leading-tight">Vamos montar sua estante?</p>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Seus gostos e seu ritmo em 20 segundos.
+              </p>
+            </div>
+            <ArrowRight className="h-5 w-5 text-gold" />
+          </Link>
+        </motion.div>
+      )}
+
+      <div className="mt-5 grid gap-3 lg:mt-8 lg:grid-cols-[minmax(0,1.6fr)_minmax(18rem,1fr)] lg:gap-5">
+        {/* Continue */}
+        <motion.div {...rise(0.06)} className="min-w-0">
+          {library === null ? (
+            <div className="h-[19rem] animate-pulse rounded-[30px] bg-card" />
+          ) : current ? (
+            <ContinueCard entry={current.entry} progress={current.progress} />
+          ) : (
+            <StartCard />
+          )}
+        </motion.div>
+
+        {/* Today + streak */}
+        <motion.div {...rise(0.12)} className="grid grid-cols-2 gap-3 lg:grid-cols-1 lg:gap-5">
+          <div className="surface-card flex items-center gap-3 p-3.5 lg:gap-5 lg:p-6">
+            <div className="relative shrink-0">
+              <span className="lg:hidden">
+                <Ring ratio={ritualRatio} />
+              </span>
+              <span className="hidden lg:block">
+                <Ring ratio={ritualRatio} size={88} stroke={9} />
+              </span>
+              <span className="absolute inset-0 grid place-items-center font-display text-sm lg:text-xl">
+                {Math.round(ritualRatio * 100)}%
+              </span>
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-bold lg:text-base">Hoje</p>
+              <p className="mt-0.5 text-[12.5px] text-muted-foreground lg:text-sm">
+                {Math.floor(ritual.todayMinutes)} de {ritual.goal} min
+              </p>
+            </div>
+          </div>
+          <div className="surface-card p-3.5 lg:p-6">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-bold lg:text-base">
+                {streak} {streak === 1 ? "dia" : "dias"}
+              </p>
+              <span className="inline-flex items-center gap-1 text-xs font-bold text-gold">
+                <Flame className="h-[15px] w-[15px]" /> seguidos
+              </span>
+            </div>
+            <div className="mt-2.5 flex gap-[5px] lg:mt-4 lg:gap-2">
+              {ritual.week.map((d) => (
+                <span
+                  key={d.key}
+                  title={`${Math.round(d.minutes)} min`}
+                  className={`grid h-[26px] flex-1 place-items-center rounded-lg text-[10.5px] font-bold lg:h-9 lg:text-xs ${
+                    d.met
+                      ? "bg-gold text-white"
+                      : d.today
+                        ? "bg-accent-soft text-gold"
+                        : "bg-secondary text-faint"
+                  }`}
+                >
+                  {d.label}
+                </span>
+              ))}
+            </div>
+          </div>
+          {goal.target > 0 && (
+            <div className="surface-card col-span-2 hidden items-center gap-4 p-6 lg:col-span-1 lg:flex">
+              <div className="min-w-0 flex-1">
+                <p className="text-base font-bold">Meta de {year}</p>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  {goal.completed} de {goal.target} livros
+                </p>
+                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-secondary">
+                  <div
+                    className="h-full rounded-full bg-gold"
+                    style={{ width: `${Math.min(100, goal.percent)}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+        </motion.div>
+      </div>
+
+      {shelf.length > 0 && (
+        <Rail title="Na sua biblioteca" to="/biblioteca" delay={0.18}>
+          {shelf.map((e) => (
+            <BookTile
+              key={e.id}
+              title={e.title}
+              author={e.author}
+              cover={e.cover}
+              meta={
+                e.status === "concluido" ? "Lido" : e.status === "quero-ler" ? "Quero ler" : "Lendo"
+              }
+              readerId={e.readerId ?? undefined}
+            />
+          ))}
+        </Rail>
+      )}
+
+      <Rail title="Feito para você" to="/descobrir" delay={0.22}>
+        {picks.map((p) => (
+          <BookTile
+            key={p.gutenbergId}
+            title={p.title}
+            author={p.author}
+            meta={formatMinutes(p.minutes)}
+            readerId={gutenbergReaderId(p.gutenbergId)}
+          />
+        ))}
+      </Rail>
+    </div>
+  );
+}
+
+function Rail({
+  title,
+  to,
+  delay,
+  children,
+}: {
+  title: string;
+  to: "/biblioteca" | "/descobrir";
+  delay: number;
+  children: React.ReactNode;
+}) {
+  const reduce = useReducedMotion();
+  return (
+    <motion.section
+      initial={reduce ? false : { opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6, ease: EASE, delay }}
+      className="mt-8"
+    >
+      <div className="mb-3.5 flex items-baseline justify-between px-1">
+        <h2 className="text-[21px] lg:text-[26px]">{title}</h2>
+        <Link
+          to={to}
+          search={to === "/descobrir" ? DISCOVER_SEARCH : undefined}
+          className="text-[13.5px] font-semibold text-muted-foreground hover:text-foreground"
+        >
+          Ver tudo
+        </Link>
+      </div>
+      <div className="no-scrollbar -mx-4 flex snap-x scroll-pl-4 gap-3.5 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:scroll-pl-6 sm:px-6 lg:mx-0 lg:scroll-pl-0 lg:gap-5 lg:px-0">
+        {children}
+      </div>
+    </motion.section>
+  );
+}
+
+function BookTile({
+  title,
+  author,
+  cover,
+  meta,
+  readerId,
+}: {
+  title: string;
+  author?: string;
+  cover?: string | null;
+  meta?: string;
+  readerId?: string;
+}) {
+  const inner = (
+    <>
+      <BookArt title={title} author={author} cover={cover} />
+      <p className="mt-2.5 truncate text-[13.5px] font-semibold tracking-[-0.01em]">{title}</p>
+      {meta && <p className="mt-0.5 truncate text-xs text-faint">{meta}</p>}
+    </>
+  );
+  const cls = "press w-[104px] shrink-0 snap-start lg:w-[132px]";
+  return readerId ? (
+    <Link to="/reader/$bookId" params={{ bookId: readerId }} className={cls}>
+      {inner}
+    </Link>
+  ) : (
+    <div className={cls}>{inner}</div>
+  );
+}
+
+function ContinueCard({
+  entry,
+  progress,
+}: {
+  entry: LibraryEntry;
+  progress?: StoredReadingProgress;
+}) {
+  const pal = bookPalette(entry.title, entry.author);
+  const ratio = progressRatio(progress);
+  const pct = Math.round(ratio * 100);
+  const chapter = progress?.chapterIndex != null ? progress.chapterIndex + 1 : null;
+  const total = progress?.chapterCount;
+  return (
+    <div
+      className="relative overflow-hidden rounded-[30px] p-[18px] lg:flex lg:h-full lg:gap-7 lg:p-7"
+      style={{ background: pal.bg, color: pal.fg }}
+    >
+      <span
+        aria-hidden
+        className="absolute -right-10 -top-10 h-[200px] w-[200px] rounded-full opacity-[.14] lg:h-[320px] lg:w-[320px]"
+        style={{ background: pal.accent }}
+      />
+      <div className="relative flex items-end gap-4 lg:contents">
+        <Link
+          to="/reader/$bookId"
+          params={{ bookId: entry.readerId! }}
+          className="press w-24 shrink-0 lg:w-[150px]"
+          aria-label={`Abrir ${entry.title}`}
+        >
+          <BookArt title={entry.title} author={entry.author} cover={entry.cover} lift eager />
+        </Link>
+        <div className="min-w-0 flex-1 pb-0.5 lg:flex lg:flex-col">
+          <p
+            className="text-[11px] font-semibold tracking-[0.12em] lg:text-xs"
+            style={{ color: pal.accent }}
+          >
+            CONTINUE LENDO
+          </p>
+          <h2 className="mt-2 line-clamp-2 text-[27px] leading-[0.98] lg:text-[40px]">
+            {entry.title}
+          </h2>
+          <p className="mt-1 truncate text-[13.5px] opacity-75 lg:text-base">
+            {entry.author}
+            {chapter ? <span className="hidden lg:inline"> · Capítulo {chapter}</span> : null}
+          </p>
+          <div className="hidden flex-1 lg:block" />
+          <div className="mt-3.5 flex items-center gap-2.5 text-[12.5px] font-semibold">
+            <div
+              className="h-1 flex-1 overflow-hidden rounded-full"
+              style={{ background: `${pal.fg}2e` }}
+            >
+              <motion.div
+                className="h-full rounded-full"
+                style={{ background: pal.accent }}
+                initial={{ width: 0 }}
+                animate={{ width: `${pct}%` }}
+                transition={{ duration: 1, ease: EASE, delay: 0.3 }}
+              />
+            </div>
+            {pct}%
+          </div>
+          <div className="mt-4 hidden gap-2.5 lg:flex">
+            <ContinueButtons entry={entry} pal={pal} chapter={chapter} />
+          </div>
+        </div>
+      </div>
+      <div className="relative mt-4 flex gap-2 lg:hidden">
+        <ContinueButtons entry={entry} pal={pal} chapter={chapter} />
+      </div>
+      {total ? (
+        <p className="relative mt-2.5 text-center text-xs opacity-70 lg:hidden">
+          Capítulo {chapter} de {total}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function ContinueButtons({
+  entry,
+  pal,
+  chapter,
+}: {
+  entry: LibraryEntry;
+  pal: { bg: string; fg: string };
+  chapter: number | null;
+}) {
+  return (
+    <>
+      <Link
+        to="/reader/$bookId"
+        params={{ bookId: entry.readerId! }}
+        className="press inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-full px-6 text-[15px] font-semibold lg:flex-none"
+        style={{ background: pal.fg, color: pal.bg }}
+      >
+        <BookOpen className="h-[18px] w-[18px]" strokeWidth={2.2} />
+        {chapter ? `Continuar · Cap. ${chapter}` : "Continuar leitura"}
+      </Link>
+      <Link
+        to="/reader/$bookId"
+        params={{ bookId: entry.readerId! }}
+        search={{ ouvir: 1 } as never}
+        aria-label="Ouvir"
+        className="press inline-flex h-12 w-12 items-center justify-center gap-2 rounded-full bg-white/15 lg:w-auto lg:px-5"
+      >
+        <Headphones className="h-[19px] w-[19px]" />
+        <span className="hidden text-[15px] font-semibold lg:inline">Ouvir</span>
+      </Link>
+    </>
+  );
+}
+
+function StartCard() {
+  return (
+    <div className="surface-card relative flex h-full flex-col items-center overflow-hidden p-6 text-center lg:flex-row lg:gap-8 lg:p-8 lg:text-left">
+      <Lumi pose="reading" size={150} bob />
+      <div className="min-w-0 flex-1">
+        <h2 className="mt-3 text-[26px] leading-tight lg:mt-0 lg:text-[34px]">
+          Seu próximo livro começa aqui
+        </h2>
+        <p className="mt-2 text-[15px] text-muted-foreground">
+          Escolha um clássico grátis ou traga seus EPUBs e PDFs. A Lumi guarda a página para você.
+        </p>
+        <div className="mt-5 flex flex-col gap-2.5 sm:flex-row lg:justify-start">
+          <Link to="/descobrir" search={DISCOVER_SEARCH} className="btn-primary">
+            <Compass className="h-[18px] w-[18px]" /> Explorar livros grátis
+          </Link>
+          <Link to="/biblioteca" className="btn-ghost">
+            <FileUp className="h-[18px] w-[18px]" /> Importar arquivo
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}

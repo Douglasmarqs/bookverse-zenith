@@ -14,7 +14,7 @@ const listeners = new Set<(t: SiteTheme) => void>();
 /** Reactive site ambience: [preference, setPreference, resolvedAmbience]. */
 export function useSiteTheme(): [SiteTheme, (t: SiteTheme) => void, ResolvedTheme] {
   const [theme, setThemeState] = useState<SiteTheme>("auto");
-  const [resolved, setResolved] = useState<ResolvedTheme>("noturna");
+  const [resolved, setResolved] = useState<ResolvedTheme>("claro");
 
   useEffect(() => {
     const stored = getStoredTheme();

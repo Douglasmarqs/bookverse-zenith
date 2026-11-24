@@ -10,14 +10,11 @@ import {
 } from "@tanstack/react-router";
 import { useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 
+import "@fontsource-variable/inter/wght.css";
+import "@fontsource-variable/bricolage-grotesque/wght.css";
+import "@fontsource-variable/literata/wght.css";
+import "@fontsource-variable/literata/wght-italic.css";
 import "@fontsource/instrument-serif/400.css";
-import "@fontsource/instrument-serif/400-italic.css";
-import "@fontsource/instrument-sans/400.css";
-import "@fontsource/instrument-sans/500.css";
-import "@fontsource/instrument-sans/600.css";
-import "@fontsource/instrument-sans/700.css";
-import "@fontsource-variable/newsreader/opsz.css";
-import "@fontsource-variable/newsreader/opsz-italic.css";
 
 import appCss from "../styles.css?url";
 import { isFirebaseConfigured } from "../lib/firebase";
@@ -26,10 +23,9 @@ import { LumiPanel } from "../components/lumi-panel";
 import { InstallPwaBanner } from "../components/install-pwa";
 import { Toaster } from "../components/ui/sonner";
 import { CommandPalette } from "../components/command-palette";
-import { CursorSpotlight } from "../components/motion/interactive";
-import { AppRail } from "../components/shell/app-rail";
 import { Dock } from "../components/shell/dock";
-import { MemberTopBar, VisitorHeader } from "../components/shell/top-bar";
+import { Sidebar } from "../components/shell/sidebar";
+import { VisitorHeader } from "../components/shell/top-bar";
 import { SESSION_HINT_KEY, useAuthState } from "../hooks/use-auth-user";
 import { THEME_BOOT_SCRIPT, applyTheme, getStoredTheme } from "../lib/theme";
 import { useSiteTheme } from "../hooks/use-site-theme";
@@ -98,24 +94,24 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
-      { title: "BookVerse — Leia mais. Leia melhor." },
+      { title: "BookVerse — todo livro, a um toque" },
       {
         name: "description",
         content:
-          "Clássicos gratuitos, seus EPUBs e PDFs e um leitor confortável com metas, diário e a Lumi, sua IA de leitura.",
+          "Milhares de clássicos grátis, seus EPUBs e PDFs, leitura e áudio no mesmo lugar — com a Lumi, sua coruja de leitura.",
       },
       { name: "author", content: "BookVerse" },
-      { name: "theme-color", content: "#0b0f0d" },
+      { name: "theme-color", content: "#f4f3ef" },
       // iOS doesn't read the web manifest for "Add to Home Screen" — these
       // three meta tags are what make it install as a standalone app with
       // the right icon/status bar there instead of just a bookmark.
       { name: "apple-mobile-web-app-capable", content: "yes" },
-      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "default" },
       { name: "apple-mobile-web-app-title", content: "BookVerse" },
-      { property: "og:title", content: "BookVerse — Leia mais. Leia melhor." },
+      { property: "og:title", content: "BookVerse — todo livro, a um toque" },
       {
         property: "og:description",
-        content: "Uma experiência editorial de leitura, para todos os seus livros.",
+        content: "Clássicos grátis, seus próprios livros, leitura e áudio no mesmo lugar.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -123,6 +119,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     links: [
       { rel: "stylesheet", href: appCss },
       { rel: "icon", href: "/bookverse-icon.svg", type: "image/svg+xml" },
+      { rel: "icon", href: "/icons/favicon-32.png", type: "image/png", sizes: "32x32" },
       { rel: "apple-touch-icon", href: "/icons/apple-touch-icon.png" },
       { rel: "manifest", href: "/manifest.webmanifest" },
     ],
@@ -135,7 +132,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="pt-BR" data-theme="noturna" suppressHydrationWarning>
+    <html lang="pt-BR" data-theme="claro" suppressHydrationWarning>
       <head>
         {/* Applied synchronously, before hydration, so switching to
             Light/Sepia/Paper doesn't flash the dark theme first on load. */}
@@ -172,7 +169,8 @@ function RootComponent() {
   // literally two headers overlapping at the same spot on mobile.
   // The reader and the first-run onboarding are focused, full-screen flows
   // without the app's navigation chrome.
-  const isReaderRoute = pathname.startsWith("/reader/") || pathname === "/bem-vindo";
+  const isReaderRoute =
+    pathname.startsWith("/reader/") || pathname === "/bem-vindo" || pathname === "/auth";
 
   // Page transitions are cosmetic: when the browser skips or aborts one
   // (rapid navigation, rotating the phone), don't surface it as an error.
@@ -212,31 +210,25 @@ function RootComponent() {
   }, []);
 
   const member = useShellMode();
+  // First-time visitors see the marketing landing on "/" with its own header;
+  // everywhere else (and for anyone already reading) it's the app shell.
+  const landing = pathname === "/" && !member;
+  const appChrome = !isReaderRoute && !landing;
 
   return (
     <QueryClientProvider client={queryClient}>
-      <div
-        className={`flex min-h-screen flex-col ${member && !isReaderRoute ? "lg:pl-[84px]" : ""}`}
-      >
+      <div className={`flex min-h-screen flex-col ${appChrome ? "lg:pl-[264px]" : ""}`}>
         {!isReaderRoute && <ConfigBanner />}
-        {!isReaderRoute &&
-          (member ? (
-            <>
-              <AppRail />
-              <MemberTopBar />
-            </>
-          ) : (
-            <VisitorHeader />
-          ))}
-        <main className={`relative z-[1] flex-1 ${isReaderRoute ? "" : "pb-28 lg:pb-0"}`}>
+        {landing && <VisitorHeader />}
+        {appChrome && <Sidebar />}
+        <main className={`relative z-[1] flex-1 ${appChrome ? "pb-44 lg:pb-0" : ""}`}>
           {/* Keyed by path so every navigation gets a gentle entrance. */}
           <div key={pathname} className={isReaderRoute ? "" : "page-enter"}>
             <Outlet />
           </div>
         </main>
-        {!isReaderRoute && !member && <SiteFooter />}
-        {!isReaderRoute && <Dock signedIn={member} />}
-        {!isReaderRoute && <CursorSpotlight />}
+        {landing && <SiteFooter />}
+        {appChrome && <Dock showMini={pathname !== "/"} />}
         <CommandPalette />
         {/* The reader opens Lumi with a book/selection context. It must stay
             mounted there too; only the site chrome itself is suppressed. */}
@@ -248,11 +240,12 @@ function RootComponent() {
   );
 }
 
-/** Toasts follow the resolved ambience (dark ambiences get dark toasts). */
+/** Toasts follow the resolved appearance. */
 function AppToaster() {
   const [, , resolved] = useSiteTheme();
-  const light = resolved === "papel" || resolved === "sepia";
-  return <Toaster position="bottom-center" theme={light ? "light" : "dark"} richColors />;
+  return (
+    <Toaster position="top-center" theme={resolved === "escuro" ? "dark" : "light"} richColors />
+  );
 }
 
 /** Member shell (rail + dock) vs visitor shell (header + footer). A returning
