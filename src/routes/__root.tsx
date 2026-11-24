@@ -173,7 +173,9 @@ function RootComponent() {
   // The reader is its own full-screen (fixed inset-0) experience with its
   // own header/nav — stacking the global site chrome on top of it was
   // literally two headers overlapping at the same spot on mobile.
-  const isReaderRoute = pathname.startsWith("/reader/");
+  // The reader and the first-run onboarding are focused, full-screen flows
+  // without the app's navigation chrome.
+  const isReaderRoute = pathname.startsWith("/reader/") || pathname === "/bem-vindo";
 
   // "Automático" follows the OS everywhere, including inside the reader where
   // the site chrome (and its theme switcher) is not mounted.
