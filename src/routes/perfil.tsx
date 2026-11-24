@@ -36,8 +36,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { LumiMascot } from "@/components/lumi-mascot";
 import { downscaleImageFile } from "@/lib/image-utils";
 import { notificationPermission, requestNotificationPermission } from "@/lib/reading-reminder";
-import { useSiteTheme } from "@/hooks/use-site-theme";
-import { THEME_LABEL, THEME_PREVIEW, allThemes } from "@/lib/theme";
+import { AmbiencePicker } from "@/components/ambience-picker";
 
 export const Route = createFileRoute("/perfil")({
   head: () => ({
@@ -114,7 +113,6 @@ function PerfilPage({ user }: { user: User }) {
   const [deleting, setDeleting] = useState(false);
 
   const provider = getPrimaryProvider(user);
-  const [siteTheme, setSiteTheme] = useSiteTheme();
 
   useEffect(
     () =>
@@ -424,34 +422,19 @@ function PerfilPage({ user }: { user: User }) {
       </section>
 
       {/* Appearance */}
-      <section className="mt-6 rounded-2xl border border-border/60 bg-card/40 p-6">
+      <section
+        id="aparencia"
+        className="mt-6 scroll-mt-24 rounded-2xl border border-border/60 bg-card/40 p-6"
+      >
         <h2 className="flex items-center gap-2 font-display text-xl font-medium">
           <Palette className="h-4 w-4 text-gold" /> Aparência
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Escolha o tema de todo o aplicativo. O leitor tem suas próprias opções de tema,
+          Escolha o ambiente de todo o aplicativo. O leitor tem suas próprias opções de tema,
           independentes desta.
         </p>
-        <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-          {allThemes().map((t) => (
-            <button
-              key={t}
-              onClick={() => setSiteTheme(t)}
-              className={`flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition ${
-                siteTheme === t
-                  ? "border-gold ring-1 ring-gold"
-                  : "border-border/60 hover:border-gold/40"
-              }`}
-            >
-              <span
-                className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[10px] font-semibold ring-1 ring-black/10"
-                style={{ background: THEME_PREVIEW[t].bg, color: THEME_PREVIEW[t].fg }}
-              >
-                Aa
-              </span>
-              <span className="text-xs font-medium">{THEME_LABEL[t]}</span>
-            </button>
-          ))}
+        <div className="mt-4">
+          <AmbiencePicker />
         </div>
       </section>
 

@@ -9,6 +9,9 @@ export const getRouter = () => {
     routeTree,
     context: { queryClient },
     scrollRestoration: true,
+    // Cross-document-style transitions between pages (cover → reader, etc.)
+    // where the browser supports the View Transitions API.
+    defaultViewTransition: true,
     defaultPreloadStaleTime: 0,
   });
 

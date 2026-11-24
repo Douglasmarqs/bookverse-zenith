@@ -1,4 +1,5 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { rememberLastBook } from "@/lib/nav";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -114,6 +115,12 @@ export const Route = createFileRoute("/reader/$bookId")({
 function GuardedReaderPage() {
   const { state, user } = useRequireAuth();
   const loaderData = Route.useLoaderData();
+  const { bookId } = Route.useParams();
+
+  // Lets the dock's "Ler" button jump straight back into this book.
+  useEffect(() => {
+    if (state === "authenticated") rememberLastBook(bookId);
+  }, [state, bookId]);
 
   if (state !== "authenticated" || !user) {
     return (

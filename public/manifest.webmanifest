@@ -1,26 +1,38 @@
 {
-  "name": "BookVerse — Leia mais. Leia melhor.",
+  "name": "BookVerse — Leia como quem acende uma lâmpada",
   "short_name": "BookVerse",
-  "description": "Clássicos gratuitos, seus EPUBs e PDFs e um leitor confortável, com a Lumi como companhia de leitura.",
+  "description": "Clássicos gratuitos, seus EPUBs e PDFs e um leitor feito para longas horas, com a Lumi como companhia de leitura.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#EEF6FF",
-  "theme_color": "#1769D8",
+  "background_color": "#0B0F0D",
+  "theme_color": "#0B0F0D",
   "lang": "pt-BR",
   "icons": [
     {
-      "src": "/bookverse-icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "/bookverse-icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ]
 }

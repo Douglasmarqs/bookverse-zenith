@@ -8,27 +8,31 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 
-import "@fontsource/fraunces/400.css";
-import "@fontsource/fraunces/500.css";
-import "@fontsource/fraunces/600.css";
-import "@fontsource/fraunces/700.css";
-import "@fontsource/inter/400.css";
-import "@fontsource/inter/500.css";
-import "@fontsource/inter/600.css";
-import "@fontsource/inter/700.css";
+import "@fontsource/instrument-serif/400.css";
+import "@fontsource/instrument-serif/400-italic.css";
+import "@fontsource/instrument-sans/400.css";
+import "@fontsource/instrument-sans/500.css";
+import "@fontsource/instrument-sans/600.css";
+import "@fontsource/instrument-sans/700.css";
+import "@fontsource-variable/newsreader/opsz.css";
+import "@fontsource-variable/newsreader/opsz-italic.css";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { isFirebaseConfigured } from "../lib/firebase";
-import { SiteHeader } from "../components/site-header";
 import { SiteFooter } from "../components/site-footer";
 import { LumiPanel } from "../components/lumi-panel";
 import { InstallPwaBanner } from "../components/install-pwa";
 import { Toaster } from "../components/ui/sonner";
-import { MobileTabBar } from "../components/mobile-tab-bar";
 import { CommandPalette } from "../components/command-palette";
+import { CursorSpotlight } from "../components/motion/interactive";
+import { AppRail } from "../components/shell/app-rail";
+import { Dock } from "../components/shell/dock";
+import { MemberTopBar, VisitorHeader } from "../components/shell/top-bar";
+import { SESSION_HINT_KEY, useAuthState } from "../hooks/use-auth-user";
+import { THEME_BOOT_SCRIPT, applyTheme, getStoredTheme } from "../lib/theme";
 
 function NotFoundComponent() {
   return (
@@ -104,7 +108,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           "Clássicos gratuitos, seus EPUBs e PDFs e um leitor confortável com metas, diário e a Lumi, sua IA de leitura.",
       },
       { name: "author", content: "BookVerse" },
-      { name: "theme-color", content: "#1769D8" },
+      { name: "theme-color", content: "#0b0f0d" },
       // iOS doesn't read the web manifest for "Add to Home Screen" — these
       // three meta tags are what make it install as a standalone app with
       // the right icon/status bar there instead of just a bookmark.
@@ -122,7 +126,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     links: [
       { rel: "stylesheet", href: appCss },
       { rel: "icon", href: "/bookverse-icon.svg", type: "image/svg+xml" },
-      { rel: "apple-touch-icon", href: "/bookverse-icon.svg" },
+      { rel: "apple-touch-icon", href: "/icons/apple-touch-icon.png" },
       { rel: "manifest", href: "/manifest.webmanifest" },
     ],
   }),
@@ -134,14 +138,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="pt-BR" className="dark" suppressHydrationWarning>
+    <html lang="pt-BR" data-theme="noturna" suppressHydrationWarning>
       <head>
         {/* Applied synchronously, before hydration, so switching to
             Light/Sepia/Paper doesn't flash the dark theme first on load. */}
         <script
           dangerouslySetInnerHTML={{
-            __html:
-              "(function(){try{var t=localStorage.getItem('bookverse:theme')||'light';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();",
+            __html: THEME_BOOT_SCRIPT,
           }}
         />
         <HeadContent />
@@ -172,6 +175,18 @@ function RootComponent() {
   // literally two headers overlapping at the same spot on mobile.
   const isReaderRoute = pathname.startsWith("/reader/");
 
+  // "Automático" follows the OS everywhere, including inside the reader where
+  // the site chrome (and its theme switcher) is not mounted.
+  useEffect(() => {
+    if (!window.matchMedia) return;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => {
+      if (getStoredTheme() === "auto") applyTheme("auto", false);
+    };
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
   useEffect(() => {
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch((err) => {
@@ -180,26 +195,56 @@ function RootComponent() {
     }
   }, []);
 
+  const member = useShellMode();
+
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="flex min-h-screen flex-col">
+      <div
+        className={`flex min-h-screen flex-col ${member && !isReaderRoute ? "lg:pl-[84px]" : ""}`}
+      >
         {!isReaderRoute && <ConfigBanner />}
-        {!isReaderRoute && <SiteHeader />}
-        <main className={`flex-1 ${isReaderRoute ? "" : "pb-24 lg:pb-0"}`}>
+        {!isReaderRoute &&
+          (member ? (
+            <>
+              <AppRail />
+              <MemberTopBar />
+            </>
+          ) : (
+            <VisitorHeader />
+          ))}
+        <main className={`relative z-[1] flex-1 ${isReaderRoute ? "" : "pb-28 lg:pb-0"}`}>
           {/* Keyed by path so every navigation gets a gentle entrance. */}
           <div key={pathname} className={isReaderRoute ? "" : "page-enter"}>
             <Outlet />
           </div>
         </main>
-        {!isReaderRoute && <SiteFooter />}
-        {!isReaderRoute && <MobileTabBar />}
+        {!isReaderRoute && !member && <SiteFooter />}
+        {!isReaderRoute && <Dock signedIn={member} />}
+        {!isReaderRoute && <CursorSpotlight />}
         <CommandPalette />
         {/* The reader opens Lumi with a book/selection context. It must stay
             mounted there too; only the site chrome itself is suppressed. */}
         <LumiPanel />
         {!isReaderRoute && <InstallPwaBanner />}
-        <Toaster position="bottom-center" theme="light" richColors />
+        <Toaster position="bottom-center" theme="system" richColors />
       </div>
     </QueryClientProvider>
   );
+}
+
+/** Member shell (rail + dock) vs visitor shell (header + footer). A returning
+ * reader gets the member shell straight away while Firebase restores the
+ * session, instead of a flash of the marketing header. */
+function useShellMode(): boolean {
+  const { user, ready } = useAuthState();
+  const [hint, setHint] = useState(false);
+  useLayoutEffect(() => {
+    try {
+      setHint(localStorage.getItem(SESSION_HINT_KEY) === "1");
+    } catch {
+      // storage unavailable
+    }
+  }, []);
+  if (user && !user.isAnonymous) return true;
+  return !ready && hint;
 }

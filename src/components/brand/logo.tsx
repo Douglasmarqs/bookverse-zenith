@@ -1,39 +1,61 @@
 import { Link } from "@tanstack/react-router";
+import { useId } from "react";
 
-/** The BookVerse mark: an open book with a spark, drawn inline so it
- * inherits theme colours and stays crisp at any size. */
+/**
+ * The BookVerse mark: an open book under a small spark, cut from a brass
+ * tile. Colours come from the active ambience, so the mark is latão in
+ * Noturna, prata in Meia-noite, ouro rosé in Bordô…
+ */
 export function LogoMark({ size = 36, className = "" }: { size?: number; className?: string }) {
+  const id = useId().replace(/:/g, "");
   return (
     <svg viewBox="0 0 40 40" width={size} height={size} aria-hidden="true" className={className}>
       <defs>
-        <linearGradient id="bv-mark" x1="4" y1="2" x2="36" y2="38" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#5AA7FF" />
-          <stop offset=".55" stopColor="#1769D8" />
-          <stop offset="1" stopColor="#0A3F9E" />
+        <linearGradient
+          id={`bv-${id}`}
+          x1="6"
+          y1="2"
+          x2="34"
+          y2="38"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop style={{ stopColor: "var(--gold-soft)" }} />
+          <stop offset="0.55" style={{ stopColor: "var(--gold)" }} />
+          <stop offset="1" style={{ stopColor: "var(--oxide)" }} />
         </linearGradient>
       </defs>
-      <rect width="40" height="40" rx="11" fill="url(#bv-mark)" />
-      <path d="M7.5 13.6c4.3-2 8.8-1.1 12.5 2.3v14.4c-3.7-3.4-8.2-4.3-12.5-2.3V13.6Z" fill="#fff" />
-      <path
-        d="M32.5 13.6c-4.3-2-8.8-1.1-12.5 2.3v14.4c3.7-3.4 8.2-4.3 12.5-2.3V13.6Z"
-        fill="#EAF4FF"
-      />
-      <path
-        d="M10 17.2c2.6-.8 5.6-.2 7.8 1.7M10 20.6c2.6-.8 5.6-.2 7.8 1.7M30 17.2c-2.6-.8-5.6-.2-7.8 1.7M30 20.6c-2.6-.8-5.6-.2-7.8 1.7"
+      <rect width="40" height="40" rx="11" fill={`url(#bv-${id})`} />
+      <rect
+        x="0.5"
+        y="0.5"
+        width="39"
+        height="39"
+        rx="10.5"
         fill="none"
-        stroke="#64A8F8"
-        strokeLinecap="round"
-        strokeWidth="1.1"
+        stroke="white"
+        strokeOpacity="0.25"
       />
-      <path d="m20 4.6.7 2.2 2.2.7-2.2.7-.7 2.2-.7-2.2-2.2-.7 2.2-.7.7-2.2Z" fill="#fff" />
+      <path
+        d="M8.5 14.2c4-1.6 8-.8 11.5 2.3v13.6c-3.5-3.1-7.5-3.9-11.5-2.3V14.2Z"
+        style={{ fill: "var(--primary-foreground)" }}
+      />
+      <path
+        d="M31.5 14.2c-4-1.6-8-.8-11.5 2.3v13.6c3.5-3.1 7.5-3.9 11.5-2.3V14.2Z"
+        style={{ fill: "var(--primary-foreground)" }}
+        fillOpacity="0.82"
+      />
+      <path
+        d="m20 5.2.8 2.3 2.3.8-2.3.8-.8 2.3-.8-2.3-2.3-.8 2.3-.8.8-2.3Z"
+        style={{ fill: "var(--primary-foreground)" }}
+      />
     </svg>
   );
 }
 
 export function Wordmark({ className = "" }: { className?: string }) {
   return (
-    <span className={`font-display font-semibold tracking-tight ${className}`}>
-      Book<span className="text-gold">Verse</span>
+    <span className={`font-display tracking-tight ${className}`}>
+      Book<span className="italic text-gold">Verse</span>
     </span>
   );
 }
@@ -42,14 +64,14 @@ export function Logo({ size = 36, className = "" }: { size?: number; className?:
   return (
     <Link
       to="/"
-      className={`group flex items-center gap-2.5 ${className}`}
+      className={`press group flex items-center gap-2.5 ${className}`}
       aria-label="BookVerse — início"
     >
       <LogoMark
         size={size}
-        className="drop-shadow-[0_8px_16px_rgba(23,105,216,0.28)] transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-105"
+        className="drop-shadow-[0_8px_18px_color-mix(in_oklab,var(--gold)_45%,transparent)] transition-transform duration-500 group-hover:-rotate-6 group-hover:scale-105"
       />
-      <Wordmark className="text-[1.35rem]" />
+      <Wordmark className="text-[1.55rem] leading-none" />
     </Link>
   );
 }
