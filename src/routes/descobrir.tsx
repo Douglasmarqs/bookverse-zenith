@@ -1,11 +1,19 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { FauxCover } from "@/components/faux-cover";
+import { Tilt } from "@/components/motion/interactive";
 import { fauxBookFor } from "@/lib/faux-books";
 import { useEffect, useMemo, useState } from "react";
 import {
+  ArrowRight,
   BookOpenCheck,
+  BookOpenText,
+  Brain,
   Check,
   Compass,
+  Feather,
+  Landmark,
+  MoonStar,
+  Rocket,
   ExternalLink,
   Loader2,
   Plus,
@@ -28,6 +36,16 @@ import {
 import { useAuthUser } from "@/hooks/use-auth-user";
 
 const CATEGORIES = ["Clássicos", "Ficção", "Ficção científica", "Poesia", "Filosofia", "Mistério"];
+
+/** Friendlier, mood-first labels for the category shortcuts. */
+const MOODS: Record<string, { label: string; icon: typeof Sparkles }> = {
+  Clássicos: { label: "Clássicos eternos", icon: Landmark },
+  Ficção: { label: "Grandes histórias", icon: BookOpenText },
+  "Ficção científica": { label: "Futuros possíveis", icon: Rocket },
+  Poesia: { label: "Poesia", icon: Feather },
+  Filosofia: { label: "Para pensar", icon: Brain },
+  Mistério: { label: "Noite de mistério", icon: MoonStar },
+};
 const DISCOVERY_THEMES = [
   "adventure",
   "romance",
@@ -204,50 +222,43 @@ function DescobrirPage() {
   }
 
   return (
-    <main className="mx-auto max-w-7xl px-5 py-8 md:px-8 md:py-12">
-      <section className="relative overflow-hidden rounded-[2rem] border border-border/70 bg-card/70 px-6 py-8 shadow-[0_26px_80px_-52px_rgba(32,52,80,0.55)] md:px-10 md:py-11">
+    <main className="relative mx-auto max-w-[84rem] px-5 py-8 md:px-10 md:py-10">
+      <section className="relative">
         <div
           aria-hidden
-          className="pointer-events-none absolute -right-20 -top-32 h-80 w-80 rounded-full bg-gold/15 blur-3xl"
-        />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -bottom-40 left-1/3 h-64 w-64 rounded-full bg-sky-400/10 blur-3xl"
+          className="lamp-glow lamp-breathe pointer-events-none absolute -top-72 left-1/3 h-[40rem] w-[40rem]"
         />
         <div className="relative">
-          <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.27em] text-gold">
-            <Compass className="h-3.5 w-3.5" /> Descobrir
+          <p className="eyebrow flex items-center gap-2">
+            <Compass className="h-3.5 w-3.5" /> Descobrir · acervo de domínio público e catálogo
           </p>
-          <h1 className="mt-3 max-w-3xl font-display text-3xl font-medium leading-[1.06] md:text-5xl">
-            Encontre algo que você realmente possa começar a ler.
-          </h1>
-          <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground md:text-base">
-            Pesquise por título, autor, ISBN ou assunto. O BookVerse separa obras que abrem no
-            leitor de referências que servem para sua estante.
-          </p>
-
-          <form onSubmit={runSearch} className="mt-7 flex max-w-3xl flex-col gap-2 sm:flex-row">
-            <label className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-border/80 bg-background/80 px-4 py-3 shadow-sm transition focus-within:border-gold/60 focus-within:ring-4 focus-within:ring-gold/10">
-              <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <form onSubmit={runSearch} className="group mt-4">
+            <label className="flex items-center gap-4 border-b border-border pb-4 transition-colors focus-within:border-gold">
+              <Search className="h-7 w-7 shrink-0 text-gold" />
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Ex.: Orgulho e Preconceito, Machado de Assis ou ISBN"
-                aria-label="Buscar livros"
-                className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                placeholder="O que você quer ler hoje?"
+                aria-label="Buscar livros por título, autor, ISBN ou assunto"
+                className="min-w-0 flex-1 bg-transparent font-display text-4xl outline-none placeholder:italic placeholder:text-muted-foreground/70 md:text-6xl"
               />
+              <button
+                type="submit"
+                className="btn-primary hidden shrink-0 sm:inline-flex"
+                aria-label="Buscar"
+              >
+                Buscar <ArrowRight className="h-4 w-4" />
+              </button>
             </label>
-            <button
-              type="submit"
-              className="rounded-2xl bg-gold px-6 py-3 text-sm font-semibold text-primary-foreground shadow-md shadow-gold/20 transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-gold/25"
-            >
-              Buscar
-            </button>
           </form>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Título, autor, ISBN ou assunto. Obras de domínio público abrem direto no leitor.
+          </p>
 
-          <div className="mt-5 flex flex-wrap gap-2">
+          <div className="no-scrollbar -mx-5 mt-6 flex gap-2 overflow-x-auto px-5 md:mx-0 md:flex-wrap md:px-0">
             {CATEGORIES.map((category) => {
               const active = search.categoria === category;
+              const mood = MOODS[category] ?? { label: category, icon: Sparkles };
               return (
                 <button
                   key={category}
@@ -257,16 +268,21 @@ function DescobrirPage() {
                       search: { q: search.q, categoria: active ? undefined : category },
                     })
                   }
-                  className={`rounded-full border px-3.5 py-1.5 text-xs font-medium transition ${active ? "border-gold bg-gold text-primary-foreground shadow-sm" : "border-border bg-background/50 text-foreground/80 hover:border-gold/45 hover:text-gold"}`}
+                  aria-pressed={active}
+                  className={`press inline-flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm transition ${
+                    active
+                      ? "border-gold bg-gold/15 text-gold"
+                      : "border-border bg-card/50 text-muted-foreground hover:border-gold/45 hover:text-foreground"
+                  }`}
                 >
-                  {category}
+                  <mood.icon className="h-4 w-4" /> {mood.label}
                 </button>
               );
             })}
             {hasSearch && (
               <button
                 onClick={clearSearch}
-                className="rounded-full px-3.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:text-gold"
+                className="shrink-0 rounded-full px-4 py-2 text-sm text-muted-foreground transition hover:text-gold"
               >
                 Limpar busca
               </button>
@@ -507,10 +523,10 @@ function SectionTitle({
 }) {
   return (
     <header>
-      <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-gold">
+      <p className="eyebrow flex items-center gap-2">
         {icon} {eyebrow}
       </p>
-      <h2 className="mt-2 font-display text-2xl font-medium md:text-3xl">{title}</h2>
+      <h2 className="mt-2 font-display text-4xl leading-none md:text-5xl">{title}</h2>
     </header>
   );
 }
@@ -528,7 +544,7 @@ function CuratedReadableCard({
 }) {
   const cover = gutenbergCover(book.gutenbergId);
   return (
-    <article className="group relative overflow-hidden rounded-2xl border border-border/70 bg-card p-4 shadow-[0_18px_40px_-34px_rgba(20,32,50,0.72)] transition duration-300 hover:-translate-y-1 hover:border-gold/45 hover:shadow-[0_24px_48px_-32px_rgba(126,92,42,0.35)]">
+    <article className="group relative overflow-hidden rounded-[1.5rem] border border-border bg-card/70 p-4 shadow-[0_24px_50px_-40px_rgb(0_0_0/0.8)] backdrop-blur transition duration-300 hover:-translate-y-1 hover:border-gold/45 hover:shadow-[0_24px_48px_-32px_rgba(126,92,42,0.35)]">
       <Link
         to="/reader/$bookId"
         params={{ bookId: gutenbergReaderId(book.gutenbergId) }}
@@ -572,7 +588,7 @@ function PublicBookCard({
   onSave: () => void;
 }) {
   return (
-    <article className="group relative overflow-hidden rounded-2xl border border-border/70 bg-card p-4 shadow-[0_18px_40px_-34px_rgba(20,32,50,0.72)] transition duration-300 hover:-translate-y-1 hover:border-gold/45">
+    <article className="group relative overflow-hidden rounded-[1.5rem] border border-border bg-card/70 p-4 shadow-[0_24px_50px_-40px_rgb(0_0_0/0.8)] backdrop-blur transition duration-300 hover:-translate-y-1 hover:border-gold/45">
       <Link
         to="/reader/$bookId"
         params={{ bookId: gutenbergReaderId(book.id) }}
@@ -615,7 +631,7 @@ function CatalogBookCard({
 }) {
   const slug = slugFor(book.title, book.author) || "livro";
   return (
-    <article className="group relative overflow-hidden rounded-2xl border border-border/70 bg-card p-4 shadow-[0_18px_40px_-34px_rgba(20,32,50,0.72)] transition duration-300 hover:-translate-y-1 hover:border-gold/45">
+    <article className="group relative overflow-hidden rounded-[1.5rem] border border-border bg-card/70 p-4 shadow-[0_24px_50px_-40px_rgb(0_0_0/0.8)] backdrop-blur transition duration-300 hover:-translate-y-1 hover:border-gold/45">
       <Link
         to="/livro/$slug"
         params={{ slug }}
@@ -653,20 +669,29 @@ function CatalogBookCard({
 
 function BookCover({ title, cover }: { title: string; cover: string | null }) {
   const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   return (
-    <div className="book-shadow relative h-32 w-[5.35rem] shrink-0 overflow-hidden rounded-lg bg-secondary">
-      {cover && !failed ? (
-        <img
-          src={cover}
-          alt={`Capa de ${title}`}
-          loading="lazy"
-          onError={() => setFailed(true)}
-          className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+    <Tilt max={14} className="shrink-0 rounded-lg">
+      <div className="book-shadow relative h-32 w-[5.35rem] shrink-0 overflow-hidden rounded-[3px_8px_8px_3px] bg-secondary">
+        {/* The typographic cover is always there; the real artwork fades in
+            over it once loaded, so slow or blocked image hosts never show
+            broken-image text. */}
+        <FauxCover
+          book={fauxBookFor(title)}
+          className="absolute inset-0 h-full w-full rounded-none"
         />
-      ) : (
-        <FauxCover book={fauxBookFor(title)} className="h-full w-full rounded-none" />
-      )}
-    </div>
+        {cover && !failed && (
+          <img
+            src={cover}
+            alt=""
+            loading="lazy"
+            onLoad={() => setLoaded(true)}
+            onError={() => setFailed(true)}
+            className={`absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-105 ${loaded ? "opacity-100" : "opacity-0"}`}
+          />
+        )}
+      </div>
+    </Tilt>
   );
 }
 

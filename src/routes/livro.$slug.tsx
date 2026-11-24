@@ -15,6 +15,7 @@ import {
 } from "@/lib/library";
 import { subscribeAuth } from "@/lib/firebase";
 import { BookCover } from "@/components/book-cover";
+import { Tilt } from "@/components/motion/interactive";
 import { BookReviews } from "@/components/book-reviews";
 import { LumiRecommendationCard } from "@/components/lumi-recommendation-card";
 import type { User } from "firebase/auth";
@@ -137,26 +138,32 @@ function LivroDetalhesPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-5 py-10 md:px-8 md:py-14">
+    <div className="relative mx-auto max-w-6xl px-5 py-8 md:px-10 md:py-12">
+      <div
+        aria-hidden
+        className="lamp-glow lamp-breathe pointer-events-none absolute -left-40 -top-72 h-[44rem] w-[44rem]"
+      />
       <button
         onClick={() => window.history.back()}
-        className="mb-8 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+        className="press relative mb-8 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" /> Voltar
       </button>
 
-      <div className="grid gap-10 md:grid-cols-[280px_1fr] md:gap-14">
-        <div>
-          <BookCover
-            title={meta?.title ?? title}
-            author={resolvedAuthor}
-            className="book-shadow w-full rounded-lg object-cover"
-          />
+      <div className="relative grid gap-10 md:grid-cols-[300px_1fr] md:gap-16">
+        <div className="mx-auto w-56 md:w-full">
+          <Tilt max={10} className="rounded-[4px_10px_10px_4px]">
+            <BookCover
+              title={meta?.title ?? title}
+              author={resolvedAuthor}
+              className="w-full rounded-[4px_10px_10px_4px] object-cover shadow-[0_50px_80px_-30px_rgb(0_0_0/0.9)]"
+            />
+          </Tilt>
         </div>
 
         <div className="min-w-0">
-          <p className="text-[11px] uppercase tracking-[0.28em] text-gold">Livro</p>
-          <h1 className="mt-2 font-display text-3xl font-medium md:text-4xl">
+          <p className="eyebrow">Livro</p>
+          <h1 className="mt-3 font-display text-5xl leading-[0.95] md:text-7xl">
             {meta?.title ?? title}
           </h1>
           <p className="mt-2 text-lg text-muted-foreground">{resolvedAuthor}</p>
@@ -272,7 +279,7 @@ function LivroDetalhesPage() {
           )}
 
           <section className="mt-10">
-            <h2 className="font-display text-lg font-medium">Sinopse</h2>
+            <h2 className="font-display text-3xl">Sinopse</h2>
             {meta === undefined ? (
               <div className="mt-3 space-y-2">
                 <div className="h-3 w-full animate-pulse rounded bg-secondary" />
@@ -303,9 +310,7 @@ function LivroDetalhesPage() {
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gold">
             Para depois
           </p>
-          <h2 className="mt-1 font-display text-2xl font-medium">
-            Uma sugestão feita para sua estante
-          </h2>
+          <h2 className="mt-1 font-display text-4xl">Uma sugestão feita para sua estante</h2>
           <div className="mt-4">
             <LumiRecommendationCard user={user} libraryEntries={library} />
           </div>

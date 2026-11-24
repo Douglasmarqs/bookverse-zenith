@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchBookMeta } from "@/lib/google-books";
+import { FauxCover } from "@/components/faux-cover";
+import { fauxBookFor } from "@/lib/faux-books";
 
 interface BookCoverProps {
   title: string;
@@ -51,31 +53,60 @@ export function BookCover({
   }
 
   const resolved = src ?? fallbackSrc;
-
-  if (!resolved) {
-    return (
-      <div
-        className={`grid place-items-center bg-gradient-to-br from-secondary to-secondary/60 p-3 text-center ${className ?? ""}`}
-        style={{ aspectRatio: "2 / 3" }}
-      >
-        <span className="font-display text-xs leading-snug text-foreground/70">{title}</span>
-      </div>
-    );
-  }
-
   return (
-    <img
-      src={resolved}
-      alt={alt ?? title}
+    <CoverWithFallback
+      src={resolved ?? null}
+      title={title}
+      author={author}
+      alt={alt}
       width={width}
       height={height}
       loading={loading}
       className={className}
-      onError={(e) => {
-        if (fallbackSrc && e.currentTarget.src !== fallbackSrc) {
-          e.currentTarget.src = fallbackSrc;
-        }
-      }}
     />
+  );
+}
+
+/** Typographic cover underneath, real artwork fading in once it loads. */
+function CoverWithFallback({
+  src,
+  title,
+  author,
+  alt,
+  width,
+  height,
+  loading,
+  className,
+}: {
+  src: string | null;
+  title: string;
+  author?: string;
+  alt?: string;
+  width: number;
+  height: number;
+  loading: "lazy" | "eager";
+  className?: string;
+}) {
+  const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+  return (
+    <div className={`relative overflow-hidden ${className ?? ""}`} style={{ aspectRatio: "2 / 3" }}>
+      <FauxCover
+        book={fauxBookFor(title, author ?? "")}
+        className="absolute inset-0 h-full w-full !rounded-none"
+      />
+      {src && !failed && (
+        <img
+          src={src}
+          alt={alt ?? `Capa de ${title}`}
+          width={width}
+          height={height}
+          loading={loading}
+          onLoad={() => setLoaded(true)}
+          onError={() => setFailed(true)}
+          className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ${loaded ? "opacity-100" : "opacity-0"}`}
+        />
+      )}
+    </div>
   );
 }
