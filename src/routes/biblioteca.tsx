@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import {
   Trash2,
   BookOpenCheck,
@@ -11,6 +12,9 @@ import {
   ChevronDown,
   Heart,
   Star,
+  Library,
+  LayoutGrid,
+  List as ListIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { describeFirestoreError } from "@/lib/async-utils";
@@ -95,6 +99,8 @@ const STATUS_BADGE: Record<LibraryStatus, string> = {
 };
 
 type FilterTab = "todos" | "favoritos" | LibraryStatus;
+type LibraryView = "lombadas" | "capas" | "lista";
+const VIEW_KEY = "bookverse:library-view";
 type SortKey = "recent" | "title" | "author" | "rating";
 
 function GuardedBibliotecaPage() {
@@ -123,6 +129,24 @@ function BibliotecaPage({ uid }: { uid: string }) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("recent");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [view, setView] = useState<LibraryView>(() => {
+    try {
+      const v = localStorage.getItem(VIEW_KEY);
+      return v === "capas" || v === "lista" ? v : "lombadas";
+    } catch {
+      return "lombadas";
+    }
+  });
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  function changeView(v: LibraryView) {
+    setView(v);
+    try {
+      localStorage.setItem(VIEW_KEY, v);
+    } catch {
+      // storage unavailable
+    }
+  }
   const coverRecoveryRef = useRef(new Set<string>());
 
   useEffect(() => subscribeLibrary(uid, setEntries), [uid]);
@@ -313,23 +337,98 @@ function BibliotecaPage({ uid }: { uid: string }) {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-5 py-10 md:px-8 md:py-12">
+    <div
+      className="relative mx-auto max-w-[84rem] px-5 py-8 md:px-10 md:py-10"
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes("Files")) return;
+        e.preventDefault();
+        setDragOver(true);
+      }}
+      onDragLeave={(e) => {
+        if (e.currentTarget === e.target) setDragOver(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragOver(false);
+        const file = e.dataTransfer.files?.[0];
+        if (file) void handleUpload(file);
+      }}
+    >
+      <AnimatePresence>
+        {dragOver && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="pointer-events-none fixed inset-0 z-[80] grid place-items-center bg-background/80 backdrop-blur-sm"
+          >
+            <div className="rounded-[2rem] border-2 border-dashed border-gold bg-card/90 px-12 py-10 text-center">
+              <UploadCloud className="mx-auto h-10 w-10 text-gold" />
+              <p className="mt-3 font-display text-4xl">Solte para importar</p>
+              <p className="text-sm text-muted-foreground">
+                EPUB ou PDF · fica privado na sua conta
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       {/* Header */}
-      <div className="social-card flex flex-wrap items-end justify-between gap-4 p-5 sm:p-7">
+      <div className="flex flex-wrap items-end justify-between gap-5">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gold">
-            Minha biblioteca
+          <p className="eyebrow">
+            Minha estante
+            {entries && entries.length > 0
+              ? ` · ${counts.todos} ${counts.todos === 1 ? "livro" : "livros"}`
+              : ""}
           </p>
-          <h1 className="mt-2 font-display text-4xl font-semibold md:text-5xl">Sua estante</h1>
+          <h1 className="mt-2 font-display text-5xl leading-none md:text-6xl">
+            Sua <span className="italic text-gold">biblioteca</span>
+          </h1>
           {entries && entries.length > 0 && (
             <p className="mt-2 text-sm text-muted-foreground">
-              {counts.todos} {counts.todos === 1 ? "livro" : "livros"} organizados · {counts.lendo}{" "}
-              lendo · {counts.concluido} concluído{counts.concluido === 1 ? "" : "s"}
+              {counts.lendo} lendo · {counts["quero-ler"]} na fila · {counts.concluido} concluído
+              {counts.concluido === 1 ? "" : "s"}
             </p>
           )}
         </div>
 
-        <div>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div
+            role="radiogroup"
+            aria-label="Visualização"
+            className="flex rounded-full border border-border bg-card/60 p-1"
+          >
+            {(
+              [
+                ["lombadas", "Lombadas", Library],
+                ["capas", "Capas", LayoutGrid],
+                ["lista", "Lista", ListIcon],
+              ] as const
+            ).map(([id, label, Icon]) => (
+              <button
+                key={id}
+                type="button"
+                role="radio"
+                aria-checked={view === id}
+                onClick={() => changeView(id)}
+                className="press relative inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-semibold"
+              >
+                {view === id && (
+                  <motion.span
+                    layoutId="library-view"
+                    className="absolute inset-0 rounded-full bg-gold/15 ring-1 ring-gold/40"
+                    transition={{ type: "spring", stiffness: 450, damping: 34 }}
+                  />
+                )}
+                <Icon
+                  className={`relative h-3.5 w-3.5 ${view === id ? "text-gold" : "text-muted-foreground"}`}
+                />
+                <span className={`relative ${view === id ? "text-gold" : "text-muted-foreground"}`}>
+                  {label}
+                </span>
+              </button>
+            ))}
+          </div>
           <input
             ref={fileInputRef}
             type="file"
@@ -343,22 +442,17 @@ function BibliotecaPage({ uid }: { uid: string }) {
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            className="inline-flex items-center gap-2 rounded-xl bg-gold px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-md shadow-gold/20 transition hover:-translate-y-0.5 disabled:opacity-60"
+            className="btn-primary disabled:opacity-60"
           >
             {uploading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <UploadCloud className="h-4 w-4" />
             )}
-            {uploading ? "Importando…" : "Adicionar livro"}
+            {uploading ? "Importando…" : "Importar EPUB/PDF"}
           </button>
         </div>
       </div>
-      <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-        Importe um <code className="font-mono">.epub</code> ou{" "}
-        <code className="font-mono">.pdf</code> seu para lê-lo aqui. O arquivo é guardado de forma
-        privada na sua conta e pode ser aberto nos seus outros dispositivos.
-      </p>
 
       {entries && entries.length > 0 && (
         <div className="mt-8 flex flex-wrap items-center gap-3 border-b border-border/70 pb-4">
@@ -458,19 +552,53 @@ function BibliotecaPage({ uid }: { uid: string }) {
           </p>
         </div>
       ) : (
-        <div className="mt-8 grid grid-cols-2 gap-x-5 gap-y-9 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-          {visible.map((entry) => (
-            <BookCard
-              key={entry.id}
-              entry={entry}
-              busy={busy.has(entry.id)}
-              onStatusChange={(status) => handleStatusChange(entry.id, status)}
-              onRemove={() => handleRemove(entry)}
-              onToggleFavorite={() => void handleFavorite(entry)}
-              onRate={(rating) => void handleRating(entry, rating)}
-            />
-          ))}
-        </div>
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={view}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+          >
+            {view === "lombadas" ? (
+              <ShelvesView
+                entries={visible}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                renderCard={(entry) => (
+                  <BookCard
+                    entry={entry}
+                    busy={busy.has(entry.id)}
+                    onStatusChange={(status) => handleStatusChange(entry.id, status)}
+                    onRemove={() => handleRemove(entry)}
+                    onToggleFavorite={() => void handleFavorite(entry)}
+                    onRate={(rating) => void handleRating(entry, rating)}
+                  />
+                )}
+              />
+            ) : view === "lista" ? (
+              <ListView
+                entries={visible}
+                onStatusChange={(id, status) => void handleStatusChange(id, status)}
+                onToggleFavorite={(entry) => void handleFavorite(entry)}
+              />
+            ) : (
+              <div className="mt-8 grid grid-cols-2 gap-x-5 gap-y-9 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+                {visible.map((entry) => (
+                  <BookCard
+                    key={entry.id}
+                    entry={entry}
+                    busy={busy.has(entry.id)}
+                    onStatusChange={(status) => handleStatusChange(entry.id, status)}
+                    onRemove={() => handleRemove(entry)}
+                    onToggleFavorite={() => void handleFavorite(entry)}
+                    onRate={(rating) => void handleRating(entry, rating)}
+                  />
+                ))}
+              </div>
+            )}
+          </motion.div>
+        </AnimatePresence>
       )}
 
       <TelegramCard />
@@ -654,5 +782,200 @@ function MoreDots() {
       <circle cx="10" cy="10" r="1.6" />
       <circle cx="16" cy="10" r="1.6" />
     </svg>
+  );
+}
+
+const SHELF_ORDER: LibraryStatus[] = ["lendo", "relendo", "quero-ler", "concluido", "abandonado"];
+
+/** Books as spines on real shelves, one shelf per status. Clicking a spine
+ * pulls it out and shows its card (all actions) beside the shelf. */
+function ShelvesView({
+  entries,
+  selectedId,
+  onSelect,
+  renderCard,
+}: {
+  entries: LibraryEntry[];
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+  renderCard: (entry: LibraryEntry) => React.ReactNode;
+}) {
+  const selected = entries.find((e) => e.id === selectedId) ?? null;
+  const groups = SHELF_ORDER.map((status) => ({
+    status,
+    items: entries.filter((e) => e.status === status),
+  })).filter((g) => g.items.length);
+
+  return (
+    <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_15rem]">
+      <div className="space-y-8">
+        {groups.map((g) => (
+          <section key={g.status} aria-label={STATUS_LABEL[g.status]}>
+            <p className="eyebrow mb-1">
+              {STATUS_LABEL[g.status]} · {g.items.length}
+            </p>
+            <div
+              className="flex flex-wrap items-end gap-x-[5px] px-2"
+              style={{
+                backgroundImage:
+                  "linear-gradient(to top, var(--shelf-2) 0, var(--shelf) 11px, transparent 11px)",
+                backgroundSize: "100% 196px",
+                backgroundPosition: "0 0",
+              }}
+            >
+              {g.items.map((e) => {
+                const fb = fauxBookFor(e.title, e.author);
+                const on = e.id === selectedId;
+                const h = 128 + ((e.title.length * 11) % 46);
+                const w = 34 + ((e.title.length * 5) % 20);
+                const isFile =
+                  !!e.readerId && (isEpubReaderId(e.readerId) || isPdfReaderId(e.readerId));
+                return (
+                  <div key={e.id} className="flex h-[196px] items-end pb-[11px]">
+                    <motion.button
+                      type="button"
+                      onClick={() => onSelect(on ? null : e.id)}
+                      aria-pressed={on}
+                      aria-label={`${e.title}${e.author ? `, de ${e.author}` : ""}`}
+                      title={e.title}
+                      initial={{ rotate: 180 }}
+                      animate={{ rotate: 180, y: on ? -18 : 0 }}
+                      whileHover={{ y: on ? -18 : -9 }}
+                      transition={{ type: "spring", stiffness: 340, damping: 22 }}
+                      className="spine relative text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-gold"
+                      style={
+                        {
+                          "--s-bg": isFile ? "#e8dcc4" : fb.bg,
+                          "--s-fg": isFile ? "#2a241b" : fb.fg,
+                          height: h,
+                          width: w,
+                          boxShadow: on
+                            ? "0 0 0 2px var(--gold), 0 20px 40px -12px color-mix(in oklab, var(--gold) 55%, transparent)"
+                            : undefined,
+                        } as React.CSSProperties
+                      }
+                    >
+                      <span className="truncate">{e.title}</span>
+                      {e.favorite ? (
+                        <Heart className="h-3 w-3 shrink-0 fill-current text-destructive" />
+                      ) : isFile ? (
+                        <span className="rotate-180 rounded-sm bg-[#2a241b] px-0.5 font-sans text-[8px] text-[#f3ead8] [writing-mode:horizontal-tb]">
+                          {isPdfReaderId(e.readerId!) ? "PDF" : "EPUB"}
+                        </span>
+                      ) : null}
+                    </motion.button>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+      </div>
+      <aside className="lg:sticky lg:top-8 lg:self-start">
+        <AnimatePresence mode="wait">
+          {selected ? (
+            <motion.div
+              key={selected.id}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -10 }}
+              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              className="rounded-[1.5rem] border border-border bg-card/70 p-3 backdrop-blur"
+            >
+              {renderCard(selected)}
+            </motion.div>
+          ) : (
+            <motion.p
+              key="hint"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="rounded-[1.5rem] border border-dashed border-border p-5 text-sm text-muted-foreground"
+            >
+              Toque em uma lombada para ver o livro, mudar de estante, avaliar ou abrir.
+            </motion.p>
+          )}
+        </AnimatePresence>
+      </aside>
+    </div>
+  );
+}
+
+/** Compact, scannable rows — best for big libraries. */
+function ListView({
+  entries,
+  onStatusChange,
+  onToggleFavorite,
+}: {
+  entries: LibraryEntry[];
+  onStatusChange: (id: string, status: LibraryStatus) => void;
+  onToggleFavorite: (entry: LibraryEntry) => void;
+}) {
+  return (
+    <ul className="mt-6 divide-y divide-border overflow-hidden rounded-[1.5rem] border border-border bg-card/50">
+      {entries.map((e, i) => {
+        const href = e.readerId
+          ? { to: "/reader/$bookId" as const, params: { bookId: e.readerId } }
+          : {
+              to: "/livro/$slug" as const,
+              params: { slug: slugFor(e.title, e.author) || "livro" },
+              search: { title: e.title, author: e.author },
+            };
+        return (
+          <motion.li
+            key={e.id}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: Math.min(i, 12) * 0.025 }}
+            className="group flex items-center gap-4 px-4 py-3 transition hover:bg-secondary/50"
+          >
+            <Link {...href} className="w-10 shrink-0">
+              {e.cover ? (
+                <img
+                  src={e.cover}
+                  alt=""
+                  loading="lazy"
+                  className="aspect-[2/3] w-full rounded-[3px] object-cover"
+                />
+              ) : (
+                <FauxCover book={fauxBookFor(e.title, e.author)} showText={false} />
+              )}
+            </Link>
+            <Link {...href} className="min-w-0 flex-1">
+              <p className="truncate font-display text-xl leading-tight group-hover:text-gold">
+                {e.title}
+              </p>
+              <p className="truncate text-xs text-muted-foreground">{e.author}</p>
+            </Link>
+            <DropdownMenu>
+              <DropdownMenuTrigger className="press hidden shrink-0 items-center gap-1 rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground outline-none hover:border-gold/40 hover:text-foreground sm:inline-flex">
+                {STATUS_LABEL[e.status]} <ChevronDown className="h-3 w-3" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44 rounded-xl p-1.5">
+                {(Object.keys(STATUS_LABEL) as LibraryStatus[]).map((st) => (
+                  <DropdownMenuItem
+                    key={st}
+                    onSelect={() => onStatusChange(e.id, st)}
+                    className={`rounded-lg text-xs ${st === e.status ? "text-gold" : ""}`}
+                  >
+                    {STATUS_LABEL[st]}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <button
+              type="button"
+              onClick={() => onToggleFavorite(e)}
+              aria-label={e.favorite ? "Remover dos favoritos" : "Marcar como favorito"}
+              aria-pressed={e.favorite ?? false}
+              className="press grid h-9 w-9 shrink-0 place-items-center rounded-full hover:bg-secondary"
+            >
+              <Heart
+                className={`h-4 w-4 ${e.favorite ? "fill-destructive text-destructive" : "text-muted-foreground"}`}
+              />
+            </button>
+          </motion.li>
+        );
+      })}
+    </ul>
   );
 }

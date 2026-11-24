@@ -106,8 +106,8 @@ export function EpubImport({ className = "" }: { className?: string }) {
         setOver(false);
         void handleFile(e.dataTransfer.files?.[0]);
       }}
-      className={`rounded-3xl border border-dashed p-6 text-center transition ${
-        over ? "border-gold bg-gold/5" : "border-border/70 bg-card/40"
+      className={`flex flex-col items-center justify-center rounded-[1.75rem] border border-dashed p-6 text-center transition ${
+        over ? "scale-[1.01] border-gold bg-gold/10" : "border-border bg-card/40"
       } ${className}`}
     >
       <input
@@ -120,7 +120,7 @@ export function EpubImport({ className = "" }: { className?: string }) {
       <div className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-gold/12 text-gold">
         {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <UploadCloud className="h-5 w-5" />}
       </div>
-      <p className="mt-4 font-display text-lg font-medium">
+      <p className="mt-4 font-display text-3xl">
         {busy ? "Processando seu livro…" : "Arraste um .epub ou .pdf aqui"}
       </p>
       <p className="mt-1.5 text-sm text-muted-foreground">
@@ -131,7 +131,7 @@ export function EpubImport({ className = "" }: { className?: string }) {
         type="button"
         disabled={busy}
         onClick={() => inputRef.current?.click()}
-        className="mt-5 inline-flex items-center gap-2 rounded-full bg-gold px-5 py-2.5 text-sm font-medium text-primary-foreground transition-transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60"
+        className="btn-primary mt-5 disabled:opacity-60"
       >
         {signedIn ? "Escolher arquivo" : "Entrar para importar"}
       </button>

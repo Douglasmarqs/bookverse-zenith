@@ -3,13 +3,13 @@ import { BAIXE_LIVROS_URL, TELEGRAM_CHANNEL_URL } from "@/lib/editorial";
 
 export function TelegramCard({ compact = false }: { compact?: boolean }) {
   return (
-    <section className="glass-plate mt-10 overflow-hidden rounded-3xl p-6 md:p-8">
+    <section className="mt-12 overflow-hidden rounded-[1.75rem] border border-border bg-card/50 p-6 md:p-8">
       <div className="flex flex-wrap items-start justify-between gap-5">
         <div className="min-w-0">
           <p className="flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-gold">
             <BookOpenCheck className="h-3.5 w-3.5" /> EPUBs
           </p>
-          <h2 className="mt-2 font-display text-2xl font-medium md:text-3xl">
+          <h2 className="mt-2 font-display text-3xl md:text-4xl">
             Escolha onde procurar seu próximo livro
           </h2>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
@@ -22,7 +22,7 @@ export function TelegramCard({ compact = false }: { compact?: boolean }) {
             href={TELEGRAM_CHANNEL_URL}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex shrink-0 items-center gap-2 rounded-full bg-gold px-5 py-3 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+            className="btn-primary shrink-0 text-sm"
           >
             <Send className="h-4 w-4" />
             Abrir Telegram
@@ -32,7 +32,7 @@ export function TelegramCard({ compact = false }: { compact?: boolean }) {
             href="https://www.gutenberg.org/"
             target="_blank"
             rel="noreferrer"
-            className="inline-flex shrink-0 items-center gap-2 rounded-full border border-border bg-background px-5 py-3 text-sm font-medium transition hover:border-gold/45 hover:text-gold"
+            className="btn-ghost shrink-0 text-sm"
           >
             Fonte oficial
             <ArrowUpRight className="h-3.5 w-3.5" />
@@ -41,7 +41,7 @@ export function TelegramCard({ compact = false }: { compact?: boolean }) {
             href={BAIXE_LIVROS_URL}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex shrink-0 items-center gap-2 rounded-full border border-blue-200 bg-blue-50/70 px-5 py-3 text-sm font-medium text-blue-700 transition hover:border-blue-400 hover:bg-blue-100"
+            className="btn-ghost shrink-0 text-sm"
           >
             <FileText className="h-4 w-4" />
             Procurar PDFs

@@ -73,10 +73,17 @@ export function LumiRecommendationCard({
   if (!user || user.isAnonymous) return null;
 
   return (
-    <div className="glass-plate flex flex-col gap-4 rounded-2xl p-6 sm:flex-row sm:items-center [box-shadow:var(--shadow-plate)]">
-      <LumiMascot size={56} blink={!loading} thinking={loading} className="shrink-0" />
+    <div className="relative flex flex-col gap-4 overflow-hidden rounded-[1.75rem] border border-border bg-card/70 p-6 backdrop-blur">
+      <div aria-hidden className="lamp-glow absolute -right-16 -top-16 h-48 w-48" />
+      <div className="relative flex items-center gap-3">
+        <LumiMascot size={52} thinking={loading} className="shrink-0" />
+        <div>
+          <p className="eyebrow">Lumi sugere</p>
+          <p className="text-xs text-muted-foreground">com base na sua estante</p>
+        </div>
+      </div>
 
-      <div className="min-w-0 flex-1">
+      <div className="relative min-w-0 flex-1">
         {libraryEntries.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Adicione alguns livros à sua biblioteca — assim eu consigo entender seu gosto e sugerir
@@ -86,11 +93,12 @@ export function LumiRecommendationCard({
           <p className="text-sm text-muted-foreground">Pensando numa sugestão pra você…</p>
         ) : rec ? (
           <>
-            <p className="text-[11px] uppercase tracking-[0.2em] text-gold">Sugestão da Lumi</p>
-            <p className="mt-1 font-display text-lg font-medium">{rec.title}</p>
+            <p className="font-display text-3xl leading-tight">{rec.title}</p>
             {rec.author && <p className="text-sm text-muted-foreground">{rec.author}</p>}
             {rec.reason && (
-              <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{rec.reason}</p>
+              <p className="mt-2 font-[family-name:var(--font-book)] text-[15px] italic leading-relaxed text-muted-foreground">
+                {rec.reason}
+              </p>
             )}
           </>
         ) : (
@@ -101,13 +109,13 @@ export function LumiRecommendationCard({
         {error && <p className="mt-1.5 text-sm text-destructive">{error}</p>}
       </div>
 
-      <div className="flex shrink-0 flex-wrap items-center gap-2 sm:flex-col sm:items-stretch">
+      <div className="relative flex flex-wrap items-center gap-2">
         {rec && !loading && (
           <Link
             to="/livro/$slug"
             params={{ slug: slugFor(rec.title, rec.author) || "livro" }}
             search={{ title: rec.title, author: rec.author }}
-            className="inline-flex items-center justify-center gap-1.5 rounded-full bg-gold px-4 py-2 text-xs font-medium text-primary-foreground"
+            className="btn-primary px-4 py-2 text-sm"
           >
             Ver livro <ArrowRight className="h-3.5 w-3.5" />
           </Link>
@@ -116,7 +124,7 @@ export function LumiRecommendationCard({
           <button
             onClick={fetchRecommendation}
             disabled={loading}
-            className="inline-flex items-center justify-center gap-1.5 rounded-full border border-border/60 px-4 py-2 text-xs font-medium text-muted-foreground transition hover:border-gold/40 hover:text-foreground disabled:opacity-60"
+            className="btn-ghost px-4 py-2 text-sm disabled:opacity-60"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
             {rec ? "Pedir outra" : "Pedir sugestão"}
