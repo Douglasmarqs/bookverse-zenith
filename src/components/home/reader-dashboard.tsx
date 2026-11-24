@@ -19,7 +19,8 @@ import { EpubImport } from "@/components/epub-import";
 import { LumiRecommendationCard } from "@/components/lumi-recommendation-card";
 import { OnboardingCard } from "@/components/onboarding-card";
 import { ProgressRing } from "@/components/progress-ring";
-import { FauxCover, fauxBookFor } from "@/components/faux-cover";
+import { FauxCover } from "@/components/faux-cover";
+import { fauxBookFor } from "@/lib/faux-books";
 import { Reveal } from "@/components/motion/reveal";
 import { getLevelInfo } from "@/lib/achievements";
 import { computeGoalProgress, currentYear, subscribeReadingGoal } from "@/lib/goals";
@@ -330,37 +331,39 @@ export function ReaderDashboard({ user }: { user: User }) {
         )}
       </section>
 
-      {/* Stats + Lumi + import */}
-      <section className="mt-12 grid gap-5 lg:grid-cols-3">
-        <Reveal className="surface-card p-6 lg:col-span-1">
-          <p className="eyebrow">Seu ritmo</p>
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <Stat
-              icon={<Library className="h-4 w-4" />}
-              label="Na biblioteca"
-              value={library?.length ?? 0}
-            />
-            <Stat
-              icon={<Trophy className="h-4 w-4" />}
-              label="Concluídos"
-              value={Math.max(profile?.booksCompleted ?? 0, counts.concluido)}
-            />
-            <Stat
-              icon={<BookOpen className="h-4 w-4" />}
-              label="Capítulos"
-              value={profile?.chaptersRead ?? 0}
-            />
-            <Stat
-              icon={<Flame className="h-4 w-4" />}
-              label="Maior sequência"
-              value={profile?.longestStreak ?? streak}
-            />
-          </div>
-        </Reveal>
-        <Reveal delay={80} className="lg:col-span-1">
+      {/* Stats */}
+      <section aria-label="Seu ritmo" className="mt-12">
+        <p className="eyebrow mb-4">Seu ritmo</p>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <Stat
+            icon={<Library className="h-4 w-4" />}
+            label="Na biblioteca"
+            value={library?.length ?? 0}
+          />
+          <Stat
+            icon={<Trophy className="h-4 w-4" />}
+            label="Concluídos"
+            value={Math.max(profile?.booksCompleted ?? 0, counts.concluido)}
+          />
+          <Stat
+            icon={<BookOpen className="h-4 w-4" />}
+            label="Capítulos lidos"
+            value={profile?.chaptersRead ?? 0}
+          />
+          <Stat
+            icon={<Flame className="h-4 w-4" />}
+            label="Maior sequência"
+            value={profile?.longestStreak ?? streak}
+          />
+        </div>
+      </section>
+
+      {/* Lumi + import */}
+      <section className="mt-5 grid gap-5 lg:grid-cols-2">
+        <Reveal>
           <LumiRecommendationCard user={user} libraryEntries={library ?? []} />
         </Reveal>
-        <Reveal delay={160} className="lg:col-span-1">
+        <Reveal delay={80}>
           <EpubImport className="h-full" />
         </Reveal>
       </section>
@@ -403,9 +406,10 @@ function ContinueCard({
             className="book-shadow aspect-[2/3] w-24 shrink-0 rounded-md object-cover transition-transform duration-500 group-hover:-translate-y-1 group-hover:rotate-[-2deg] sm:w-32"
           />
         ) : (
-          <div className="book-shadow grid aspect-[2/3] w-24 shrink-0 place-items-center rounded-md bg-white/10 p-3 text-center font-display text-sm sm:w-32">
-            {entry.title}
-          </div>
+          <FauxCover
+            book={fauxBookFor(entry.title, entry.author ?? "")}
+            className="w-24 shrink-0 transition-transform duration-500 group-hover:-translate-y-1 group-hover:rotate-[-2deg] sm:w-32"
+          />
         )}
         <div className="flex min-w-0 flex-1 flex-col">
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#7fb6ff]">
@@ -533,7 +537,7 @@ function ShelfTile({ entry, ratio }: { entry: LibraryEntry; ratio: number }) {
 
 function Stat({ label, value, icon }: { label: string; value: number; icon: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-border/60 bg-background/40 p-3.5">
+    <div className="surface-card !rounded-2xl p-4">
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <span className="text-gold">{icon}</span>
         {label}

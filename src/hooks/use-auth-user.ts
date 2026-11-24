@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import type { User } from "firebase/auth";
 import { subscribeAuth } from "@/lib/firebase";
 
@@ -18,8 +18,7 @@ export const SESSION_HINT_KEY = "bookverse:had-session";
 let current: User | null = null;
 let resolved = false;
 let started = false;
-const listeners = new Set<(u: User | null) => void>();
-const readyListeners = new Set<(ready: boolean) => void>();
+const listeners = new Set<() => void>();
 
 function start() {
   if (started) return;
@@ -33,41 +32,41 @@ function start() {
     } catch {
       // storage unavailable — the hint is only a cosmetic optimisation
     }
-    listeners.forEach((l) => l(u));
-    readyListeners.forEach((l) => l(true));
+    listeners.forEach((l) => l());
   });
+}
+
+function subscribe(listener: () => void) {
+  start();
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+// The server never knows the user. useSyncExternalStore uses this snapshot
+// while hydrating, so markup always matches the SSR HTML even when Firebase
+// restores the session before a lazily-hydrated route boundary; React then
+// re-renders with the real user right after hydration.
+const serverUser = () => null;
+const serverReady = () => false;
+
+export function useAuthUser(): User | null {
+  return useSyncExternalStore(subscribe, () => current, serverUser);
 }
 
 /** Like useAuthUser, plus `ready` — false until Firebase reports the first
  * auth state, so pages can avoid flashing signed-out UI to signed-in readers. */
 export function useAuthState(): { user: User | null; ready: boolean } {
   const user = useAuthUser();
-  const [ready, setReady] = useState(resolved);
+  const ready = useSyncExternalStore(subscribe, () => resolved, serverReady);
+  const [timedOut, setTimedOut] = useState(false);
   useEffect(() => {
-    start();
-    setReady(resolved);
-    readyListeners.add(setReady);
     // Firebase never answers when it is not configured; don't hang forever.
-    const timer = setTimeout(() => setReady(true), 2500);
-    return () => {
-      readyListeners.delete(setReady);
-      clearTimeout(timer);
-    };
+    const timer = setTimeout(() => setTimedOut(true), 2500);
+    return () => clearTimeout(timer);
   }, []);
-  return { user, ready };
-}
-
-export function useAuthUser(): User | null {
-  const [user, setUser] = useState<User | null>(current);
-  useEffect(() => {
-    start();
-    setUser(current);
-    listeners.add(setUser);
-    return () => {
-      listeners.delete(setUser);
-    };
-  }, []);
-  return user;
+  return { user, ready: ready || timedOut };
 }
 
 /** True once the element is (or has been) scrolled near the viewport —

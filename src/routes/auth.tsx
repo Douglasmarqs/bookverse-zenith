@@ -23,7 +23,8 @@ import {
   getFirebaseKeyDebugInfo,
 } from "../lib/firebase";
 import { LogoMark, Wordmark } from "@/components/brand/logo";
-import { FAUX_BOOKS, FauxCover } from "@/components/faux-cover";
+import { FauxCover } from "@/components/faux-cover";
+import { FAUX_BOOKS } from "@/lib/faux-books";
 import { LumiMascot } from "@/components/lumi-mascot";
 
 export const Route = createFileRoute("/auth")({

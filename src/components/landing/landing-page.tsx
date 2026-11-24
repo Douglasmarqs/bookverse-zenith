@@ -23,7 +23,8 @@ import {
 } from "lucide-react";
 
 import { CountUp, Reveal } from "@/components/motion/reveal";
-import { FAUX_BOOKS, FauxCover } from "@/components/faux-cover";
+import { FauxCover } from "@/components/faux-cover";
+import { FAUX_BOOKS } from "@/lib/faux-books";
 import { LumiMascot } from "@/components/lumi-mascot";
 import { ProgressRing } from "@/components/progress-ring";
 import {
@@ -104,24 +105,26 @@ function Hero() {
             <h1 className="mt-6 font-display text-[2.6rem] font-medium leading-[1.02] tracking-tight sm:text-6xl lg:text-[3.5rem] xl:text-[3.9rem]">
               Toda grande história
               <br className="hidden sm:block" /> começa em{" "}
-              <span className="relative inline-block italic text-gold">
-                uma página
-                <svg
-                  aria-hidden
-                  viewBox="0 0 300 20"
-                  className="absolute -bottom-2 left-0 h-3 w-full text-warm"
-                  preserveAspectRatio="none"
-                >
-                  <path
-                    d="M3 14C60 4 140 2 297 10"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="5"
-                    strokeLinecap="round"
-                  />
-                </svg>
+              <span className="whitespace-nowrap">
+                <span className="relative inline-block italic text-gold">
+                  uma página
+                  <svg
+                    aria-hidden
+                    viewBox="0 0 300 20"
+                    className="absolute -bottom-2 left-0 h-3 w-full text-warm"
+                    preserveAspectRatio="none"
+                  >
+                    <path
+                      d="M3 14C60 4 140 2 297 10"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="5"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </span>
+                .
               </span>
-              .
             </h1>
           </Reveal>
 

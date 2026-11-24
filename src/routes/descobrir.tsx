@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { FauxCover, fauxBookFor } from "@/components/faux-cover";
+import { FauxCover } from "@/components/faux-cover";
+import { fauxBookFor } from "@/lib/faux-books";
 import { useEffect, useMemo, useState } from "react";
 import {
   BookOpenCheck,

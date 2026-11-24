@@ -16,7 +16,8 @@ import { toast } from "sonner";
 import { describeFirestoreError } from "@/lib/async-utils";
 import { useRequireAuth } from "@/hooks/use-require-auth";
 import { TelegramCard } from "@/components/telegram-card";
-import { FauxCover, fauxBookFor } from "@/components/faux-cover";
+import { FauxCover } from "@/components/faux-cover";
+import { fauxBookFor } from "@/lib/faux-books";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -515,6 +516,7 @@ function BookCard({
           ) : (
             <FauxCover
               book={fauxBookFor(entry.title, entry.author)}
+              padTop
               className="!rounded-lg transition-transform duration-300 group-hover:-translate-y-1"
             />
           )}
