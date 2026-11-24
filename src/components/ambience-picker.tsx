@@ -11,22 +11,48 @@ import {
   type SiteTheme,
 } from "@/lib/theme";
 
-/** A tiny scene of the ambience: page, shelf of spines and accent. */
+/** A tiny scene of the ambience: a lamp glow, a page and a shelf of spines. */
 function Swatch({ theme }: { theme: ResolvedTheme }) {
   const c = THEME_PREVIEW[theme];
   return (
-    <span className="absolute inset-0 flex flex-col p-2" style={{ background: c.bg }}>
-      <span className="h-1.5 w-8 rounded-full" style={{ background: c.accent }} />
-      <span className="mt-1 h-1 w-12 rounded-full opacity-60" style={{ background: c.fg }} />
-      <span className="mt-auto flex items-end gap-[3px]">
+    <span className="absolute inset-0 overflow-hidden" style={{ background: c.bg }}>
+      <span
+        className="absolute -right-6 -top-8 h-24 w-24 rounded-full opacity-40 blur-xl"
+        style={{ background: c.accent }}
+      />
+      <span
+        className="absolute left-2.5 top-2.5 h-1.5 w-7 rounded-full"
+        style={{ background: c.accent }}
+      />
+      <span
+        className="absolute left-2.5 top-5 h-1 w-11 rounded-full opacity-50"
+        style={{ background: c.fg }}
+      />
+      <span className="absolute bottom-2.5 left-2.5 flex items-end gap-[3px]">
         {[0.9, 0.7, 1, 0.8, 0.6].map((h, i) => (
           <span
             key={i}
             className="w-[7px] rounded-t-[1px]"
             style={{
-              height: `${h * 22}px`,
+              height: `${h * 26}px`,
               background: i === 2 ? c.accent : c.surface,
               boxShadow: `inset 0 0 0 1px ${c.fg}22`,
+            }}
+          />
+        ))}
+      </span>
+      <span
+        className="absolute bottom-2.5 right-2.5 top-7 flex w-[46%] flex-col gap-[5px] rounded-[4px] p-2"
+        style={{ background: c.surface, boxShadow: `0 6px 14px -8px rgb(0 0 0 / 0.5)` }}
+      >
+        {[1, 0.86, 0.94, 0.6].map((w, i) => (
+          <span
+            key={i}
+            className="h-[3px] rounded-full"
+            style={{
+              width: `${w * 100}%`,
+              background: i === 1 ? c.accent : c.fg,
+              opacity: i === 1 ? 0.9 : 0.35,
             }}
           />
         ))}

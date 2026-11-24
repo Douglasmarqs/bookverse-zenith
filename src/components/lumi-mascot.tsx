@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import owl from "@/assets/lumi-bookverse-blue.png";
+import owl from "@/assets/owl-mascot.webp";
 
 /**
  * The Lumi owl mascot, wherever it appears (hero, login screen, chat
@@ -18,7 +18,7 @@ export function LumiMascot({
   className = "",
   thinking = false,
   interactive = false,
-  blink = true,
+  blink = false,
   onClick,
 }: {
   /** Rendered width/height in px — the artwork is square. */
