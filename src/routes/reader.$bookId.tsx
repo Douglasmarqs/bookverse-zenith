@@ -1,6 +1,13 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { rememberLastBook } from "@/lib/nav";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import "@fontsource-variable/literata/opsz.css";
+import "@fontsource/atkinson-hyperlegible/400.css";
+import "@fontsource/atkinson-hyperlegible/700.css";
+import { READER_FONTS } from "@/components/reader/settings-panel";
+import { useReadingTimer } from "@/lib/ritual";
+import { setAmbient, stopAmbient } from "@/lib/ambient-sound";
 import {
   ArrowLeft,
   ChevronLeft,
@@ -17,6 +24,9 @@ import {
   Trash2,
   Share2,
   Languages,
+  Search as SearchIcon,
+  Keyboard,
+  Clock,
 } from "lucide-react";
 
 import { getSampleBook, type Book } from "@/lib/sample-book";
@@ -382,36 +392,36 @@ const THEME_STYLES = {
     bg: "#FFFFFF",
     fg: "#1A1A1A",
     muted: "#6B6B6B",
-    accent: "#8B5E34",
+    accent: "#9C6F27",
     rule: "rgba(0,0,0,0.1)",
   },
   paper: {
-    bg: "#F2ECE1",
-    fg: "#2A2420",
-    muted: "#7A7062",
-    accent: "#8B5E34",
-    rule: "rgba(42,36,32,0.12)",
+    bg: "#F3EAD8",
+    fg: "#2A241B",
+    muted: "#7D6E57",
+    accent: "#9C6F27",
+    rule: "rgba(42,36,27,0.12)",
   },
   sepia: {
-    bg: "#EFE0C0",
+    bg: "#E8D6B1",
     fg: "#3A2818",
-    muted: "#7A5B3E",
-    accent: "#8B5E34",
-    rule: "rgba(58,40,24,0.14)",
+    muted: "#755C3E",
+    accent: "#8A4B17",
+    rule: "rgba(58,40,24,0.15)",
   },
   dark: {
-    bg: "#0E0B08",
+    bg: "#1A1712",
     fg: "#E8DFD3",
-    muted: "#9C907E",
-    accent: "#C89B6A",
+    muted: "#9B8F7C",
+    accent: "#D9A54E",
     rule: "rgba(232,223,211,0.12)",
   },
   amoled: {
     bg: "#000000",
-    fg: "#F2F0EA",
-    muted: "#A39C91",
-    accent: "#D6B56F",
-    rule: "rgba(242,240,234,0.14)",
+    fg: "#EFEAE0",
+    muted: "#8A8478",
+    accent: "#D9A54E",
+    rule: "rgba(239,234,224,0.14)",
   },
 } as const;
 
@@ -440,7 +450,10 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   const [scrollRatio, setScrollRatio] = useState(0);
   const [panelOpen, setPanelOpen] = useState(false);
   const [tocOpen, setTocOpen] = useState(false);
-  const [tocTab, setTocTab] = useState<"toc" | "highlights" | "bookmarks">("toc");
+  const [tocTab, setTocTab] = useState<"toc" | "highlights" | "bookmarks" | "search">("toc");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [scrubValue, setScrubValue] = useState<number | null>(null);
   const [annotations, setAnnotations] = useState<BookAnnotations>({
     highlights: [],
     bookmarks: [],
@@ -458,6 +471,8 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   const [chapterCompletionOpen, setChapterCompletionOpen] = useState(false);
   const [completingChapter, setCompletingChapter] = useState(false);
   const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Active reading time feeds the daily ritual on the home screen.
+  useReadingTimer(uid);
   const chapterStartedAtRef = useRef(Date.now());
 
   // Paginated mode: content is laid out in CSS columns exactly as wide as
@@ -610,6 +625,62 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       setTocOpen(false);
     },
     [book.chapters.length, makeProgress, queueSave, settings.mode],
+  );
+
+  /** Lands on any position: a chapter plus a 0–1 ratio inside it. Used by
+   * bookmarks, highlights, search results and the location scrubber, in
+   * both paginated and scroll modes (and within the current chapter). */
+  const jumpTo = useCallback(
+    (targetChapter: number, ratio: number) => {
+      const clamped = Math.max(0, Math.min(book.chapters.length - 1, targetChapter));
+      const r = Math.max(0, Math.min(1, Number.isFinite(ratio) ? ratio : 0));
+      setTocOpen(false);
+      setSelectedPassage(null);
+      setActiveHighlightId(null);
+      setChapterCompletionOpen(false);
+      if (settings.mode === "paginated") {
+        if (clamped === chapterIndex) {
+          const el = contentRef.current;
+          if (!el || pageWidthPx <= 0) return;
+          const target = Math.round(r * Math.max(0, pageCount - 1));
+          isProgrammaticScroll.current = true;
+          el.scrollTo({ left: target * pageWidthPx, behavior: "instant" as ScrollBehavior });
+          setPageIndex(target);
+          const nr = pageCount > 1 ? target / (pageCount - 1) : 0;
+          setScrollRatio(nr);
+          queueSave(makeProgress(clamped, nr, { index: target, count: pageCount }));
+          setTimeout(() => {
+            isProgrammaticScroll.current = false;
+          }, 200);
+        } else {
+          pendingRatioRef.current = r;
+          chapterStartedAtRef.current = Date.now();
+          setChapterIndex(clamped);
+          setScrollRatio(r);
+          queueSave(makeProgress(clamped, r));
+        }
+        return;
+      }
+      if (clamped !== chapterIndex) chapterStartedAtRef.current = Date.now();
+      setChapterIndex(clamped);
+      setScrollRatio(r);
+      queueSave(makeProgress(clamped, r));
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          const el = contentRef.current;
+          if (el) el.scrollTo({ top: r * (el.scrollHeight - el.clientHeight) });
+        }),
+      );
+    },
+    [
+      book.chapters.length,
+      chapterIndex,
+      makeProgress,
+      pageCount,
+      pageWidthPx,
+      queueSave,
+      settings.mode,
+    ],
   );
 
   /** Reaching the end records the chapter once and advances immediately.
@@ -924,19 +995,66 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     }, 120);
   }, [pageWidthPx, pageCount, chapterIndex, makeProgress, queueSave]);
 
-  // Keyboard page-turning on desktop — ignored while typing in a note or
-  // any other input so arrow keys still work normally there.
+  // Keyboard: arrows/space/PageUp/PageDown turn pages (or scroll), and
+  // single letters open the main tools — ignored while typing.
   useEffect(() => {
-    if (settings.mode !== "paginated") return;
     function onKeyDown(e: KeyboardEvent) {
       const tag = (document.activeElement?.tagName ?? "").toLowerCase();
-      if (tag === "input" || tag === "textarea") return;
-      if (e.key === "ArrowRight") goToPage(pageIndex + 1);
-      else if (e.key === "ArrowLeft") goToPage(pageIndex - 1);
+      if (tag === "input" || tag === "textarea" || e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = contentRef.current;
+      const forward =
+        e.key === "ArrowRight" || e.key === "PageDown" || (e.key === " " && !e.shiftKey);
+      const back = e.key === "ArrowLeft" || e.key === "PageUp" || (e.key === " " && e.shiftKey);
+      if (forward || back) {
+        e.preventDefault();
+        if (settings.mode === "paginated") goToPage(pageIndex + (forward ? 1 : -1));
+        else el?.scrollBy({ top: (forward ? 1 : -1) * el.clientHeight * 0.88, behavior: "smooth" });
+        return;
+      }
+      const k = e.key.toLowerCase();
+      if (k === "escape") {
+        setTocOpen(false);
+        setPanelOpen(false);
+        setShortcutsOpen(false);
+      } else if (k === "t") {
+        setTocTab("toc");
+        setTocOpen((v) => !v);
+      } else if (k === "/" || k === "f") {
+        e.preventDefault();
+        setTocTab("search");
+        setTocOpen(true);
+      } else if (k === "a") {
+        setPanelOpen((v) => !v);
+      } else if (k === "m") {
+        void handleAddBookmark();
+      } else if (k === "?") {
+        setShortcutsOpen((v) => !v);
+      }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
+    // handleAddBookmark is recreated every render; the latest one is fine.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.mode, pageIndex, goToPage]);
+
+  // Ambient sound: browsers only allow audio after a gesture, so a saved
+  // soundscape starts on the reader's first tap/key, and stops on exit.
+  useEffect(() => {
+    if (!hydrated) return;
+    const kind = settings.ambient ?? "off";
+    if (kind === "off") {
+      stopAmbient();
+      return;
+    }
+    const start = () => setAmbient(kind, settings.ambientVolume ?? 0.35);
+    window.addEventListener("pointerdown", start, { once: true });
+    window.addEventListener("keydown", start, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", start);
+      window.removeEventListener("keydown", start);
+    };
+  }, [hydrated, settings.ambient, settings.ambientVolume]);
+  useEffect(() => () => stopAmbient(), []);
 
   const theme = THEME_STYLES[settings.theme];
   const chapter = book.chapters[chapterIndex];
@@ -945,6 +1063,63 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     const per = 1 / book.chapters.length;
     return Math.min(1, chapterIndex * per + scrollRatio * per);
   }, [book.chapters.length, chapterIndex, scrollRatio]);
+
+  // Word counts drive Kindle-style "time left" estimates (≈230 words/min).
+  const chapterWords = useMemo(
+    () =>
+      book.chapters.map((c) =>
+        c.paragraphs.reduce((n: number, p: string) => n + (p.match(/\S+/g)?.length ?? 0), 0),
+      ),
+    [book.chapters],
+  );
+  const WPM = 230;
+  const minutesLeftInChapter = Math.max(
+    0,
+    Math.ceil(((chapterWords[chapterIndex] ?? 0) * (1 - scrollRatio)) / WPM),
+  );
+  const minutesLeftInBook = Math.max(
+    0,
+    Math.ceil(
+      ((chapterWords[chapterIndex] ?? 0) * (1 - scrollRatio) +
+        chapterWords.slice(chapterIndex + 1).reduce((a, b) => a + b, 0)) /
+        WPM,
+    ),
+  );
+
+  const searchResults = useMemo(() => {
+    const q = searchQuery
+      .trim()
+      .toLocaleLowerCase("pt-BR")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    if (q.length < 2) return [];
+    const out: {
+      chapterIndex: number;
+      paragraphIndex: number;
+      before: string;
+      match: string;
+      after: string;
+    }[] = [];
+    book.chapters.forEach((c, ci) => {
+      c.paragraphs.forEach((p: string, pi: number) => {
+        if (out.length >= 80) return;
+        const norm = p
+          .toLocaleLowerCase("pt-BR")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "");
+        const at = norm.indexOf(q);
+        if (at < 0) return;
+        out.push({
+          chapterIndex: ci,
+          paragraphIndex: pi,
+          before: (at > 60 ? "…" : "") + p.slice(Math.max(0, at - 60), at),
+          match: p.slice(at, at + q.length),
+          after: p.slice(at + q.length, at + q.length + 80) + "…",
+        });
+      });
+    });
+    return out;
+  }, [searchQuery, book.chapters]);
 
   const chapterHighlights = useMemo(
     () => annotations.highlights.filter((highlight) => highlight.chapterId === chapter.id),
@@ -1155,21 +1330,22 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   }
 
   function jumpToBookmark(b: { chapterIndex: number; scrollRatio: number }) {
-    setChapterIndex(b.chapterIndex);
-    setScrollRatio(b.scrollRatio);
-    setTocOpen(false);
-    requestAnimationFrame(() => {
-      const el = contentRef.current;
-      if (el) el.scrollTo({ top: b.scrollRatio * (el.scrollHeight - el.clientHeight) });
-    });
+    jumpTo(b.chapterIndex, b.scrollRatio);
+  }
+  function jumpToHighlight(h: { chapterIndex: number; paragraphIndex?: number }) {
+    const total = book.chapters[h.chapterIndex]?.paragraphs.length ?? 1;
+    jumpTo(h.chapterIndex, (h.paragraphIndex ?? 0) / Math.max(1, total));
   }
 
-  function jumpToHighlight(h: { chapterIndex: number }) {
-    goto(h.chapterIndex);
-    setTocOpen(false);
-  }
+  const readerFontFamily =
+    READER_FONTS.find((f) => f.value === (settings.font ?? "serif"))?.family ?? "var(--font-book)";
 
-  const readerFontFamily = settings.font === "serif" ? "var(--font-display)" : "var(--font-sans)";
+  const isBookmarkedHere = annotations.bookmarks.some(
+    (b) =>
+      b.chapterIndex === chapterIndex &&
+      Math.abs(b.scrollRatio - scrollRatio) <
+        (settings.mode === "paginated" ? 0.5 / Math.max(1, pageCount - 1) : 0.03),
+  );
 
   const contentStyle: React.CSSProperties =
     settings.mode === "paginated"
@@ -1194,68 +1370,74 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     <div
       className="fixed inset-0 z-30 flex flex-col transition-colors duration-300"
       style={{ backgroundColor: theme.bg, color: theme.fg }}
-      onPointerMove={revealControls}
-      onPointerDown={revealControls}
+      onPointerMove={(e) => {
+        if (e.pointerType === "mouse") revealControls();
+      }}
       onPointerUp={captureTextSelection}
     >
       {/* Top bar */}
       <header
-        className={`absolute inset-x-0 top-0 z-30 flex items-center justify-between gap-3 border-b px-4 py-3 transition-all duration-300 md:px-6 ${
+        className={`absolute inset-x-0 top-0 z-30 transition-all duration-300 ${
           controlsVisible
             ? "translate-y-0 opacity-100"
             : "pointer-events-none -translate-y-full opacity-0"
         }`}
-        style={{ borderColor: theme.rule, backgroundColor: theme.bg + "F2" }}
+        style={{
+          background: `linear-gradient(${theme.bg}, ${theme.bg}F0 65%, ${theme.bg}00)`,
+          fontFamily: "var(--font-sans)",
+        }}
       >
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex items-center gap-1 px-2 pb-6 pt-[max(0.5rem,env(safe-area-inset-top))] md:px-4">
           <Link
             to="/"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-full transition hover:opacity-70"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-full transition hover:opacity-70"
             style={{ color: theme.fg }}
-            aria-label="Voltar"
+            aria-label="Voltar ao início"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="h-[18px] w-[18px]" />
           </Link>
-          <div className="min-w-0">
-            <p className="truncate font-display text-sm font-medium">{book.title}</p>
-            <p className="truncate text-[11px]" style={{ color: theme.muted }}>
-              {book.author}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex shrink-0 items-center gap-1">
-          <span
-            className="mr-1 hidden items-center gap-1 text-[11px] sm:inline-flex"
-            style={{ color: theme.muted }}
-            title={saved ? "Sincronizado" : "Salvando..."}
-          >
-            {saved ? <Cloud className="h-3.5 w-3.5" /> : <CloudOff className="h-3.5 w-3.5" />}
-            {saved ? "Salvo" : "Salvando..."}
-          </span>
-          <IconBtn theme={theme} onClick={() => setTocOpen(true)} label="Sumário">
-            <List className="h-4 w-4" />
-          </IconBtn>
-          <IconBtn theme={theme} onClick={handleAddBookmark} label="Marcar esta página">
-            <BookmarkIcon className="h-4 w-4" />
-          </IconBtn>
           <IconBtn
             theme={theme}
-            onClick={() =>
-              openLumiPanel({
-                bookTitle: book.title,
-                bookAuthor: book.author,
-                chapterTitle: chapter.title,
-                chapterExcerpt: chapter.paragraphs.slice(0, 6).join(" ").slice(0, 1500),
-                positionLabel: `Capítulo ${chapterIndex + 1} de ${book.chapters.length}`,
-                topic: "translation",
-                initialPrompt:
-                  "Traduza o trecho de referência para português do Brasil, preservando sentido, parágrafos e nomes próprios. Se ele já estiver em português, apenas informe isso.",
-              })
-            }
-            label="Traduzir trecho do capítulo com a Lumi"
+            onClick={() => {
+              setTocTab("toc");
+              setTocOpen(true);
+            }}
+            label="Sumário, destaques e marcadores (T)"
           >
-            <Languages className="h-4 w-4" />
+            <List className="h-[18px] w-[18px]" />
+          </IconBtn>
+          <div className="min-w-0 flex-1 px-1 text-center">
+            <p className="truncate font-display text-lg italic leading-tight">{book.title}</p>
+            <p className="truncate text-[11px]" style={{ color: theme.muted }}>
+              {chapter.title}
+            </p>
+          </div>
+          <span
+            className="hidden h-11 w-8 place-items-center sm:grid"
+            style={{ color: theme.muted }}
+            title={saved ? "Progresso salvo" : "Salvando…"}
+            aria-label={saved ? "Progresso salvo" : "Salvando"}
+          >
+            {saved ? <Cloud className="h-4 w-4" /> : <CloudOff className="h-4 w-4 animate-pulse" />}
+          </span>
+          <IconBtn
+            theme={theme}
+            onClick={() => {
+              setTocTab("search");
+              setTocOpen(true);
+            }}
+            label="Buscar no livro (/)"
+          >
+            <SearchIcon className="h-[18px] w-[18px]" />
+          </IconBtn>
+          <IconBtn theme={theme} onClick={handleAddBookmark} label="Marcar esta página (M)">
+            <BookmarkIcon
+              className="h-[18px] w-[18px]"
+              style={isBookmarkedHere ? { fill: theme.accent, color: theme.accent } : undefined}
+            />
+          </IconBtn>
+          <IconBtn theme={theme} onClick={() => setPanelOpen(true)} label="Aparência (A)">
+            <span className="font-display text-xl leading-none">Aa</span>
           </IconBtn>
           <IconBtn
             theme={theme}
@@ -1271,16 +1453,34 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
             }
             label="Perguntar à Lumi"
           >
-            <Sparkles className="h-4 w-4" />
+            <Sparkles className="h-[18px] w-[18px]" style={{ color: theme.accent }} />
           </IconBtn>
-          <IconBtn theme={theme} onClick={() => setPanelOpen(true)} label="Ajustes">
-            <Settings2 className="h-4 w-4" />
-          </IconBtn>
+          <span className="hidden md:block">
+            <IconBtn
+              theme={theme}
+              onClick={() => setShortcutsOpen(true)}
+              label="Atalhos de teclado (?)"
+            >
+              <Keyboard className="h-[18px] w-[18px]" />
+            </IconBtn>
+          </span>
         </div>
       </header>
 
-      {/* Content */}
-      <div className="relative flex-1 overflow-hidden">
+      {/* Content — a tap anywhere that isn't a control shows/hides the
+          chrome, like a Kindle. Side zones (paginated) turn pages. */}
+      <div
+        className="relative flex-1 overflow-hidden"
+        onClick={(e) => {
+          const target = e.target as HTMLElement;
+          if (target.closest("[data-reader-action],button,a,input,textarea,mark,label")) return;
+          const sel = window.getSelection();
+          if (sel && !sel.isCollapsed) return;
+          if (selectedPassage || activeHighlightId) return;
+          if (controlsTimer.current) clearTimeout(controlsTimer.current);
+          setControlsVisible((v) => !v);
+        }}
+      >
         <div
           ref={contentRef}
           onScroll={
@@ -1302,28 +1502,34 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
               maxWidth: `${settings.maxWidth}ch`,
               paddingInline: settings.mode === "paginated" ? `${settings.margin}px` : undefined,
               fontFamily: readerFontFamily,
+              ["--reader-accent" as string]: theme.accent,
               fontSize: `${settings.fontSize}px`,
               lineHeight: settings.lineHeight,
               color: theme.fg,
             }}
           >
-            <header className="mb-10" style={{ breakInside: "avoid" }}>
+            <header className="mb-10 text-center" style={{ breakInside: "avoid" }}>
               <p
-                className="text-[11px] uppercase tracking-[0.25em]"
-                style={{ color: theme.accent, fontFamily: "var(--font-sans)" }}
+                className="text-[10px] uppercase tracking-[0.32em]"
+                style={{ color: theme.muted, fontFamily: "var(--font-sans)" }}
               >
                 Capítulo {chapterIndex + 1} de {book.chapters.length}
               </p>
               <h1
-                className="mt-3 font-display text-3xl font-medium md:text-4xl"
+                className="mt-3 font-display text-[2.2em] leading-[1.05]"
                 style={{ color: theme.fg }}
               >
                 {chapter.title}
               </h1>
               <div
-                className="mt-6 h-px w-16"
-                style={{ backgroundColor: theme.accent, opacity: 0.7 }}
-              />
+                className="mx-auto mt-5 flex items-center justify-center gap-2"
+                style={{ color: theme.accent }}
+                aria-hidden
+              >
+                <span className="h-px w-10" style={{ background: theme.accent, opacity: 0.5 }} />
+                <span className="text-xs">❦</span>
+                <span className="h-px w-10" style={{ background: theme.accent, opacity: 0.5 }} />
+              </div>
             </header>
 
             {(
@@ -1357,7 +1563,11 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                 <div key={i} className="relative" style={{ breakInside: "avoid" }}>
                   <p
                     data-paragraph-index={i}
-                    className="rounded-sm px-2 -mx-2 py-0.5 [hyphens:auto]"
+                    className={`rounded-sm px-2 -mx-2 py-0.5 [hyphens:auto] ${
+                      i === 0 && /^[A-Za-zÀ-ÿ]/.test(p ?? "")
+                        ? "first-letter:float-left first-letter:pr-2 first-letter:pt-[0.08em] first-letter:font-display first-letter:text-[3.5em] first-letter:leading-[0.78] first-letter:text-[var(--reader-accent)]"
+                        : ""
+                    }`}
                     style={{ marginBottom: 0, textAlign: settings.alignment }}
                   >
                     <HighlightedParagraph
@@ -1685,37 +1895,155 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
         )}
       </div>
 
-      {/* Progress rail */}
+      {/* Night light + dimmer, like a Kindle's warm light and brightness. */}
+      {(settings.warmth ?? 0) > 0 && (
+        <div
+          aria-hidden
+          className="pointer-events-none fixed inset-0 z-[35] mix-blend-multiply"
+          style={{ background: `rgba(255, 146, 40, ${((settings.warmth ?? 0) / 100) * 0.38})` }}
+        />
+      )}
+      {(settings.dim ?? 0) > 0 && (
+        <div
+          aria-hidden
+          className="pointer-events-none fixed inset-0 z-[36]"
+          style={{ background: `rgba(0, 0, 0, ${(settings.dim ?? 0) / 100})` }}
+        />
+      )}
+
+      {/* Location bar */}
       <div
-        className={`absolute inset-x-0 bottom-0 z-30 border-t px-4 py-2.5 transition-all duration-300 md:px-6 ${
+        className={`absolute inset-x-0 bottom-0 z-30 transition-all duration-300 ${
           controlsVisible
             ? "translate-y-0 opacity-100"
             : "pointer-events-none translate-y-full opacity-0"
         }`}
         style={{
-          borderColor: theme.rule,
           fontFamily: "var(--font-sans)",
-          backgroundColor: theme.bg + "F2",
+          background: `linear-gradient(${theme.bg}00, ${theme.bg}F0 35%, ${theme.bg})`,
         }}
       >
-        <div className="flex items-center gap-3 text-[11px]" style={{ color: theme.muted }}>
-          <span className="tabular-nums">{Math.round(overallProgress * 100)}%</span>
+        <div className="mx-auto max-w-3xl px-4 pb-[max(0.85rem,env(safe-area-inset-bottom))] pt-8">
+          {(() => {
+            const n = book.chapters.length;
+            const value = scrubValue ?? Math.round(overallProgress * 1000);
+            const previewChapter = Math.min(n - 1, Math.floor((value / 1000) * n));
+            const commit = () => {
+              if (scrubValue === null) return;
+              const v = scrubValue / 1000;
+              const target = Math.min(n - 1, Math.floor(v * n));
+              jumpTo(target, Math.min(1, v * n - target));
+              setScrubValue(null);
+            };
+            return (
+              <div className="relative">
+                <AnimatePresence>
+                  {scrubValue !== null && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 6 }}
+                      className="absolute -top-12 left-1/2 max-w-[80vw] -translate-x-1/2 truncate rounded-full px-4 py-2 text-xs font-semibold shadow-lg"
+                      style={{ background: theme.fg, color: theme.bg }}
+                    >
+                      Cap. {previewChapter + 1} · {book.chapters[previewChapter]?.title} ·{" "}
+                      {Math.round(value / 10)}%
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                <input
+                  type="range"
+                  min={0}
+                  max={1000}
+                  value={value}
+                  aria-label="Localização no livro"
+                  aria-valuetext={`${Math.round(value / 10)}%, capítulo ${previewChapter + 1}`}
+                  onChange={(e) => setScrubValue(Number(e.target.value))}
+                  onPointerUp={commit}
+                  onKeyUp={commit}
+                  onBlur={commit}
+                  className="w-full"
+                  style={{ accentColor: theme.accent }}
+                  data-reader-action="true"
+                />
+              </div>
+            );
+          })()}
           <div
-            className="h-1 flex-1 overflow-hidden rounded-full"
-            style={{ backgroundColor: theme.rule }}
+            className="mt-1 flex items-center justify-between gap-3 text-[11px]"
+            style={{ color: theme.muted }}
           >
-            <div
-              className="h-full rounded-full transition-[width] duration-200"
-              style={{ width: `${overallProgress * 100}%`, backgroundColor: theme.accent }}
-            />
+            <span className="tabular-nums">
+              {settings.mode === "paginated"
+                ? `Pág. ${pageIndex + 1} de ${pageCount} · Cap. ${chapterIndex + 1}/${book.chapters.length}`
+                : `Cap. ${chapterIndex + 1} de ${book.chapters.length}`}
+            </span>
+            <span className="inline-flex items-center gap-1.5 tabular-nums">
+              <Clock className="h-3 w-3" />
+              {minutesLeftInChapter <= 1 ? "Menos de 1 min" : `${minutesLeftInChapter} min`} no
+              capítulo
+              <span className="hidden sm:inline">
+                · {formatDuration(minutesLeftInBook)} no livro
+              </span>
+            </span>
+            <span className="tabular-nums">{Math.round(overallProgress * 100)}%</span>
           </div>
-          <span className="tabular-nums">
-            {settings.mode === "paginated"
-              ? `Pág. ${pageIndex + 1}/${pageCount} · Cap. ${chapterIndex + 1}/${book.chapters.length}`
-              : `Cap. ${chapterIndex + 1}/${book.chapters.length}`}
-          </span>
         </div>
       </div>
+
+      {/* Keyboard shortcuts */}
+      <AnimatePresence>
+        {shortcutsOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] grid place-items-center bg-black/50 p-4 backdrop-blur-sm"
+            onClick={() => setShortcutsOpen(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 10 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.97 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm rounded-[1.75rem] p-6 shadow-2xl"
+              style={{
+                background: theme.bg,
+                color: theme.fg,
+                fontFamily: "var(--font-sans)",
+                border: `1px solid ${theme.rule}`,
+              }}
+            >
+              <p className="font-display text-3xl">Atalhos</p>
+              <ul className="mt-4 space-y-2.5 text-sm">
+                {[
+                  ["→  Espaço  PgDn", "Próxima página"],
+                  ["←  Shift+Espaço  PgUp", "Página anterior"],
+                  ["T", "Sumário"],
+                  ["/  F", "Buscar no livro"],
+                  ["A", "Aparência"],
+                  ["M", "Marcar página"],
+                  ["Esc", "Fechar painéis"],
+                ].map(([k, d]) => (
+                  <li key={k} className="flex items-center justify-between gap-4">
+                    <span style={{ color: theme.muted }}>{d}</span>
+                    <kbd
+                      className="rounded-md px-2 py-0.5 text-xs"
+                      style={{ boxShadow: `inset 0 0 0 1px ${theme.rule}` }}
+                    >
+                      {k}
+                    </kbd>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-5 text-xs" style={{ color: theme.muted }}>
+                No celular: toque nas bordas para virar a página e no centro para mostrar os
+                controles.
+              </p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Settings panel */}
       <ReaderSettingsPanel
@@ -1727,159 +2055,246 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       />
 
       {/* Table of contents / highlights / bookmarks */}
-      {tocOpen && (
-        <>
-          <div
-            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
-            onClick={() => setTocOpen(false)}
-          />
-          <aside
-            className="fixed left-0 top-0 z-50 flex h-full w-full max-w-sm flex-col border-r shadow-2xl"
-            style={{ backgroundColor: theme.bg, color: theme.fg, borderColor: theme.rule }}
-          >
-            <div className="border-b px-5 py-4" style={{ borderColor: theme.rule }}>
-              <h3 className="font-display text-lg font-medium">{book.title}</h3>
-              <div
-                className="mt-3 grid grid-cols-3 gap-1 rounded-full p-1"
-                style={{ backgroundColor: theme.rule, fontFamily: "var(--font-sans)" }}
-              >
-                {(
-                  [
-                    { key: "toc", label: "Sumário" },
-                    { key: "highlights", label: "Destaques" },
-                    { key: "bookmarks", label: "Marcadores" },
-                  ] as const
-                ).map((t) => (
-                  <button
-                    key={t.key}
-                    onClick={() => setTocTab(t.key)}
-                    className="rounded-full px-2 py-1.5 text-xs font-medium transition"
-                    style={{
-                      backgroundColor: tocTab === t.key ? theme.accent : "transparent",
-                      color: tocTab === t.key ? theme.bg : theme.fg,
-                    }}
-                  >
-                    {t.label}
-                  </button>
-                ))}
+      <AnimatePresence>
+        {tocOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px]"
+              onClick={() => setTocOpen(false)}
+            />
+            <motion.aside
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", stiffness: 380, damping: 38 }}
+              className="fixed left-0 top-0 z-50 flex h-full w-full max-w-sm flex-col border-r shadow-2xl"
+              style={{
+                backgroundColor: theme.bg,
+                color: theme.fg,
+                borderColor: theme.rule,
+                fontFamily: "var(--font-sans)",
+              }}
+            >
+              <div className="border-b px-5 py-4" style={{ borderColor: theme.rule }}>
+                <h3 className="font-display text-3xl leading-tight">{book.title}</h3>
+                <p className="text-xs" style={{ color: theme.muted }}>
+                  {book.author} · {Math.round(overallProgress * 100)}% lido ·{" "}
+                  {formatDuration(minutesLeftInBook)} restantes
+                </p>
+                <div
+                  className="mt-3 grid grid-cols-4 gap-1 rounded-full p-1"
+                  style={{ backgroundColor: theme.rule, fontFamily: "var(--font-sans)" }}
+                >
+                  {(
+                    [
+                      { key: "toc", label: "Sumário" },
+                      { key: "highlights", label: "Destaques" },
+                      { key: "bookmarks", label: "Marcadores" },
+                      { key: "search", label: "Buscar" },
+                    ] as const
+                  ).map((t) => (
+                    <button
+                      key={t.key}
+                      onClick={() => setTocTab(t.key)}
+                      className="rounded-full px-2 py-1.5 text-xs font-medium transition"
+                      style={{
+                        backgroundColor: tocTab === t.key ? theme.accent : "transparent",
+                        color: tocTab === t.key ? theme.bg : theme.fg,
+                      }}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
 
-            {tocTab === "toc" && (
-              <ul className="flex-1 overflow-y-auto p-3">
-                {book.chapters.map((c: (typeof book.chapters)[number], i: number) => {
-                  const active = i === chapterIndex;
-                  return (
-                    <li key={c.id}>
-                      <button
-                        onClick={() => goto(i)}
-                        className="w-full rounded-xl px-4 py-3 text-left transition"
-                        style={{
-                          backgroundColor: active ? theme.accent + "22" : "transparent",
-                          color: active ? theme.accent : theme.fg,
-                        }}
-                      >
-                        <span className="text-[10px] tabular-nums" style={{ color: theme.muted }}>
-                          {String(i + 1).padStart(2, "0")}
-                        </span>
-                        <span className="ml-3 font-display">{c.title}</span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-
-            {tocTab === "highlights" &&
-              (annotations.highlights.length === 0 ? (
-                <div className="flex-1 p-6 text-center text-sm" style={{ color: theme.muted }}>
-                  <Highlighter className="mx-auto h-5 w-5" />
-                  <p className="mt-3">Selecione um trecho durante a leitura para destacá-lo.</p>
-                </div>
-              ) : (
-                <ul className="flex-1 space-y-2 overflow-y-auto p-3">
-                  {[...annotations.highlights]
-                    .sort(
-                      (a, b) =>
-                        a.chapterIndex - b.chapterIndex || a.paragraphIndex - b.paragraphIndex,
-                    )
-                    .map((h) => (
-                      <li
-                        key={h.id}
-                        className="rounded-xl border p-3"
-                        style={{ borderColor: theme.rule }}
-                      >
+              {tocTab === "toc" && (
+                <ul className="flex-1 overflow-y-auto p-3">
+                  {book.chapters.map((c: (typeof book.chapters)[number], i: number) => {
+                    const active = i === chapterIndex;
+                    return (
+                      <li key={c.id}>
                         <button
-                          onClick={() => jumpToHighlight(h)}
-                          className="block w-full text-left"
-                        >
-                          <p
-                            className="text-sm"
-                            style={{
-                              boxShadow: `inset 3px 0 0 0 ${HIGHLIGHT_ACCENT[h.color]}`,
-                              paddingLeft: 8,
-                            }}
-                          >
-                            {h.excerpt}
-                            {h.excerpt.length >= 140 ? "…" : ""}
-                          </p>
-                          {h.note && (
-                            <p className="mt-2 text-xs italic" style={{ color: theme.muted }}>
-                              {h.note}
-                            </p>
-                          )}
-                        </button>
-                        <button
-                          onClick={() => void removeHighlight(uid, book.id, h.id)}
-                          className="mt-2 inline-flex items-center gap-1 text-[11px]"
-                          style={{ color: theme.muted }}
-                        >
-                          <Trash2 className="h-3 w-3" /> Remover
-                        </button>
-                      </li>
-                    ))}
-                </ul>
-              ))}
-
-            {tocTab === "bookmarks" &&
-              (annotations.bookmarks.length === 0 ? (
-                <div className="flex-1 p-6 text-center text-sm" style={{ color: theme.muted }}>
-                  <BookmarkIcon className="mx-auto h-5 w-5" />
-                  <p className="mt-3">
-                    Use o ícone de marcador no topo para salvar a página atual.
-                  </p>
-                </div>
-              ) : (
-                <ul className="flex-1 space-y-2 overflow-y-auto p-3">
-                  {[...annotations.bookmarks]
-                    .sort((a, b) => a.chapterIndex - b.chapterIndex)
-                    .map((b) => (
-                      <li key={b.id} className="flex items-center gap-2">
-                        <button
-                          onClick={() => jumpToBookmark(b)}
-                          className="flex-1 rounded-xl border px-4 py-3 text-left"
-                          style={{ borderColor: theme.rule }}
+                          onClick={() => goto(i)}
+                          className="w-full rounded-xl px-4 py-3 text-left transition"
+                          style={{
+                            backgroundColor: active ? theme.accent + "22" : "transparent",
+                            color: active ? theme.accent : theme.fg,
+                          }}
                         >
                           <span className="text-[10px] tabular-nums" style={{ color: theme.muted }}>
-                            Cap. {b.chapterIndex + 1}
+                            {String(i + 1).padStart(2, "0")}
                           </span>
-                          <span className="ml-3 font-display">{b.label}</span>
+                          <span className="ml-3 font-display">{c.title}</span>
                         </button>
-                        <button
-                          onClick={() => void handleRemoveBookmark(b.id)}
-                          aria-label="Remover marcador"
-                          className="rounded-full p-2 hover:opacity-70"
-                          style={{ color: theme.muted }}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
+              {tocTab === "highlights" &&
+                (annotations.highlights.length === 0 ? (
+                  <div className="flex-1 p-6 text-center text-sm" style={{ color: theme.muted }}>
+                    <Highlighter className="mx-auto h-5 w-5" />
+                    <p className="mt-3">Selecione um trecho durante a leitura para destacá-lo.</p>
+                  </div>
+                ) : (
+                  <ul className="flex-1 space-y-2 overflow-y-auto p-3">
+                    {[...annotations.highlights]
+                      .sort(
+                        (a, b) =>
+                          a.chapterIndex - b.chapterIndex || a.paragraphIndex - b.paragraphIndex,
+                      )
+                      .map((h) => (
+                        <li
+                          key={h.id}
+                          className="rounded-xl border p-3"
+                          style={{ borderColor: theme.rule }}
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
+                          <button
+                            onClick={() => jumpToHighlight(h)}
+                            className="block w-full text-left"
+                          >
+                            <p
+                              className="text-sm"
+                              style={{
+                                boxShadow: `inset 3px 0 0 0 ${HIGHLIGHT_ACCENT[h.color]}`,
+                                paddingLeft: 8,
+                              }}
+                            >
+                              {h.excerpt}
+                              {h.excerpt.length >= 140 ? "…" : ""}
+                            </p>
+                            {h.note && (
+                              <p className="mt-2 text-xs italic" style={{ color: theme.muted }}>
+                                {h.note}
+                              </p>
+                            )}
+                          </button>
+                          <button
+                            onClick={() => void removeHighlight(uid, book.id, h.id)}
+                            className="mt-2 inline-flex items-center gap-1 text-[11px]"
+                            style={{ color: theme.muted }}
+                          >
+                            <Trash2 className="h-3 w-3" /> Remover
+                          </button>
+                        </li>
+                      ))}
+                  </ul>
+                ))}
+
+              {tocTab === "bookmarks" &&
+                (annotations.bookmarks.length === 0 ? (
+                  <div className="flex-1 p-6 text-center text-sm" style={{ color: theme.muted }}>
+                    <BookmarkIcon className="mx-auto h-5 w-5" />
+                    <p className="mt-3">
+                      Use o ícone de marcador no topo para salvar a página atual.
+                    </p>
+                  </div>
+                ) : (
+                  <ul className="flex-1 space-y-2 overflow-y-auto p-3">
+                    {[...annotations.bookmarks]
+                      .sort((a, b) => a.chapterIndex - b.chapterIndex)
+                      .map((b) => (
+                        <li key={b.id} className="flex items-center gap-2">
+                          <button
+                            onClick={() => jumpToBookmark(b)}
+                            className="flex-1 rounded-xl border px-4 py-3 text-left"
+                            style={{ borderColor: theme.rule }}
+                          >
+                            <span
+                              className="text-[10px] tabular-nums"
+                              style={{ color: theme.muted }}
+                            >
+                              Cap. {b.chapterIndex + 1}
+                            </span>
+                            <span className="ml-3 font-display">{b.label}</span>
+                          </button>
+                          <button
+                            onClick={() => void handleRemoveBookmark(b.id)}
+                            aria-label="Remover marcador"
+                            className="rounded-full p-2 hover:opacity-70"
+                            style={{ color: theme.muted }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </li>
+                      ))}
+                  </ul>
+                ))}
+              {tocTab === "search" && (
+                <div className="flex min-h-0 flex-1 flex-col">
+                  <div className="p-3">
+                    <label
+                      className="flex items-center gap-2 rounded-2xl px-3 py-2.5"
+                      style={{ boxShadow: `inset 0 0 0 1px ${theme.rule}` }}
+                    >
+                      <SearchIcon className="h-4 w-4 shrink-0" style={{ color: theme.muted }} />
+                      <input
+                        autoFocus
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Buscar palavras neste livro"
+                        className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+                        style={{ color: theme.fg }}
+                        aria-label="Buscar no livro"
+                      />
+                    </label>
+                    <p className="mt-2 px-1 text-[11px]" style={{ color: theme.muted }}>
+                      {searchQuery.trim().length < 2
+                        ? "Digite pelo menos 2 letras. Acentos são ignorados."
+                        : searchResults.length === 0
+                          ? "Nada encontrado."
+                          : `${searchResults.length}${searchResults.length >= 80 ? "+" : ""} trechos encontrados`}
+                    </p>
+                  </div>
+                  <ul className="flex-1 space-y-1.5 overflow-y-auto px-3 pb-4">
+                    {searchResults.map((r) => (
+                      <li key={`${r.chapterIndex}-${r.paragraphIndex}`}>
+                        <button
+                          onClick={() =>
+                            jumpTo(
+                              r.chapterIndex,
+                              r.paragraphIndex /
+                                Math.max(1, book.chapters[r.chapterIndex]?.paragraphs.length ?? 1),
+                            )
+                          }
+                          className="w-full rounded-xl px-3 py-2.5 text-left text-sm transition hover:opacity-80"
+                          style={{ boxShadow: `inset 0 0 0 1px ${theme.rule}` }}
+                        >
+                          <span
+                            className="block truncate text-[10px] uppercase tracking-wider"
+                            style={{ color: theme.muted }}
+                          >
+                            Cap. {r.chapterIndex + 1} · {book.chapters[r.chapterIndex]?.title}
+                          </span>
+                          <span
+                            className="mt-0.5 block leading-relaxed"
+                            style={{ fontFamily: readerFontFamily }}
+                          >
+                            {r.before}
+                            <mark
+                              className="rounded-sm px-0.5"
+                              style={{ background: theme.accent + "40", color: "inherit" }}
+                            >
+                              {r.match}
+                            </mark>
+                            {r.after}
+                          </span>
                         </button>
                       </li>
                     ))}
-                </ul>
-              ))}
-          </aside>
-        </>
-      )}
+                  </ul>
+                </div>
+              )}
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -1955,10 +2370,18 @@ function IconBtn({
     <button
       onClick={onClick}
       aria-label={label}
-      className="grid h-10 w-10 place-items-center rounded-full transition hover:opacity-70"
+      title={label}
+      className="grid h-11 w-11 shrink-0 place-items-center rounded-full transition hover:opacity-70 active:scale-95"
       style={{ color: theme.fg }}
     >
       {children}
     </button>
   );
+}
+
+function formatDuration(minutes: number): string {
+  if (minutes < 60) return `${Math.max(1, minutes)} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m ? `${h}h ${m}min` : `${h}h`;
 }

@@ -10,7 +10,10 @@ import { ensureUser, getFirebase } from "./firebase";
 import { withDeadline, withFallback } from "./async-utils";
 
 export type ReaderTheme = "light" | "paper" | "sepia" | "dark" | "amoled";
-export type ReaderFont = "serif" | "sans";
+/** serif = Newsreader · literata = Literata · atkinson = Atkinson
+ * Hyperlegible (designed for low vision) · sans = Instrument Sans. */
+export type ReaderFont = "serif" | "sans" | "literata" | "atkinson";
+export type AmbientSound = "off" | "chuva" | "lareira" | "mar" | "foco";
 export type ReaderMode = "scroll" | "paginated";
 export type ReaderAlignment = "justify" | "left";
 
@@ -28,6 +31,13 @@ export interface ReaderSettings {
    * away like a paper leaf. Kept optional for backwards-compatible saved
    * preferences from older BookVerse versions. */
   pageTurn?: boolean;
+  /** Amber "night light" filter strength, 0–100. */
+  warmth?: number;
+  /** Extra dimming on top of the theme, 0–70 (%). */
+  dim?: number;
+  /** Generated ambient soundscape while reading. */
+  ambient?: AmbientSound;
+  ambientVolume?: number;
   /** Millisecond client timestamp used only to reconcile preferences across
    * devices. Reading settings are personal presentation data, not stats. */
   updatedAt?: number;
@@ -67,6 +77,10 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
   alignment: "justify",
   mode: "paginated",
   pageTurn: true,
+  warmth: 0,
+  dim: 0,
+  ambient: "off",
+  ambientVolume: 0.35,
 };
 
 const SETTINGS_KEY = "bookverse:reader:settings";
