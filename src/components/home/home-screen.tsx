@@ -10,14 +10,17 @@ import {
   FileUp,
   Flame,
   Headphones,
+  RefreshCw,
   Search,
+  Sparkles,
 } from "lucide-react";
 
 import { BookArt } from "@/components/book-art";
 import { Lumi } from "@/components/brand/lumi";
 import { AccountMenu } from "@/components/shell/account-menu";
 import { openCommandPalette } from "@/lib/command-palette-store";
-import { LUMI_PICKS } from "@/lib/editorial";
+import { picksFor, type LumiPick } from "@/lib/editorial";
+import { openLumiPanel } from "@/lib/lumi-panel-store";
 import { bookPalette } from "@/lib/faux-books";
 import { computeGoalProgress, currentYear, subscribeReadingGoal } from "@/lib/goals";
 import { subscribeLibrary, type LibraryEntry } from "@/lib/library";
@@ -111,6 +114,8 @@ export function HomeScreen({ user }: { user: User | null }) {
   const [onboarded, setOnboarded] = useState<boolean | null>(() =>
     getLocalOnboarding(uid) ? true : null,
   );
+  const [tastes, setTastes] = useState<string[]>(() => getLocalOnboarding(uid)?.genres ?? []);
+  const [shuffle, setShuffle] = useState(0);
   const ritual = useRitual(uid);
 
   useEffect(() => {
@@ -156,11 +161,17 @@ export function HomeScreen({ user }: { user: User | null }) {
   useEffect(() => {
     if (onboarded) return;
     if (guest) {
-      setOnboarded(!!getLocalOnboarding(uid));
+      const local = getLocalOnboarding(uid);
+      setOnboarded(!!local);
+      setTastes(local?.genres ?? []);
       return;
     }
     let alive = true;
-    void loadOnboarding(uid).then((p) => alive && setOnboarded(!!p));
+    void loadOnboarding(uid).then((p) => {
+      if (!alive) return;
+      setOnboarded(!!p);
+      setTastes(p?.genres ?? []);
+    });
     return () => {
       alive = false;
     };
@@ -183,10 +194,17 @@ export function HomeScreen({ user }: { user: User | null }) {
         .slice(0, 12),
     [library, current],
   );
-  const picks = useMemo(() => {
-    const reading = current?.entry.title.toLowerCase();
-    return LUMI_PICKS.filter((p) => p.title.toLowerCase() !== reading).slice(0, 12);
-  }, [current]);
+  const picks = useMemo(
+    () =>
+      picksFor({
+        genres: tastes,
+        exclude: (library ?? []).map((e) => e.title),
+        count: 13,
+        shuffle,
+      }),
+    [tastes, library, shuffle],
+  );
+  const todayPick = picks[0];
 
   const goal = computeGoalProgress(library ?? [], goalTarget ?? 0);
   const streak = profile?.currentStreak ?? 0;
@@ -331,8 +349,34 @@ export function HomeScreen({ user }: { user: User | null }) {
         </motion.div>
       </div>
 
-      <Rail title="Feito para você" to="/descobrir" delay={0.18}>
-        {picks.map((p) => (
+      {todayPick && <LumiTodayCard pick={todayPick} delay={0.16} />}
+
+      <Rail
+        title="Feito para você"
+        to="/descobrir"
+        delay={0.18}
+        contentKey={shuffle || undefined}
+        action={
+          <button
+            type="button"
+            onClick={() => setShuffle((n) => n + 1)}
+            aria-label="Outras sugestões"
+            className="press inline-flex h-8 items-center gap-1.5 rounded-full bg-surface-2 px-3 text-[12.5px] font-semibold"
+          >
+            <motion.span
+              key={shuffle}
+              initial={{ rotate: -180 }}
+              animate={{ rotate: 0 }}
+              transition={{ duration: 0.5, ease: EASE }}
+              className="grid"
+            >
+              <RefreshCw className="h-3.5 w-3.5" strokeWidth={2.4} />
+            </motion.span>
+            Outras
+          </button>
+        }
+      >
+        {picks.slice(1).map((p) => (
           <BookTile
             key={p.gutenbergId}
             title={p.title}
@@ -395,11 +439,15 @@ function Rail({
   title,
   to,
   delay,
+  action,
+  contentKey,
   children,
 }: {
+  contentKey?: string | number;
   title: string;
   to: "/biblioteca" | "/descobrir";
   delay: number;
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const reduce = useReducedMotion();
@@ -410,18 +458,113 @@ function Rail({
       transition={{ duration: 0.6, ease: EASE, delay }}
       className="mt-8"
     >
-      <div className="mb-3.5 flex items-baseline justify-between px-1">
-        <h2 className="text-[21px] lg:text-[26px]">{title}</h2>
-        <Link
-          to={to}
-          search={to === "/descobrir" ? DISCOVER_SEARCH : undefined}
-          className="text-[13.5px] font-semibold text-muted-foreground hover:text-foreground"
-        >
-          Ver tudo
-        </Link>
+      <div className="mb-3.5 flex items-center justify-between gap-3 px-1">
+        <h2 className="min-w-0 truncate text-[21px] lg:text-[26px]">{title}</h2>
+        <div className="flex shrink-0 items-center gap-3">
+          {action}
+          <Link
+            to={to}
+            search={to === "/descobrir" ? DISCOVER_SEARCH : undefined}
+            className="text-[13.5px] font-semibold text-muted-foreground hover:text-foreground"
+          >
+            Ver tudo
+          </Link>
+        </div>
       </div>
-      <div className="no-scrollbar -mx-4 flex snap-x scroll-pl-4 gap-3.5 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:scroll-pl-6 sm:px-6 lg:mx-0 lg:scroll-pl-0 lg:gap-5 lg:px-0">
+      <motion.div
+        key={contentKey}
+        initial={contentKey ? { opacity: 0.3, x: 18 } : false}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.45, ease: EASE }}
+        className="no-scrollbar -mx-4 flex snap-x scroll-pl-4 gap-3.5 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:scroll-pl-6 sm:px-6 lg:mx-0 lg:scroll-pl-0 lg:gap-5 lg:px-0"
+      >
         {children}
+      </motion.div>
+    </motion.section>
+  );
+}
+
+const LUMI_CHIPS = [
+  {
+    label: "O que leio hoje?",
+    prompt:
+      "Com base no meu momento, me indique um livro de domínio público para começar hoje e diga por quê, em poucas linhas.",
+  },
+  {
+    label: "Algo curto",
+    prompt:
+      "Me sugira três leituras curtas (menos de 2 horas) de domínio público, com uma frase sobre cada.",
+  },
+  {
+    label: "Montar um hábito",
+    prompt:
+      "Me ajude a montar um hábito de leitura de 20 minutos por dia: um plano simples para esta semana.",
+  },
+];
+
+/** Lumi's pick of the day — her note plus quick questions that open the chat. */
+function LumiTodayCard({ pick, delay }: { pick: LumiPick; delay: number }) {
+  const reduce = useReducedMotion();
+  return (
+    <motion.section
+      initial={reduce ? false : { opacity: 0.55, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6, ease: EASE, delay }}
+      className="mt-6 overflow-hidden rounded-[28px] bg-accent-soft p-4 sm:p-5"
+    >
+      <div className="flex items-start gap-3">
+        <Lumi pose="reading" size={54} shadow={false} />
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-1.5 text-[11.5px] font-bold uppercase tracking-[0.12em] text-gold">
+            <Sparkles className="h-3.5 w-3.5" /> A Lumi indica hoje
+          </p>
+          <Link
+            to="/reader/$bookId"
+            params={{ bookId: gutenbergReaderId(pick.gutenbergId) }}
+            className="mt-1 block font-display text-[20px] leading-tight hover:underline"
+          >
+            {pick.title}
+          </Link>
+          <p className="text-[12.5px] text-muted-foreground">
+            {pick.author} · {formatMinutes(pick.minutes)} · {pick.mood}
+          </p>
+        </div>
+      </div>
+      <p className="mt-3 text-[14px] leading-relaxed text-foreground/85">“{pick.lumiNote}”</p>
+      <div className="mt-3.5 flex flex-wrap gap-2">
+        <Link
+          to="/reader/$bookId"
+          params={{ bookId: gutenbergReaderId(pick.gutenbergId) }}
+          className="press inline-flex h-9 items-center gap-1.5 rounded-full bg-foreground px-4 text-[13px] font-semibold text-background"
+        >
+          <BookOpen className="h-4 w-4" /> Ler agora
+        </Link>
+        <button
+          type="button"
+          onClick={() =>
+            openLumiPanel({
+              topic: "question",
+              bookTitle: pick.title,
+              bookAuthor: pick.author,
+              initialPrompt: `Sem spoilers: por que eu deveria ler “${pick.title}”, de ${pick.author}? O que observar enquanto leio?`,
+            })
+          }
+          className="press inline-flex h-9 items-center gap-1.5 rounded-full bg-card px-3.5 text-[13px] font-semibold shadow-[inset_0_0_0_1px_var(--border)]"
+        >
+          <Sparkles className="h-3.5 w-3.5 text-gold" /> Por que ler?
+        </button>
+      </div>
+      <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4 sm:-mx-5 sm:px-5">
+        {LUMI_CHIPS.map((c) => (
+          <button
+            key={c.label}
+            type="button"
+            onClick={() => openLumiPanel({ topic: "general", initialPrompt: c.prompt })}
+            className="press shrink-0 rounded-full border border-gold/30 bg-card/60 px-3 py-1.5 text-[12.5px] font-semibold text-foreground/80"
+          >
+            {c.label}
+          </button>
+        ))}
       </div>
     </motion.section>
   );

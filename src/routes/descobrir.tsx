@@ -36,7 +36,8 @@ import {
   type CatalogSource,
 } from "@/lib/catalog";
 import { COLLECTIONS, collectionById, type Collection } from "@/lib/collections";
-import { LUMI_PICKS } from "@/lib/editorial";
+import { picksFor } from "@/lib/editorial";
+import { LumiAskBar } from "@/components/lumi-ask-bar";
 import { slugFor } from "@/lib/library";
 import { gutenbergReaderId } from "@/lib/public-domain";
 
@@ -253,7 +254,7 @@ function ExploreHome() {
     { label: "Poesia", to: "poesia" },
     { label: "Aventura", to: "aventura" },
   ];
-  const trend = LUMI_PICKS.slice(0, 5);
+  const trend = useMemo(() => picksFor({ count: 5, shuffle: 3 }), []);
 
   return (
     <div className="mx-auto max-w-5xl pb-10 pt-[calc(env(safe-area-inset-top)+0.875rem)] lg:pt-10">
@@ -286,6 +287,18 @@ function ExploreHome() {
             {c.label}
           </button>
         ))}
+      </motion.div>
+
+      <motion.div {...rise(0.06)} className="mt-4 px-4 lg:px-10">
+        <LumiAskBar
+          placeholder="Diga à Lumi o que você quer ler…"
+          prefix="Me recomende livros de domínio público (grátis) para este pedido, com uma frase sobre cada um: "
+          suggestions={[
+            "Um mistério curto para hoje à noite",
+            "Algo parecido com Dom Casmurro",
+            "Um clássico leve para começar",
+          ]}
+        />
       </motion.div>
 
       {/* Collections bento */}
