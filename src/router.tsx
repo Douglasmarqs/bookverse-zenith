@@ -9,6 +9,13 @@ export const getRouter = () => {
     routeTree,
     context: { queryClient },
     scrollRestoration: true,
+    // Page changes animate inside the app (see .page-enter): the browser's
+    // View Transitions blinked and hid the fixed tab bar on some phones.
+    defaultViewTransition: false,
+    // Load a page's code as soon as a finger touches its link, so the
+    // switch never waits on the network.
+    defaultPreload: "intent",
+    defaultPreloadDelay: 0,
     defaultPreloadStaleTime: 0,
   });
 

@@ -3,15 +3,18 @@
 @import "tw-animate-css";
 
 /*
- * BookVerse — social reading, with room to breathe.
- * The warm reading surface lives alongside a clear blue navigation system.
- * `gold` is retained as the semantic accent name so existing features keep
- * working, but now resolves to the BookVerse blue rather than a metallic hue.
+ * BookVerse — "capa viva".
+ * A bright, editorial reading app: ink, paper and one vermilion accent, while
+ * each book's own cover colour tints the screens that belong to it.
+ * `gold` is kept as the semantic accent name so older components keep
+ * working; it now resolves to the BookVerse vermilion.
  */
 
 @theme inline {
-  --font-display: "Fraunces", "Times New Roman", serif;
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Bricolage Grotesque Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-book: "Literata Variable", Georgia, serif;
+  --font-cover: "Instrument Serif", Georgia, serif;
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -46,24 +49,108 @@
   --color-ink: var(--ink);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
+  --color-warm: var(--warm);
+  --color-success: var(--success);
+  --color-night: var(--night);
+  --color-night-foreground: var(--night-foreground);
+  --color-paper: var(--paper);
+  --color-paper-ink: var(--paper-ink);
+  --color-faint: var(--faint);
+  --color-accent-soft: var(--accent-soft);
+  --color-lilac: var(--lilac);
+  --color-mint: var(--mint);
+  --color-sky: var(--sky);
+  --color-rose: var(--rose);
+  --color-butter: var(--butter);
 
-  --shadow-glow: 0 18px 48px -26px color-mix(in oklab, var(--gold) 58%, transparent);
-  --shadow-plate: 0 24px 60px -34px oklch(0.2 0.02 250 / 0.25);
-  --gradient-gold: linear-gradient(135deg, oklch(0.62 0.16 244), oklch(0.52 0.18 255));
-  --gradient-ember: radial-gradient(ellipse at top, oklch(0.7 0.12 235 / 0.2), transparent 62%);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --shadow-glow: 0 14px 30px -14px color-mix(in oklab, var(--gold) 70%, transparent);
+  --shadow-plate: 0 30px 60px -30px rgb(0 0 0 / 0.35);
+  --shadow-book: 0 1px 1px rgb(0 0 0 / 0.08), 0 10px 22px -10px rgb(0 0 0 / 0.35);
+  --shadow-book-lift: 0 2px 2px rgb(0 0 0 / 0.06), 0 30px 50px -18px rgb(0 0 0 / 0.45),
+    0 14px 24px -14px rgb(0 0 0 / 0.35);
+  --gradient-gold: linear-gradient(180deg, var(--gold-soft), var(--gold));
+  --gradient-ember: radial-gradient(
+    ellipse at top,
+    color-mix(in oklab, var(--gold) 14%, transparent),
+    transparent 62%
+  );
 }
 
-:root {
-  --radius: 0.9rem;
+/* App appearance. `data-theme` on <html> holds the resolved value; see
+   lib/theme.ts. Both pairs were checked for WCAG AA on body text. */
+:root,
+[data-theme="claro"] {
+  --radius: 1.25rem;
+  color-scheme: light;
+  --ink: #f4f3ef;
+  --surface: #ffffff;
+  --surface-2: #ecebe6;
+  --parchment: #131313;
+  --muted-foreground: #5c5b56;
+  --faint: #8d8c86;
+  --gold: #ff4d1a;
+  --gold-soft: #ff7a4d;
+  --oxide: #d93d0f;
+  --accent-soft: #ffe7dd;
+  --warm: #ff4d1a;
+  --success: #1f8a52;
+  --night: #141416;
+  --night-foreground: #f4f3ef;
+  --paper: #fffdf8;
+  --paper-ink: #1b1b1b;
+  --border: #e4e2dc;
+  --input: #d9d7d0;
+  --primary-foreground: #ffffff;
+  --destructive: #d93025;
+  --lilac: #e3e0ff;
+  --mint: #d8efe2;
+  --sky: #dbe8ff;
+  --rose: #fbe0e6;
+  --butter: #fff0bf;
+  --ambient-1: transparent;
+  --ambient-2: transparent;
+  --shelf: #e2dfd7;
+  --shelf-2: #cfcbc1;
+}
 
-  --ink: oklch(0.975 0.008 245);
-  --surface: oklch(1 0 0);
-  --surface-2: oklch(0.94 0.015 245);
-  --parchment: oklch(0.25 0.025 248);
-  --gold: oklch(0.56 0.17 247);
-  --gold-soft: oklch(0.48 0.15 248);
-  --oxide: oklch(0.46 0.14 258);
+[data-theme="escuro"] {
+  color-scheme: dark;
+  --ink: #0c0c0e;
+  --surface: #18181b;
+  --surface-2: #232327;
+  --parchment: #f3f2ee;
+  --muted-foreground: #a8a7a1;
+  --faint: #76756f;
+  --gold: #ff6436;
+  --gold-soft: #ff8a62;
+  --oxide: #ff4d1a;
+  --accent-soft: #3a1d13;
+  --warm: #ff6436;
+  --success: #4fd08b;
+  --night: #1f1f24;
+  --night-foreground: #f3f2ee;
+  --paper: #fffdf8;
+  --paper-ink: #1b1b1b;
+  --border: #2a2a2f;
+  --input: #3a3a40;
+  --primary-foreground: #ffffff;
+  --destructive: #ff6b60;
+  --lilac: #26234a;
+  --mint: #15302a;
+  --sky: #172640;
+  --rose: #3a1b24;
+  --butter: #3a3317;
+  --ambient-1: transparent;
+  --ambient-2: transparent;
+  --shelf: #2a2a2f;
+  --shelf-2: #1c1c20;
+}
 
+:root,
+[data-theme] {
   --background: var(--ink);
   --foreground: var(--parchment);
   --card: var(--surface);
@@ -71,162 +158,13 @@
   --popover: var(--surface);
   --popover-foreground: var(--parchment);
   --primary: var(--gold);
-  --primary-foreground: oklch(0.99 0.003 245);
   --secondary: var(--surface-2);
   --secondary-foreground: var(--parchment);
   --muted: var(--surface-2);
-  --muted-foreground: oklch(0.48 0.025 247);
   --accent: var(--gold);
-  --accent-foreground: oklch(0.15 0.01 55);
-  --destructive: oklch(0.55 0.19 25);
-  --destructive-foreground: oklch(0.99 0.003 245);
-  --border: oklch(0.88 0.015 245 / 0.9);
-  --input: oklch(0.84 0.02 245 / 0.9);
+  --accent-foreground: var(--primary-foreground);
+  --destructive-foreground: #ffffff;
   --ring: var(--gold);
-
-  --ambient-1: oklch(0.84 0.08 235 / 0.42);
-  --ambient-2: oklch(0.9 0.04 245 / 0.36);
-}
-
-/*
- * Site-wide reading themes — Dark (default), Light, Sepia, Paper.
- * Applied via `data-theme` on <html> (see lib/theme.ts). Every value below
- * was checked against WCAG contrast minimums (4.5:1 body text, 3:1 large
- * text/icons) before being picked, not just eyeballed.
- */
-[data-theme="dark"] {
-  --ink: oklch(0.17 0.025 250);
-  --surface: oklch(0.22 0.028 250);
-  --surface-2: oklch(0.27 0.03 250);
-  --parchment: oklch(0.93 0.015 245);
-  --gold: oklch(0.7 0.14 240);
-  --gold-soft: oklch(0.78 0.11 238);
-  --oxide: oklch(0.6 0.13 252);
-
-  --background: var(--ink);
-  --foreground: var(--parchment);
-  --card: var(--surface);
-  --card-foreground: var(--parchment);
-  --popover: var(--surface);
-  --popover-foreground: var(--parchment);
-  --primary: var(--gold);
-  --primary-foreground: oklch(0.16 0.02 250);
-  --secondary: var(--surface-2);
-  --secondary-foreground: var(--parchment);
-  --muted: var(--surface-2);
-  --muted-foreground: oklch(0.72 0.02 245);
-  --accent: var(--gold);
-  --accent-foreground: oklch(0.16 0.02 250);
-  --destructive-foreground: var(--parchment);
-  --border: oklch(0.37 0.025 250 / 0.9);
-  --input: oklch(0.37 0.025 250 / 0.9);
-  --ring: var(--gold);
-  --ambient-1: oklch(0.34 0.09 245 / 0.35);
-  --ambient-2: oklch(0.27 0.05 260 / 0.25);
-}
-
-[data-theme="light"] {
-  --ink: oklch(0.975 0.008 245);
-  --surface: oklch(1 0 0);
-  --surface-2: oklch(0.94 0.015 245);
-  --parchment: oklch(0.25 0.025 248);
-  --gold: oklch(0.56 0.17 247);
-  --gold-soft: oklch(0.48 0.15 248);
-  --oxide: oklch(0.46 0.14 258);
-
-  --background: var(--ink);
-  --foreground: var(--parchment);
-  --card: var(--surface);
-  --card-foreground: var(--parchment);
-  --popover: var(--surface);
-  --popover-foreground: var(--parchment);
-  --primary: var(--gold);
-  --primary-foreground: oklch(0.99 0.003 245);
-  --secondary: var(--surface-2);
-  --secondary-foreground: var(--parchment);
-  --muted: var(--surface-2);
-  --muted-foreground: oklch(0.48 0.025 247);
-  --accent: var(--gold);
-  --accent-foreground: oklch(0.99 0.003 245);
-  --destructive: oklch(0.5 0.19 25);
-  --destructive-foreground: oklch(0.99 0.003 245);
-  --border: oklch(0.88 0.015 245 / 0.9);
-  --input: oklch(0.84 0.02 245 / 0.9);
-  --ring: var(--gold);
-
-  --ambient-1: oklch(0.84 0.08 235 / 0.42);
-  --ambient-2: oklch(0.9 0.04 245 / 0.36);
-}
-
-[data-theme="sepia"] {
-  --ink: oklch(0.87 0.032 75);
-  --surface: oklch(0.83 0.036 72);
-  --surface-2: oklch(0.79 0.04 68);
-  --parchment: oklch(0.26 0.045 45);
-  --gold: oklch(0.42 0.09 50);
-  --gold-soft: oklch(0.5 0.08 52);
-  --oxide: oklch(0.35 0.08 48);
-
-  --background: var(--ink);
-  --foreground: var(--parchment);
-  --card: var(--surface);
-  --card-foreground: var(--parchment);
-  --popover: var(--surface);
-  --popover-foreground: var(--parchment);
-  --primary: var(--gold);
-  --primary-foreground: oklch(0.97 0.02 75);
-  --secondary: var(--surface-2);
-  --secondary-foreground: var(--parchment);
-  --muted: var(--surface-2);
-  --muted-foreground: oklch(0.42 0.05 50);
-  --accent: var(--gold);
-  --accent-foreground: oklch(0.97 0.02 75);
-  --destructive: oklch(0.48 0.18 25);
-  --destructive-foreground: oklch(0.97 0.02 75);
-  --border: oklch(0.65 0.035 60 / 0.6);
-  --input: oklch(0.65 0.035 60 / 0.6);
-  --ring: var(--gold);
-
-  --ambient-1: oklch(0.75 0.05 65 / 0.4);
-  --ambient-2: oklch(0.72 0.045 55 / 0.3);
-}
-
-[data-theme="paper"] {
-  --ink: oklch(0.94 0.008 80);
-  --surface: oklch(0.9 0.01 78);
-  --surface-2: oklch(0.87 0.012 75);
-  --parchment: oklch(0.24 0.01 50);
-  --gold: oklch(0.46 0.1 58);
-  --gold-soft: oklch(0.54 0.09 60);
-  --oxide: oklch(0.38 0.09 52);
-
-  --background: var(--ink);
-  --foreground: var(--parchment);
-  --card: var(--surface);
-  --card-foreground: var(--parchment);
-  --popover: var(--surface);
-  --popover-foreground: var(--parchment);
-  --primary: var(--gold);
-  --primary-foreground: oklch(0.98 0.005 85);
-  --secondary: var(--surface-2);
-  --secondary-foreground: var(--parchment);
-  --muted: var(--surface-2);
-  --muted-foreground: oklch(0.44 0.012 60);
-  --accent: var(--gold);
-  --accent-foreground: oklch(0.98 0.005 85);
-  --destructive: oklch(0.5 0.19 25);
-  --destructive-foreground: oklch(0.98 0.005 85);
-  --border: oklch(0.8 0.01 70 / 0.6);
-  --input: oklch(0.8 0.01 70 / 0.6);
-  --ring: var(--gold);
-
-  --ambient-1: oklch(0.82 0.015 75 / 0.4);
-  --ambient-2: oklch(0.85 0.012 65 / 0.3);
-}
-
-.dark {
-  --background: var(--ink);
-  --foreground: var(--parchment);
 }
 
 @layer base {
@@ -236,18 +174,16 @@
 
   html {
     scroll-behavior: smooth;
+    overflow-x: clip;
   }
 
   body {
+    overflow-x: clip;
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
-    font-feature-settings: "ss01", "cv11";
+    font-feature-settings: "cv11", "ss01";
     -webkit-font-smoothing: antialiased;
-    background-image:
-      radial-gradient(ellipse 75% 45% at 50% -8%, var(--ambient-1), transparent 62%),
-      radial-gradient(ellipse 60% 40% at 95% 100%, var(--ambient-2), transparent 62%);
-    background-attachment: fixed;
     transition:
       background-color 0.25s ease,
       color 0.25s ease;
@@ -256,20 +192,26 @@
   h1,
   h2,
   h3,
-  h4 {
+  h4,
+  .font-display {
     font-family: var(--font-display);
-    font-optical-sizing: auto;
-    letter-spacing: -0.015em;
+    font-weight: 720;
+    letter-spacing: -0.035em;
   }
 
   ::selection {
-    background: color-mix(in oklab, var(--gold) 26%, transparent);
+    background: color-mix(in oklab, var(--gold) 22%, transparent);
     color: var(--foreground);
   }
 
   :focus-visible {
     outline: 3px solid color-mix(in oklab, var(--gold) 55%, transparent);
     outline-offset: 3px;
+  }
+
+  button,
+  [role="button"] {
+    cursor: pointer;
   }
 }
 
@@ -704,6 +646,397 @@
   }
 }
 
+/* ==========================================================================
+   BookVerse motion & component layer
+   Every animation here is transform/opacity only (GPU friendly) and is
+   neutralised by the prefers-reduced-motion block at the end of the file.
+   ========================================================================== */
+
+/* Scroll reveal — <Reveal> toggles data-revealed once in view. */
+.reveal {
+  opacity: 0;
+  transform: translate3d(0, 22px, 0);
+  transition:
+    opacity 700ms var(--ease-out-expo),
+    transform 800ms var(--ease-out-expo);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+.reveal[data-revealed="true"] {
+  opacity: 1;
+  transform: none;
+}
+.reveal--scale {
+  transform: scale(0.96);
+}
+.reveal--left {
+  transform: translate3d(-28px, 0, 0);
+}
+.reveal--right {
+  transform: translate3d(28px, 0, 0);
+}
+
+/* Route-level entrance, applied to <main> content on each navigation. */
+@keyframes page-enter {
+  from {
+    opacity: 0.8;
+    transform: translate3d(0, 10px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@utility page-enter {
+  animation: page-enter 300ms var(--ease-out-expo) both;
+}
+
+/* Infinite cover marquee. Content is duplicated so -50% loops seamlessly. */
+@keyframes marquee-x {
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+@utility marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee-x var(--marquee-duration, 48s) linear infinite;
+}
+.marquee-mask {
+  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+}
+.marquee-mask:hover .marquee-track {
+  animation-play-state: paused;
+}
+
+/* Floating hero books — each gets its own --float-delay / --float-rot. */
+@keyframes book-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(var(--float-rot, 0deg));
+  }
+  50% {
+    transform: translate3d(0, -14px, 0) rotate(calc(var(--float-rot, 0deg) * -0.4));
+  }
+}
+@utility book-float {
+  animation: book-float 7s ease-in-out infinite;
+  animation-delay: var(--float-delay, 0s);
+  will-change: transform;
+}
+
+/* Slow drifting colour blobs behind heroes. */
+@keyframes blob-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(30px, -24px, 0) scale(1.08);
+  }
+  66% {
+    transform: translate3d(-22px, 18px, 0) scale(0.95);
+  }
+}
+@utility blob-drift {
+  animation: blob-drift 18s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* Subtle animated sheen across primary CTAs. */
+@keyframes sheen {
+  0% {
+    transform: translateX(-120%) skewX(-18deg);
+  }
+  60%,
+  100% {
+    transform: translateX(260%) skewX(-18deg);
+  }
+}
+.btn-sheen {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.btn-sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.35), transparent);
+  animation: sheen 4.2s ease-in-out infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Blinking text caret used by the live "typing" demos. */
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+@utility caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: -0.12em;
+  background: currentColor;
+  animation: caret-blink 1s steps(1) infinite;
+}
+
+/* Progress ring stroke animation (stroke-dashoffset driven by CSS var). */
+.ring-progress {
+  transition: stroke-dashoffset 1200ms var(--ease-out-expo);
+}
+
+/* Fine film-grain overlay for dark showcase bands. */
+.grain::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* Shared primitives ------------------------------------------------------ */
+@utility eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+@utility btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  background: var(--parchment);
+  color: var(--ink);
+  font-weight: 650;
+  font-size: 0.9375rem;
+  letter-spacing: -0.01em;
+  padding: 0.85rem 1.4rem;
+  white-space: nowrap;
+  transition:
+    transform 200ms var(--ease-out-expo),
+    opacity 200ms ease;
+}
+.btn-primary:hover {
+  opacity: 0.9;
+}
+.btn-primary:active {
+  transform: scale(0.97);
+}
+
+@utility btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--border);
+  color: var(--foreground);
+  font-weight: 650;
+  font-size: 0.9375rem;
+  letter-spacing: -0.01em;
+  padding: 0.85rem 1.4rem;
+  white-space: nowrap;
+  transition:
+    background-color 200ms ease,
+    transform 200ms var(--ease-out-expo);
+}
+.btn-ghost:hover {
+  background: var(--surface-2);
+}
+.btn-ghost:active {
+  transform: scale(0.97);
+}
+
+@utility surface-card {
+  background: var(--card);
+  border-radius: 1.6rem;
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+@utility lift {
+  transition:
+    transform 260ms var(--ease-out-expo),
+    box-shadow 260ms ease,
+    border-color 260ms ease;
+}
+.lift:hover {
+  transform: translateY(-3px);
+}
+
+/* Bottom tab bar respects the iOS home indicator. */
+@utility pb-safe {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+/* Hide scrollbars on horizontal rails while keeping them scrollable. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ==========================================================================
+   Biblioteca Noturna — signature components
+   ========================================================================== */
+
+/* Tactile press feedback for anything tappable. */
+@utility press {
+  transition: transform 160ms var(--ease-out-expo);
+  &:active {
+    transform: scale(0.96);
+  }
+}
+
+/* Book spine: vertical title, cloth sheen, gilt band. Set --s-bg/--s-fg. */
+@utility spine {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  font-family: var(--font-display);
+  line-height: 1;
+  border-radius: 2px 2px 0 0;
+  color: var(--s-fg, #efe6d4);
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--s-bg, #3c5a4a) 78%, black),
+    var(--s-bg, #3c5a4a) 28%,
+    color-mix(in oklab, var(--s-bg, #3c5a4a) 86%, white) 55%,
+    var(--s-bg, #3c5a4a) 76%,
+    color-mix(in oklab, var(--s-bg, #3c5a4a) 68%, black)
+  );
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.25);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@utility shelfboard {
+  height: 12px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--shelf), var(--shelf-2));
+  box-shadow: 0 24px 30px -16px rgb(0 0 0 / 0.75);
+}
+
+/* Warm lamp glow blob — position it with absolute utilities. */
+@utility lamp-glow {
+  display: none;
+}
+
+/* Hairline that catches the light. */
+@utility foil {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--gold) 60%, transparent),
+    transparent
+  );
+}
+
+@utility num {
+  font-family: var(--font-display);
+  font-weight: 720;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Breathing lamp — the light pulses very slowly. */
+@keyframes lamp-breathe {
+  0%,
+  100% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+@utility lamp-breathe {
+  animation: lamp-breathe 6s ease-in-out infinite;
+}
+
+/* Candle flame flicker. */
+@keyframes flame {
+  0%,
+  100% {
+    transform: scaleY(1) rotate(-1deg);
+  }
+  25% {
+    transform: scaleY(1.12) rotate(2deg);
+  }
+  50% {
+    transform: scaleY(0.94) rotate(-2deg);
+  }
+  75% {
+    transform: scaleY(1.06) rotate(1deg);
+  }
+}
+@utility flame {
+  transform-origin: 50% 100%;
+  animation: flame 1.6s ease-in-out infinite;
+}
+
+/* Page-to-page transitions (View Transitions API). The old page stays
+   put underneath while the new one rises in over it, so there is never a
+   frame where both are transparent (that was the "blink"). The dock, the
+   sidebar and the "Lendo agora" bar keep their own layer and don't fade. */
+::view-transition-old(root) {
+  animation: vt-out 320ms var(--ease-out-expo) both;
+}
+::view-transition-new(root) {
+  animation: vt-in 380ms var(--ease-out-expo) both;
+}
+@keyframes vt-out {
+  to {
+    transform: scale(0.985);
+    filter: brightness(0.97);
+  }
+}
+@keyframes vt-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+::view-transition-group(*) {
+  animation-duration: 380ms;
+  animation-timing-function: var(--ease-out-expo);
+}
+::view-transition-old(app-dock),
+::view-transition-new(app-dock),
+::view-transition-old(app-sidebar),
+::view-transition-new(app-sidebar),
+::view-transition-old(app-mini),
+::view-transition-new(app-mini) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+.vt-dock {
+  view-transition-name: app-dock;
+}
+.vt-sidebar {
+  view-transition-name: app-sidebar;
+}
+.vt-mini {
+  view-transition-name: app-mini;
+}
+
 /* Skips layout/paint work for offscreen sections (long shelf pages scroll
    noticeably smoother on low-end phones). */
 @utility content-auto {
@@ -723,6 +1056,26 @@
     scroll-behavior: auto !important;
   }
 
+  .reveal {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  ::view-transition-old(root),
+  ::view-transition-new(root),
+  ::view-transition-group(*) {
+    animation: none !important;
+  }
+
+  .marquee-track,
+  .lamp-breathe,
+  .flame,
+  .book-float,
+  .blob-drift,
+  .btn-sheen::after {
+    animation: none !important;
+  }
+
   /* The reader's explicit “Efeito de folha” switch is the final authority.
      People who prefer no motion can turn it off in the reader itself. */
   .reader-page-turn__sheet,
@@ -732,5 +1085,179 @@
   .pdf-page-turn__sheet::before,
   .pdf-page-turn__sheet::after {
     animation-duration: 680ms !important;
+  }
+}
+
+/* ==========================================================================
+   Capa viva — new primitives
+   ========================================================================== */
+@utility btn-accent {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  background: var(--gold);
+  color: #fff;
+  font-weight: 650;
+  font-size: 0.9375rem;
+  letter-spacing: -0.01em;
+  padding: 0.85rem 1.4rem;
+  white-space: nowrap;
+  box-shadow: 0 14px 30px -14px var(--gold);
+  transition: transform 200ms var(--ease-out-expo), filter 200ms ease;
+}
+.btn-accent:hover {
+  filter: brightness(1.05);
+}
+.btn-accent:active {
+  transform: scale(0.97);
+}
+
+@utility chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 2.25rem;
+  padding: 0 0.9rem;
+  border-radius: 999px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--surface);
+  color: var(--foreground);
+  box-shadow: inset 0 0 0 1px var(--border);
+  transition: background-color 160ms ease, color 160ms ease;
+}
+.chip[data-on="true"] {
+  background: var(--parchment);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+@utility book-shadow {
+  box-shadow: var(--shadow-book);
+}
+@utility book-shadow-lift {
+  box-shadow: var(--shadow-book-lift);
+}
+
+@utility glass-bar {
+  background: color-mix(in oklab, var(--surface) 86%, transparent);
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  box-shadow: inset 0 0 0 1px var(--border), 0 20px 40px -20px rgb(0 0 0 / 0.35);
+}
+
+@keyframes lumi-blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95% { transform: scaleY(0.1); }
+}
+.lumi-blink {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: lumi-blink 5.5s ease-in-out infinite;
+}
+@keyframes lumi-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+.lumi-bob {
+  animation: lumi-bob 3.6s ease-in-out infinite;
+}
+@keyframes lumi-wave {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-14deg); }
+}
+.lumi-wave {
+  transform-box: view-box;
+  transform-origin: 296px 220px;
+  animation: lumi-wave 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lumi-blink, .lumi-bob, .lumi-wave { animation: none; }
+}
+
+/* Reader sliders: ink fill on a soft track, white thumb (mockup 11). */
+.reader-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 24px;
+  background: transparent;
+  cursor: pointer;
+}
+.reader-range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--ink) var(--fill), var(--track) var(--fill));
+}
+.reader-range::-moz-range-track {
+  height: 6px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--ink) var(--fill), var(--track) var(--fill));
+}
+.reader-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  margin-top: -9px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.25);
+}
+.reader-range::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.25);
+}
+
+/* Reader location scrubber: invisible track (drawn behind), white thumb
+   with an accent ring (mockup 09). */
+.scrub-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 22px;
+  background: transparent;
+  cursor: pointer;
+}
+.scrub-range::-webkit-slider-runnable-track { height: 22px; background: transparent; }
+.scrub-range::-moz-range-track { height: 22px; background: transparent; }
+.scrub-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.3), inset 0 0 0 5px var(--scrub-accent, #ff4d1a);
+}
+.scrub-range::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.3), inset 0 0 0 5px var(--scrub-accent, #ff4d1a);
+}
+
+/* The page steps back while the phone controls are up (mockup 09); on
+   desktop the chrome is always there, so the page never dims. */
+.reader-dim {
+  opacity: 0.55;
+}
+@media (min-width: 1024px) {
+  .reader-dim {
+    opacity: 1;
+  }
+}
+
+@keyframes lumi-search {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
   }
 }

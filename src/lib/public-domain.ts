@@ -365,10 +365,8 @@ export async function getPublicDomainBook(gutenbergId: number): Promise<Book> {
     if (isNetworkFailure || isTimeout) {
       throw new Error(
         isTimeout
-          ? "O download do texto deste livro demorou demais e foi cancelado. Tente novamente — se persistir, publique as Cloud Functions do projeto (veja DEPLOY.md) para um download mais confiável."
-          : cloudFunctionTried
-            ? "Não conseguimos baixar o texto deste livro nem pelo servidor nem diretamente. Se você administra este site, publique as Cloud Functions (veja DEPLOY.md) — isso resolve de forma definitiva."
-            : "Não conseguimos baixar o texto deste livro. Se você administra este site, publique as Cloud Functions do projeto (veja DEPLOY.md) para que a leitura funcione de forma confiável.",
+          ? "O acervo demorou para responder e o download foi interrompido. Confira sua internet e tente de novo."
+          : "Não conseguimos baixar este livro agora. Confira sua internet e tente de novo em instantes.",
       );
     }
     throw err;

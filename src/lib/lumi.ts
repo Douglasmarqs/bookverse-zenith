@@ -10,6 +10,9 @@ import type { LumiContext } from "./lumi-panel-store";
 export interface LumiMessage {
   role: "user" | "assistant";
   text: string;
+  /** What the reader sees instead of `text` (e.g. the quoted passage for
+   * a reader action, rather than the internal instruction). */
+  display?: string;
 }
 
 interface AskLumiResponse {
@@ -39,12 +42,37 @@ function friendlyAuthError(err: unknown): string {
  * returns Lumi's reply. Throws a friendly error if the function isn't
  * deployed yet or the call otherwise fails.
  */
+/** Our own server first (works without an account); the Firebase
+ * function is the fallback while the server has no AI key. */
+async function askLumiServer(
+  messages: LumiMessage[],
+  context?: LumiContext | null,
+): Promise<string | null> {
+  try {
+    const r = await fetch("/api/lumi", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages, context: context ?? null }),
+    });
+    if (r.status === 503 || r.status === 404) return null;
+    const data = (await r.json().catch(() => ({}))) as { reply?: string; error?: string };
+    if (!r.ok || !data.reply)
+      throw new Error(data.error || "A Lumi não conseguiu responder agora.");
+    return data.reply;
+  } catch (err) {
+    if (err instanceof TypeError) return null; // offline / network: try the function
+    throw err;
+  }
+}
+
 export async function askLumi(
   messages: LumiMessage[],
   context?: LumiContext | null,
 ): Promise<string> {
+  const viaServer = await askLumiServer(messages, context);
+  if (viaServer) return viaServer;
   const fb = getFirebase();
-  if (!fb) throw new Error("Firebase não inicializado.");
+  if (!fb) throw new Error("A Lumi está indisponível neste momento. Tente de novo daqui a pouco.");
 
   // askLumi requires an authenticated caller (any session works, including
   // anonymous) — make sure one exists even if the visitor never touched a

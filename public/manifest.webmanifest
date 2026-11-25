@@ -1,26 +1,91 @@
 {
-  "name": "BookVerse — Sua biblioteca literária premium",
+  "name": "BookVerse — todo livro, a um toque",
   "short_name": "BookVerse",
-  "description": "Descubra, leia e organize livros em uma experiência editorial premium, com a Lumi como companhia de leitura.",
+  "description": "Clássicos grátis, seus EPUBs e PDFs, leitura e áudio no mesmo lugar — com a Lumi, sua coruja de leitura.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait-primary",
-  "background_color": "#EEF6FF",
-  "theme_color": "#1769D8",
+  "orientation": "any",
+  "background_color": "#F4F3EF",
+  "theme_color": "#F4F3EF",
   "lang": "pt-BR",
   "icons": [
     {
-      "src": "/bookverse-icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "/bookverse-icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
+    }
+  ],
+  "share_target": {
+    "action": "/compartilhar",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "files",
+          "accept": [
+            ".epub",
+            ".pdf",
+            ".mobi",
+            ".azw3",
+            ".fb2",
+            ".cbz",
+            ".txt",
+            "application/epub+zip",
+            "application/pdf",
+            "application/x-mobipocket-ebook",
+            "text/plain",
+            "application/octet-stream"
+          ]
+        }
+      ]
+    }
+  },
+  "shortcuts": [
+    {
+      "name": "Adicionar livros",
+      "short_name": "Adicionar",
+      "url": "/adicionar",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Explorar grátis",
+      "short_name": "Explorar",
+      "url": "/descobrir",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }

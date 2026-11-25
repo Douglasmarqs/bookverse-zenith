@@ -250,17 +250,27 @@ export async function setLibraryStatus(
   }
 }
 
+/** Last known shelf per reader, so switching tabs never flashes empty. */
+const libraryCache = new Map<string, LibraryEntry[]>();
+
 export function subscribeLibrary(uid: string, cb: (entries: LibraryEntry[]) => void): Unsubscribe {
   const fb = getFirebase();
   if (!fb) {
     cb([]);
     return () => {};
   }
+  const cached = libraryCache.get(uid);
+  if (cached) cb(cached);
   const ref = collection(fb.db, "users", uid, "library");
   return onSnapshot(
     ref,
     (snap) => {
-      cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<LibraryEntry, "id">) })));
+      const entries = snap.docs.map((d) => ({
+        id: d.id,
+        ...(d.data() as Omit<LibraryEntry, "id">),
+      }));
+      libraryCache.set(uid, entries);
+      cb(entries);
     },
     (err) => {
       console.warn("[library] subscribe failed", err);

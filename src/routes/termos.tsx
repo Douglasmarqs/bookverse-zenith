@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { TopBar } from "@/components/shell/top-bar";
 
 export const Route = createFileRoute("/termos")({
   head: () => ({ meta: [{ title: "Termos de uso — BookVerse" }] }),
   component: () => (
-    <div className="mx-auto max-w-3xl px-5 py-16 md:px-8">
+    <div className="mx-auto max-w-3xl px-5 pb-16 md:px-8 lg:pt-16">
+      <TopBar title="Termos de uso" className="mb-4" />
       <p className="text-[11px] uppercase tracking-[0.28em] text-gold">Termos</p>
       <h1 className="mt-2 font-display text-4xl font-medium md:text-5xl">Termos de uso</h1>
       <div className="mt-6 space-y-4 text-muted-foreground leading-relaxed">

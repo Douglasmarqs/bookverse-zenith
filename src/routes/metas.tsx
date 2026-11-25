@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { PageHeader } from "@/components/page-header";
 import { useEffect, useMemo, useState } from "react";
 import { Target, Flame, BookOpenCheck, Heart, Loader2, Check } from "lucide-react";
 import { toast } from "sonner";
@@ -13,7 +14,7 @@ import {
   subscribeReadingGoal,
   type ReadingGoal,
 } from "@/lib/goals";
-import { TelegramCard } from "@/components/telegram-card";
+import { TopBar } from "@/components/shell/top-bar";
 
 export const Route = createFileRoute("/metas")({
   head: () => ({
@@ -100,16 +101,24 @@ function MetasPage({ uid }: { uid: string }) {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-5 py-12 md:px-8">
-      <p className="text-[11px] uppercase tracking-[0.28em] text-gold">Hábitos</p>
-      <h1 className="mt-2 font-display text-4xl font-medium md:text-5xl">Metas de leitura</h1>
-      <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+    <div className="relative mx-auto max-w-5xl px-5 pb-12 md:px-10 lg:pt-10">
+      <TopBar title="Metas" fallback="/perfil" className="mb-3" />
+      <PageHeader
+        eyebrow="Jornada · metas"
+        title="Sua estante de"
+        accent={String(year)}
+        aside={
+          <Link to="/desafios" className="btn-ghost text-sm">
+            Desafios e conquistas
+          </Link>
+        }
+      >
         Defina quantos livros quer concluir em {year}. O progresso vem direto da sua estante
-        “Concluídos” — nada de anotar duas vezes.
-      </p>
+        “Concluídos”, sem anotar duas vezes.
+      </PageHeader>
 
       {/* Meta anual */}
-      <section className="glass-plate mt-8 rounded-3xl p-6 md:p-8">
+      <section className="mt-8 rounded-[1.75rem] border border-border bg-card/60 backdrop-blur p-6 md:p-8">
         <div className="flex flex-wrap items-end justify-between gap-6">
           <div>
             <div className="flex items-center gap-2 text-gold">
@@ -208,8 +217,6 @@ function MetasPage({ uid }: { uid: string }) {
           Ver desafios e conquistas
         </Link>
       </div>
-
-      <TelegramCard />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { PageHeader } from "@/components/page-header";
 import { useEffect, useState } from "react";
 import { Medal, Trophy } from "lucide-react";
 import { subscribeRanking, type RankingMetric, type RankingRow } from "@/lib/ranking";
@@ -7,6 +8,7 @@ import { getLevelInfo } from "@/lib/achievements";
 import { UserAvatar } from "@/components/user-avatar";
 import { LumiMascot } from "@/components/lumi-mascot";
 import type { User } from "firebase/auth";
+import { TopBar } from "@/components/shell/top-bar";
 
 export const Route = createFileRoute("/ranking")({
   head: () => ({
@@ -116,15 +118,19 @@ function RankingPage() {
   const distance = myRow && nextRow ? Math.max(0, nextRow.value - myRow.value) : null;
 
   return (
-    <main className="mx-auto max-w-3xl px-5 py-12 md:px-8">
-      <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-gold">
-        <Trophy className="h-4 w-4" /> Ranking
-      </div>
-      <h1 className="mt-2 font-display text-4xl font-medium md:text-5xl">Leitores em movimento</h1>
-      <p className="mt-3 max-w-2xl text-muted-foreground">
-        Os rankings mostram os dados registrados nas contas. Cada aba usa uma métrica diferente, sem
-        transformar livros de catálogo em leitura concluída.
-      </p>
+    <main className="relative mx-auto max-w-4xl px-5 pb-12 md:px-10 lg:pt-10">
+      <TopBar title="Ranking" fallback="/perfil" className="mb-3" />
+      <PageHeader
+        eyebrow={
+          <>
+            <Trophy className="h-3.5 w-3.5" /> Clube · ranking
+          </>
+        }
+        title="Quem acendeu"
+        accent="mais noites"
+      >
+        Cada aba usa uma métrica diferente, sempre a partir do que foi realmente lido.
+      </PageHeader>
       <div className="mt-7 flex gap-2 overflow-x-auto pb-1">
         {METRICS.map((item) => (
           <button

@@ -24,22 +24,24 @@ export function PdfDisplaySettingsPanel({
         type="button"
         aria-label="Fechar ajustes"
         onClick={onClose}
-        className={`fixed inset-0 z-40 bg-slate-950/45 backdrop-blur-sm transition-opacity ${open ? "opacity-100" : "pointer-events-none opacity-0"}`}
+        className={`fixed inset-0 z-40 bg-black/40 backdrop-blur-sm transition-opacity ${open ? "opacity-100" : "pointer-events-none opacity-0"}`}
       />
       <aside
         aria-hidden={!open}
-        className={`fixed right-0 top-0 z-50 flex h-full w-full max-w-sm flex-col border-l border-blue-100 bg-white text-slate-950 shadow-2xl transition-transform duration-300 ${open ? "translate-x-0" : "translate-x-full"}`}
+        className={`fixed right-0 top-0 z-50 flex h-full w-full max-w-sm flex-col border-l border-border bg-card text-foreground shadow-2xl transition-transform duration-300 ${open ? "translate-x-0" : "translate-x-full"}`}
       >
-        <header className="flex items-center justify-between border-b border-blue-100 px-5 py-4">
+        <header className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
             <h2 className="font-display text-xl font-semibold">Ajustes do PDF</h2>
-            <p className="mt-0.5 text-xs text-slate-500">Visualização da página digitalizada</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Visualização da página digitalizada
+            </p>
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Fechar"
-            className="grid h-10 w-10 place-items-center rounded-full hover:bg-blue-50"
+            className="grid h-10 w-10 place-items-center rounded-full hover:bg-surface-2"
           >
             <X className="h-5 w-5" />
           </button>
@@ -47,7 +49,7 @@ export function PdfDisplaySettingsPanel({
 
         <div className="flex-1 space-y-7 overflow-y-auto px-5 py-6">
           <section>
-            <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
               Virada de página
             </p>
             <button
@@ -55,22 +57,22 @@ export function PdfDisplaySettingsPanel({
               role="switch"
               aria-checked={pageTurnEnabled}
               onClick={onTogglePageTurn}
-              className="flex w-full items-center justify-between rounded-2xl border border-blue-100 p-4 text-left"
+              className="flex w-full items-center justify-between rounded-2xl border border-border p-4 text-left"
             >
               <span className="flex gap-3">
-                <BookOpen className="mt-0.5 h-5 w-5 text-blue-600" />
+                <BookOpen className="mt-0.5 h-5 w-5 text-gold" />
                 <span>
                   <span className="block text-sm font-semibold">Efeito de folha</span>
-                  <span className="mt-1 block text-xs leading-relaxed text-slate-500">
+                  <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
                     Anima a página no celular e no navegador.
                   </span>
                 </span>
               </span>
               <span
-                className={`relative h-7 w-12 shrink-0 rounded-full transition ${pageTurnEnabled ? "bg-blue-600" : "bg-slate-200"}`}
+                className={`relative h-7 w-12 shrink-0 rounded-full transition ${pageTurnEnabled ? "bg-gold" : "bg-surface-2"}`}
               >
                 <span
-                  className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${pageTurnEnabled ? "translate-x-6" : "translate-x-1"}`}
+                  className={`absolute top-1 h-5 w-5 rounded-full bg-card shadow transition-transform ${pageTurnEnabled ? "translate-x-6" : "translate-x-1"}`}
                 />
               </span>
             </button>
@@ -117,7 +119,7 @@ export function PdfDisplaySettingsPanel({
             onChange={(contrast) => onChange({ contrast })}
           />
 
-          <p className="rounded-2xl bg-blue-50 p-4 text-xs leading-relaxed text-slate-600">
+          <p className="rounded-2xl bg-accent-soft p-4 text-xs leading-relaxed text-muted-foreground">
             Este PDF não possui uma camada de texto confiável. Por isso o BookVerse amplia a página
             inteira sem alterar a diagramação. PDFs com texto selecionável usam automaticamente os
             controles completos de fonte, linhas, parágrafos e largura.
@@ -154,7 +156,7 @@ function PdfSlider({
           {icon}
           {label}
         </span>
-        <span className="tabular-nums text-blue-700">{format(value)}</span>
+        <span className="tabular-nums text-gold">{format(value)}</span>
       </span>
       <input
         type="range"
@@ -163,7 +165,7 @@ function PdfSlider({
         step={step}
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
-        className="w-full accent-blue-600"
+        className="w-full accent-gold"
       />
     </label>
   );

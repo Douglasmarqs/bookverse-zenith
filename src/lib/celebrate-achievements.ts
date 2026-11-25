@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import { celebrate } from "./celebration";
 import { ACHIEVEMENTS, isUnlocked, type AchievementStats } from "./achievements";
 
 const STORAGE_KEY = "bookverse:achievements-seen";
@@ -24,13 +25,24 @@ export function celebrateNewAchievements(stats: AchievementStats): void {
   const newlyUnlocked = unlockedIds.filter((id) => !seen.includes(id));
   if (newlyUnlocked.length === 0) return;
 
-  for (const id of newlyUnlocked) {
+  // First visit ever: mark what's already unlocked without a party.
+  const firstRun = localStorage.getItem(STORAGE_KEY) === null && unlockedIds.length > 1;
+  newlyUnlocked.forEach((id, i) => {
     const a = ACHIEVEMENTS.find((x) => x.id === id);
-    if (!a) continue;
-    toast.success(`Conquista desbloqueada: ${a.title}`, {
-      description: `${a.description} · +${a.xpReward} XP`,
-    });
-  }
+    if (!a || firstRun) return;
+    if (i === 0) {
+      celebrate({
+        eyebrow: "Conquista desbloqueada",
+        title: a.title,
+        body: `${a.description} · +${a.xpReward} XP`,
+        share: `Desbloqueei "${a.title}" no BookVerse.`,
+      });
+    } else {
+      toast.success(`Conquista desbloqueada: ${a.title}`, {
+        description: `${a.description} · +${a.xpReward} XP`,
+      });
+    }
+  });
 
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(unlockedIds));

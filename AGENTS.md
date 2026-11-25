@@ -1,10 +1,10 @@
-<!-- LOVABLE:BEGIN -->
-> [!IMPORTANT]
-> This project is connected to [Lovable](https://lovable.dev). Avoid rewriting
-> published git history — force pushing, or rebasing/amending/squashing commits
-> that are already pushed — as it rewrites history on Lovable's side and the
-> user will likely lose their project history.
->
-> Commits you push to the connected branch sync back to Lovable and show up in
-> the editor, so keep the branch in a working state.
-<!-- LOVABLE:END -->
+# BookVerse — notas para agentes e colaboradores
+
+- Stack: TanStack Start (React 19) + Vite + Tailwind v4, Firebase (Auth,
+  Firestore, Storage, Cloud Functions) e Nitro para o servidor.
+- O build é configurado diretamente em `vite.config.ts` (sem wrappers de
+  plataforma). Nitro detecta o provedor de hospedagem automaticamente.
+- Antes de enviar: `npx tsc --noEmit`, `npm run lint` e `npm run build`
+  precisam passar.
+- Não reescreva histórico já publicado (force push, rebase de commits
+  enviados).

@@ -7,9 +7,6 @@
  * público e abrem direto no leitor via id do Project Gutenberg.
  */
 
-export const TELEGRAM_CHANNEL_URL = "https://t.me/livros_em_epub";
-export const BAIXE_LIVROS_URL = "https://www.baixelivros.com.br/";
-
 export interface LumiPick {
   /** Project Gutenberg id — abre no leitor via gutenbergReaderId(). */
   gutenbergId: number;
@@ -49,7 +46,7 @@ export const LUMI_PICKS: LumiPick[] = [
     title: "As Aventuras de Sherlock Holmes",
     author: "Arthur Conan Doyle",
     lumiNote:
-      "Doze contos independentes: perfeito para quem lê em pausas de 20 minutos. Comece por “A Escândalo na Boêmia” e veja se você percebe a pista antes do Watson.",
+      "Doze contos independentes: perfeito para quem lê em pausas de 20 minutos. Comece por “Um Escândalo na Boêmia” e veja se você percebe a pista antes do Watson.",
     mood: "Investigação leve",
     minutes: 260,
     tags: ["Contos", "Leitura em pausas"],

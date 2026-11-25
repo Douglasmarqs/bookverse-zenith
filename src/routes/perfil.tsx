@@ -1,674 +1,606 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { motion, useReducedMotion } from "motion/react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  Loader2,
-  Save,
-  KeyRound,
-  ShieldAlert,
-  Trophy,
-  BookMarked,
-  Library,
-  Eye,
-  EyeOff,
+  ChevronRight,
+  Download,
   Flame,
-  Palette,
-  Camera,
-  X,
-  BellRing,
-  BookOpenCheck,
-  Clock3,
-  Heart,
+  NotebookPen,
+  Settings,
+  Target,
+  Trophy,
+  Users,
 } from "lucide-react";
-import { toast } from "sonner";
 import type { User } from "firebase/auth";
-import { useRequireAuth } from "@/hooks/use-require-auth";
-import { getPrimaryProvider, updateDisplayName } from "@/lib/firebase";
-import {
-  deleteUserData,
-  subscribeUserProfile,
-  updateProfileFields,
-  type UserProfile,
-} from "@/lib/user-profile";
-import { subscribeLibrary, type LibraryEntry } from "@/lib/library";
-import { getLevelInfo } from "@/lib/achievements";
-import { describeFirestoreError } from "@/lib/async-utils";
+
+import { Lumi } from "@/components/brand/lumi";
 import { UserAvatar } from "@/components/user-avatar";
-import { LumiMascot } from "@/components/lumi-mascot";
-import { downscaleImageFile } from "@/lib/image-utils";
-import { notificationPermission, requestNotificationPermission } from "@/lib/reading-reminder";
-import { useSiteTheme } from "@/hooks/use-site-theme";
-import { THEME_LABEL, THEME_PREVIEW, allThemes } from "@/lib/theme";
+import { useAccount } from "@/hooks/use-auth-user";
+import { getLevelInfo } from "@/lib/achievements";
+import { computeGoalProgress, currentYear, subscribeReadingGoal } from "@/lib/goals";
+import { subscribeLibrary, type LibraryEntry } from "@/lib/library";
+import { getLocalOnboarding, type ReadingMoment } from "@/lib/onboarding";
+import { dayKey, useRitual, type RitualDays } from "@/lib/ritual";
+import { subscribeUserProfile, type UserProfile } from "@/lib/user-profile";
 
 export const Route = createFileRoute("/perfil")({
   head: () => ({
     meta: [
-      { title: "Meu perfil — BookVerse" },
-      { name: "description", content: "Gerencie seu perfil, avatar e configurações de conta." },
+      { title: "Você — BookVerse" },
+      { name: "description", content: "Sua sequência, horas lidas, semana e conquistas." },
       { name: "robots", content: "noindex" },
     ],
   }),
-  component: GuardedPerfilPage,
+  component: VocePage,
 });
 
-function GuardedPerfilPage() {
-  const { state, user } = useRequireAuth();
-  if (state !== "authenticated" || !user) {
-    return (
-      <div className="grid min-h-[calc(100vh-8rem)] place-items-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-gold/30 border-t-gold" />
+function VocePage() {
+  const { state, user } = useAccount();
+  if (state === "loading") return <VoceSkeleton />;
+  if (state === "guest" || !user) return <GuestVoce />;
+  return <MemberVoce user={user} />;
+}
+
+function VoceSkeleton() {
+  return (
+    <div
+      className="mx-auto max-w-3xl px-4 pt-[calc(env(safe-area-inset-top)+0.875rem)] lg:pt-10"
+      aria-busy="true"
+    >
+      <div className="mx-[6px] mt-2 h-11 w-32 animate-pulse rounded-xl bg-surface-2" />
+      <div className="mt-6 flex items-center gap-4 px-[6px]">
+        <div className="h-[62px] w-[62px] animate-pulse rounded-full bg-surface-2" />
+        <div className="h-5 w-40 animate-pulse rounded bg-surface-2" />
       </div>
-    );
-  }
-  return <PerfilPage user={user} />;
+      <div className="mt-5 h-[300px] animate-pulse rounded-[30px] bg-surface-2" />
+    </div>
+  );
 }
 
-function formatMemberSince(createdAt: unknown): string | null {
-  const date =
-    createdAt && typeof createdAt === "object" && "toDate" in createdAt
-      ? (createdAt as { toDate: () => Date }).toDate()
-      : null;
-  if (!date) return null;
-  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "long" }).format(date);
+const MOMENT: Record<ReadingMoment, string> = {
+  manha: "Leitura matinal",
+  tarde: "Leitura à tarde",
+  noite: "Leitura noturna",
+  qualquer: "Leitura a qualquer hora",
+};
+
+function sinceYear(createdAt: unknown): number | null {
+  const t = createdAt as { toDate?: () => Date; seconds?: number } | null;
+  const d = t?.toDate?.() ?? (t?.seconds ? new Date(t.seconds * 1000) : null);
+  return d ? d.getFullYear() : null;
 }
 
-function PerfilPage({ user }: { user: User }) {
-  const navigate = useNavigate();
+function fmtMinutes(min: number): string {
+  if (min < 60) return `${Math.round(min)}min`;
+  const h = Math.floor(min / 60);
+  const m = Math.round(min % 60);
+  return m ? `${h}h ${String(m).padStart(2, "0")}min` : `${h}h`;
+}
+
+const nf = new Intl.NumberFormat("pt-BR");
+
+function MemberVoce({ user }: { user: User }) {
+  const reduce = useReducedMotion();
+  const year = currentYear();
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [profileReady, setProfileReady] = useState(false);
+  const [ready, setReady] = useState(false);
   const [library, setLibrary] = useState<LibraryEntry[]>([]);
-
-  const [name, setName] = useState("");
-  const [username, setUsername] = useState("");
-  const [bio, setBio] = useState("");
-  const [nameSaving, setNameSaving] = useState(false);
-  const [photoSaving, setPhotoSaving] = useState(false);
-  const [notifSupport, setNotifSupport] = useState<NotificationPermission | "unsupported">(
-    "default",
-  );
+  const [goal, setGoal] = useState<number | null>(null);
+  const [moment, setMoment] = useState<ReadingMoment | null>(null);
+  const ritual = useRitual(user.uid);
 
   useEffect(() => {
-    setNotifSupport(notificationPermission());
-  }, []);
-
-  async function handleEnableNotifications() {
-    const result = await requestNotificationPermission();
-    setNotifSupport(result);
-    if (result === "granted") {
-      toast.success("Lembretes ativados — a Lumi vai te dar um toque quando precisar.");
-    } else if (result === "denied") {
-      toast.error(
-        "Notificações bloqueadas. Você pode ativar depois nas configurações do navegador.",
-      );
-    }
-  }
-
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPasswords, setShowPasswords] = useState(false);
-  const [passwordSaving, setPasswordSaving] = useState(false);
-
-  const [deleteConfirmText, setDeleteConfirmText] = useState("");
-  const [deletePassword, setDeletePassword] = useState("");
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-
-  const provider = getPrimaryProvider(user);
-  const [siteTheme, setSiteTheme] = useSiteTheme();
-
-  useEffect(
-    () =>
-      subscribeUserProfile(user.uid, (nextProfile) => {
-        setProfile(nextProfile);
-        setProfileReady(true);
+    setMoment(getLocalOnboarding(user.uid)?.moment ?? null);
+    const unsubs = [
+      subscribeUserProfile(user.uid, (p) => {
+        setProfile(p);
+        setReady(true);
       }),
-    [user.uid],
-  );
-  useEffect(() => subscribeLibrary(user.uid, setLibrary), [user.uid]);
+      subscribeLibrary(user.uid, setLibrary),
+      subscribeReadingGoal(user.uid, year, (g) => setGoal(g?.books ?? null)),
+    ];
+    return () => unsubs.forEach((u) => u());
+  }, [user.uid, year]);
 
-  useEffect(() => {
-    if (profile?.displayName) setName(profile.displayName);
-    else if (user.displayName) setName(user.displayName);
-    setUsername(profile?.username ?? "");
-    setBio(profile?.bio ?? "");
-  }, [profile?.displayName, profile?.username, profile?.bio, user.displayName]);
+  const name = profile?.displayName || user.displayName || "Leitor";
+  const since = sinceYear(profile?.createdAt);
+  const persona = moment ? MOMENT[moment] : `Nível ${getLevelInfo(profile?.xp ?? 0).level}`;
 
-  async function handleSaveProfile(e: React.FormEvent) {
-    e.preventDefault();
-    const trimmed = name.trim();
-    if (!trimmed) {
-      toast.error("O nome não pode ficar em branco.");
-      return;
-    }
-    const normalizedUsername = username
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9_.-]/g, "");
-    if (username.trim() && normalizedUsername.length < 3) {
-      toast.error("O identificador precisa ter pelo menos 3 caracteres.");
-      return;
-    }
-    if (bio.trim().length > 280) {
-      toast.error("A bio pode ter até 280 caracteres.");
-      return;
-    }
-    setNameSaving(true);
-    try {
-      await updateDisplayName(trimmed);
-      await updateProfileFields(user.uid, {
-        displayName: trimmed,
-        username: normalizedUsername || null,
-        bio: bio.trim() || null,
-      });
-      toast.success("Perfil atualizado.");
-    } catch (err) {
-      toast.error(describeFirestoreError(err, "Não foi possível salvar o nome agora."));
-    } finally {
-      setNameSaving(false);
-    }
-  }
+  const streak = profile?.currentStreak ?? 0;
+  const record = Math.max(profile?.longestStreak ?? 0, streak);
+  const readToday = ritual.todayMinutes > 0 || profile?.lastActiveDate === dayKey();
 
-  async function handlePhotoSelected(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = ""; // allow re-selecting the same file later
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      toast.error("Escolha um arquivo de imagem.");
-      return;
-    }
-    setPhotoSaving(true);
-    try {
-      // 320px is plenty for a circular avatar even on a retina display,
-      // and keeps the encoded JPEG comfortably under Firestore's 1MB
-      // per-document limit (typically 15–50KB at this size).
-      const dataUrl = await downscaleImageFile(file, 320, 0.85);
-      await updateProfileFields(user.uid, { customPhotoDataUrl: dataUrl });
-      toast.success("Foto de perfil atualizada.");
-    } catch (err) {
-      toast.error(describeFirestoreError(err, "Não foi possível salvar a foto agora."));
-    } finally {
-      setPhotoSaving(false);
-    }
-  }
+  const yearMinutes = useMemo(() => {
+    const fromDays = Object.entries(ritual.days)
+      .filter(([k]) => k.startsWith(`${year}-`))
+      .reduce((s, [, v]) => s + v, 0);
+    return Math.max(fromDays, profile?.readingMinutes ?? 0);
+  }, [ritual.days, year, profile?.readingMinutes]);
 
-  async function handleRemovePhoto() {
-    setPhotoSaving(true);
-    try {
-      await updateProfileFields(user.uid, { customPhotoDataUrl: null });
-      toast.success("Foto removida.");
-    } catch (err) {
-      toast.error(describeFirestoreError(err, "Não foi possível remover a foto agora."));
-    } finally {
-      setPhotoSaving(false);
+  const weekTotal = ritual.week.reduce((s, d) => s + d.minutes, 0);
+  const lastWeekTotal = useMemo(() => {
+    let sum = 0;
+    for (const d of ritual.week) {
+      const prev = new Date(`${d.key}T12:00:00`);
+      prev.setDate(prev.getDate() - 7);
+      sum += ritual.days[dayKey(prev)] ?? 0;
     }
-  }
+    return sum;
+  }, [ritual.week, ritual.days]);
+  const delta =
+    lastWeekTotal > 0 ? Math.round(((weekTotal - lastWeekTotal) / lastWeekTotal) * 100) : null;
 
-  async function handleChangePassword(e: React.FormEvent) {
-    e.preventDefault();
-    if (newPassword.length < 6) {
-      toast.error("A nova senha precisa ter pelo menos 6 caracteres.");
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      toast.error("As senhas não coincidem.");
-      return;
-    }
-    setPasswordSaving(true);
-    try {
-      const { changePassword } = await import("@/lib/firebase-account");
-      await changePassword(currentPassword, newPassword);
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-      toast.success("Senha alterada com sucesso.");
-    } catch (err) {
-      const code = (err as { code?: string })?.code ?? "";
-      if (code === "auth/wrong-password" || code === "auth/invalid-credential") {
-        toast.error("Senha atual incorreta.");
-      } else {
-        toast.error(describeFirestoreError(err, "Não foi possível alterar a senha agora."));
-      }
-    } finally {
-      setPasswordSaving(false);
-    }
-  }
-
-  async function handleDeleteAccount() {
-    if (deleteConfirmText.trim().toUpperCase() !== "EXCLUIR") {
-      toast.error('Digite "EXCLUIR" para confirmar.');
-      return;
-    }
-    setDeleting(true);
-    try {
-      await deleteUserData(user.uid);
-      const { deleteAccount } = await import("@/lib/firebase-account");
-      await deleteAccount(provider === "password" ? deletePassword : undefined);
-      toast.success("Conta excluída.");
-      navigate({ to: "/", replace: true });
-    } catch (err) {
-      const code = (err as { code?: string })?.code ?? "";
-      if (code === "auth/wrong-password" || code === "auth/invalid-credential") {
-        toast.error("Senha incorreta.");
-      } else {
-        toast.error(describeFirestoreError(err, "Não foi possível excluir a conta agora."));
-      }
-      setDeleting(false);
-    }
-  }
-
-  const memberSince = formatMemberSince(profile?.createdAt);
+  const goalProgress = goal ? computeGoalProgress(library, goal) : null;
+  const rise = (d: number) =>
+    reduce
+      ? {}
+      : {
+          initial: { opacity: 0.55, y: 14 },
+          animate: { opacity: 1, y: 0 },
+          transition: { delay: d, duration: 0.45, ease: [0.16, 1, 0.3, 1] as const },
+        };
 
   return (
-    <div className="mx-auto max-w-4xl px-5 py-12 md:px-8">
-      <p className="text-[11px] uppercase tracking-[0.28em] text-gold">Minha conta</p>
-      <h1 className="mt-2 font-display text-4xl font-medium md:text-5xl">Meu perfil</h1>
+    <div className="mx-auto max-w-3xl pb-10 pt-[calc(env(safe-area-inset-top)+0.875rem)] lg:pt-10">
+      <header className="flex items-center justify-between px-[22px] pt-2">
+        <h1 className="font-display text-[44px] leading-none tracking-[-0.035em] lg:text-[56px]">
+          Você
+        </h1>
+        <Link
+          to="/ajustes"
+          aria-label="Ajustes"
+          className="press grid h-[46px] w-[46px] place-items-center rounded-full bg-card shadow-[inset_0_0_0_1px_var(--border)]"
+        >
+          <Settings className="h-[21px] w-[21px]" strokeWidth={2} />
+        </Link>
+      </header>
 
-      {/* Summary header */}
-      <div className="mt-8 flex flex-wrap items-center gap-5 rounded-2xl border border-border/60 bg-card/40 p-6">
-        <div className="group relative shrink-0">
-          <UserAvatar
-            profile={profile}
-            user={user}
-            size="lg"
-            allowProviderFallback={profileReady}
-          />
-          <label
-            className={`absolute -bottom-1 -right-1 grid h-8 w-8 cursor-pointer place-items-center rounded-full bg-gold text-primary-foreground ring-2 ring-background transition hover:scale-105 ${photoSaving ? "pointer-events-none opacity-70" : ""}`}
-            title="Trocar foto de perfil"
-          >
-            {photoSaving ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Camera className="h-3.5 w-3.5" />
-            )}
-            <input
-              type="file"
-              accept="image/*"
-              className="sr-only"
-              onChange={handlePhotoSelected}
-              disabled={photoSaving}
-            />
-          </label>
-          {profile?.customPhotoDataUrl && (
-            <button
-              onClick={handleRemovePhoto}
-              disabled={photoSaving}
-              title="Remover foto"
-              className="absolute -top-1 -right-1 grid h-6 w-6 place-items-center rounded-full bg-secondary text-foreground ring-2 ring-background transition hover:bg-destructive/80 hover:text-destructive-foreground disabled:opacity-60"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          )}
-        </div>
+      <motion.div {...rise(0)} className="mt-5 flex items-center gap-4 px-[22px]">
+        <UserAvatar
+          profile={profile}
+          user={user}
+          size="lg"
+          allowProviderFallback={ready}
+          className="!h-[62px] !w-[62px] !text-[26px]"
+        />
         <div className="min-w-0">
-          <p className="truncate font-display text-xl font-medium">
-            {profile?.displayName || user.displayName || "Leitor"}
+          <p className="truncate text-[20px] font-bold tracking-[-0.01em]">{name}</p>
+          <p className="mt-0.5 truncate text-[14.5px] text-muted-foreground">
+            {persona}
+            {since ? ` · desde ${since}` : ""}
           </p>
-          {profile?.username && <p className="mt-0.5 text-sm text-gold">@{profile.username}</p>}
-          <p className="truncate text-sm text-muted-foreground">{user.email}</p>
-          {profile?.bio && (
-            <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
-              {profile.bio}
-            </p>
-          )}
-          {memberSince && (
-            <p className="mt-1 text-xs text-muted-foreground">Membro desde {memberSince}</p>
-          )}
         </div>
-      </div>
+      </motion.div>
+
+      {/* Streak */}
+      <motion.section
+        {...rise(0.05)}
+        className="relative mx-4 mt-5 overflow-hidden rounded-[30px] bg-[linear-gradient(150deg,#ff6a3d,var(--gold)_55%,#e8400f)] px-5 pb-5 pt-5 text-white shadow-[0_14px_32px_-14px_rgba(255,77,26,.55)]"
+      >
+        <Flame
+          aria-hidden
+          className="pointer-events-none absolute -right-8 -top-6 h-[150px] w-[150px] text-white/20"
+          strokeWidth={1.6}
+        />
+        <p className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.14em]">
+          <Flame className="h-4 w-4" strokeWidth={2.2} /> Sequência
+        </p>
+        <p className="mt-1.5 font-display text-[52px] leading-none tracking-[-0.04em] sm:text-[58px]">
+          {streak} {streak === 1 ? "dia" : "dias"}
+        </p>
+        <p className="mt-2.5 text-[15px] text-white/90">
+          {streak === 0
+            ? "Leia alguns minutos hoje para começar."
+            : readToday
+              ? `Você já leu hoje. Seu recorde é ${record}.`
+              : `Seu recorde é ${record}. Leia hoje para manter.`}
+        </p>
+        <WeekDots week={ritual.week} />
+      </motion.section>
+
+      {/* Rhythm heatmap — on a neutral card so the levels are easy to read */}
+      <motion.section {...rise(0.08)} className="surface-card mx-4 mt-3 px-4 pb-4 pt-4 sm:px-5">
+        <Heatmap days={ritual.days} goal={ritual.goal} />
+      </motion.section>
 
       {/* Stats */}
-      <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
-        <StatCard
-          icon={Trophy}
-          label={`Nível ${getLevelInfo(profile?.xp ?? 0).level}`}
-          value={profile?.xp ?? 0}
-          suffix=" XP"
+      <motion.div {...rise(0.1)} className="mx-4 mt-3 grid grid-cols-3 gap-2.5">
+        <Stat value={`${Math.floor(yearMinutes / 60)}h`} label={`lidas em ${year}`} />
+        <Stat value={nf.format(profile?.pagesRead ?? 0)} label="páginas" />
+        <Stat
+          value={nf.format(profile?.booksCompleted ?? 0)}
+          label={(profile?.booksCompleted ?? 0) === 1 ? "livro lido" : "livros lidos"}
         />
-        <StatCard
-          icon={Flame}
-          label="Sequência"
-          value={profile?.currentStreak ?? 0}
-          suffix=" dias"
-        />
-        <StatCard
-          icon={BookMarked}
-          label="Livros concluídos"
-          value={profile?.booksCompleted ?? 0}
-        />
-        <StatCard icon={Library} label="Na biblioteca" value={library.length} />
-        <StatCard icon={BookOpenCheck} label="Capítulos lidos" value={profile?.chaptersRead ?? 0} />
-        <StatCard
-          icon={Clock3}
-          label="Tempo de leitura"
-          value={profile?.readingMinutes ?? 0}
-          suffix=" min"
-        />
-        <StatCard
-          icon={Heart}
-          label="Favoritos"
-          value={library.filter((entry) => entry.favorite).length}
-        />
-      </div>
-      <section className="mt-4 grid gap-3 rounded-2xl border border-border/60 bg-card/35 p-5 sm:grid-cols-3">
-        <ReadingRecap label="XP nesta semana" value={profile?.weeklyXp ?? 0} suffix=" XP" />
-        <ReadingRecap label="Capítulos neste mês" value={profile?.monthlyChaptersRead ?? 0} />
-        <ReadingRecap
-          label="Minutos neste mês"
-          value={profile?.monthlyReadingMinutes ?? 0}
-          suffix=" min"
-        />
-      </section>
-      <Link
-        to="/desafios"
-        className="mt-3 inline-flex items-center gap-1.5 text-xs text-gold underline underline-offset-4"
-      >
-        Ver conquistas e missões
-      </Link>
+      </motion.div>
 
-      {/* Edit profile */}
-      <section className="mt-10 rounded-2xl border border-border/60 bg-card/40 p-6">
-        <h2 className="font-display text-xl font-medium">Editar perfil</h2>
-
-        <form onSubmit={handleSaveProfile} className="mt-5 grid gap-3 sm:grid-cols-2">
-          <label>
-            <span className="text-sm text-muted-foreground">Nome de exibição</span>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="mt-1.5 w-full rounded-xl border border-border bg-background/50 px-4 py-3 text-sm outline-none focus:border-gold/60"
-            />
-          </label>
-          <label>
-            <span className="text-sm text-muted-foreground">Identificador</span>
-            <div className="mt-1.5 flex items-center rounded-xl border border-border bg-background/50 px-4 focus-within:border-gold/60">
-              <span className="text-sm text-muted-foreground">@</span>
-              <input
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                maxLength={32}
-                placeholder="seu_nome"
-                className="min-w-0 flex-1 bg-transparent py-3 pl-1 text-sm outline-none"
-              />
-            </div>
-          </label>
-          <label className="sm:col-span-2">
-            <span className="text-sm text-muted-foreground">
-              Bio <span className="text-xs">({bio.length}/280)</span>
-            </span>
-            <textarea
-              value={bio}
-              onChange={(e) => setBio(e.target.value)}
-              maxLength={280}
-              rows={3}
-              placeholder="Conte brevemente o que você gosta de ler."
-              className="mt-1.5 w-full resize-y rounded-xl border border-border bg-background/50 px-4 py-3 text-sm outline-none focus:border-gold/60"
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={nameSaving}
-            className="inline-flex items-center justify-center gap-2 self-end rounded-full bg-gold px-5 py-3 text-sm font-medium text-primary-foreground disabled:opacity-60 sm:col-span-2 sm:justify-self-start"
-          >
-            {nameSaving ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4" />
-            )}
-            Salvar
-          </button>
-        </form>
-      </section>
-
-      {/* Appearance */}
-      <section className="mt-6 rounded-2xl border border-border/60 bg-card/40 p-6">
-        <h2 className="flex items-center gap-2 font-display text-xl font-medium">
-          <Palette className="h-4 w-4 text-gold" /> Aparência
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Escolha o tema de todo o aplicativo. O leitor tem suas próprias opções de tema,
-          independentes desta.
-        </p>
-        <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-          {allThemes().map((t) => (
-            <button
-              key={t}
-              onClick={() => setSiteTheme(t)}
-              className={`flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition ${
-                siteTheme === t
-                  ? "border-gold ring-1 ring-gold"
-                  : "border-border/60 hover:border-gold/40"
-              }`}
-            >
-              <span
-                className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[10px] font-semibold ring-1 ring-black/10"
-                style={{ background: THEME_PREVIEW[t].bg, color: THEME_PREVIEW[t].fg }}
-              >
-                Aa
-              </span>
-              <span className="text-xs font-medium">{THEME_LABEL[t]}</span>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {/* Reading reminders */}
-      <section className="mt-6 rounded-2xl border border-border/60 bg-card/40 p-6">
-        <h2 className="flex items-center gap-2 font-display text-xl font-medium">
-          <BellRing className="h-4 w-4 text-gold" /> Lembretes de leitura
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          A Lumi te avisa, no máximo uma vez por dia e só enquanto o app estiver aberto, se você
-          ainda não leu nada hoje.
-        </p>
-        <div className="mt-4 flex items-center gap-3">
-          <LumiMascot size={40} blink={false} />
-          {notifSupport === "unsupported" ? (
-            <p className="text-sm text-muted-foreground">Seu navegador não aceita notificações.</p>
-          ) : notifSupport === "granted" ? (
-            <p className="text-sm text-emerald-500">Ativados — bom te ter por perto. 🦉</p>
-          ) : notifSupport === "denied" ? (
-            <p className="text-sm text-muted-foreground">
-              Bloqueados nas configurações do navegador. Para ativar, libere notificações para este
-              site e recarregue a página.
-            </p>
-          ) : (
-            <button
-              onClick={handleEnableNotifications}
-              className="inline-flex items-center gap-1.5 rounded-full bg-gold px-4 py-2 text-sm font-medium text-primary-foreground"
-            >
-              <BellRing className="h-3.5 w-3.5" /> Ativar lembretes
-            </button>
-          )}
-        </div>
-      </section>
-
-      {/* Security */}
-      <section className="mt-6 rounded-2xl border border-border/60 bg-card/40 p-6">
-        <h2 className="flex items-center gap-2 font-display text-xl font-medium">
-          <KeyRound className="h-4 w-4 text-gold" /> Segurança
-        </h2>
-
-        {provider === "google.com" ? (
-          <p className="mt-3 text-sm text-muted-foreground">
-            Você entra com sua conta Google — a senha é gerenciada diretamente pelo Google.
+      {/* Week */}
+      <motion.section {...rise(0.15)} className="surface-card mx-4 mt-3 px-5 pb-4 pt-4">
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="text-[17px] font-bold tracking-[-0.01em]">Esta semana</h2>
+          <p className="num text-[13.5px] text-muted-foreground">
+            {fmtMinutes(weekTotal)}
+            {delta !== null && ` · ${delta >= 0 ? "+" : ""}${delta}%`}
           </p>
-        ) : (
-          <form onSubmit={handleChangePassword} className="mt-4 space-y-3">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <PasswordInput
-                placeholder="Senha atual"
-                value={currentPassword}
-                onChange={setCurrentPassword}
-                visible={showPasswords}
-                autoComplete="current-password"
-              />
-              <div />
-              <PasswordInput
-                placeholder="Nova senha"
-                value={newPassword}
-                onChange={setNewPassword}
-                visible={showPasswords}
-                autoComplete="new-password"
-              />
-              <PasswordInput
-                placeholder="Confirme a nova senha"
-                value={confirmPassword}
-                onChange={setConfirmPassword}
-                visible={showPasswords}
-                autoComplete="new-password"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowPasswords((v) => !v)}
-              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-            >
-              {showPasswords ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-              {showPasswords ? "Ocultar senhas" : "Mostrar senhas"}
-            </button>
-            <div>
-              <button
-                type="submit"
-                disabled={passwordSaving}
-                className="inline-flex items-center gap-2 rounded-full border border-gold/40 px-5 py-2.5 text-sm font-medium text-gold hover:bg-gold/10 disabled:opacity-60"
-              >
-                {passwordSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-                Alterar senha
-              </button>
-            </div>
-          </form>
-        )}
-      </section>
+        </div>
+        <WeekBars week={ritual.week} />
+      </motion.section>
 
-      {/* Danger zone */}
-      <section className="mt-6 rounded-2xl border border-destructive/30 bg-destructive/5 p-6">
-        <h2 className="flex items-center gap-2 font-display text-xl font-medium text-destructive">
-          <ShieldAlert className="h-4 w-4" /> Zona de perigo
-        </h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Excluir sua conta remove permanentemente seu perfil, biblioteca e progresso de leitura.
-          Essa ação não pode ser desfeita.
-        </p>
-
-        {!deleteOpen ? (
-          <button
-            onClick={() => setDeleteOpen(true)}
-            className="mt-4 rounded-full border border-destructive/40 px-5 py-2.5 text-sm font-medium text-destructive hover:bg-destructive/10"
-          >
-            Excluir minha conta
-          </button>
-        ) : (
-          <div className="mt-4 space-y-3 rounded-xl border border-destructive/30 bg-background/40 p-4">
-            {provider === "password" && (
-              <PasswordInput
-                placeholder="Confirme sua senha"
-                value={deletePassword}
-                onChange={setDeletePassword}
-                visible={showPasswords}
-                autoComplete="current-password"
-              />
+      {/* Goal */}
+      <motion.div {...rise(0.2)}>
+        <Link
+          to="/metas"
+          className="surface-card press mx-4 mt-3 flex items-center gap-4 px-5 py-4"
+        >
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[16px] bg-accent-soft text-gold">
+            <Target className="h-[22px] w-[22px]" strokeWidth={2} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[15.5px] font-semibold">Meta de {year}</p>
+            {goalProgress ? (
+              <>
+                <p className="mt-0.5 text-[13px] text-muted-foreground">
+                  {goalProgress.completed} de {goalProgress.target} livros
+                  {goalProgress.remaining > 0
+                    ? ` · ${goalProgress.perMonthNeeded} por mês para chegar lá`
+                    : " · meta batida!"}
+                </p>
+                <div className="mt-2 h-[5px] overflow-hidden rounded-full bg-accent-soft">
+                  <div
+                    className="h-full rounded-full bg-gold"
+                    style={{ width: `${Math.max(3, goalProgress.percent)}%` }}
+                  />
+                </div>
+              </>
+            ) : (
+              <p className="mt-0.5 text-[13px] text-muted-foreground">
+                Defina quantos livros quer ler este ano
+              </p>
             )}
-            <label className="block">
-              <span className="text-sm text-muted-foreground">
-                Digite <strong>EXCLUIR</strong> para confirmar
-              </span>
-              <input
-                value={deleteConfirmText}
-                onChange={(e) => setDeleteConfirmText(e.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-destructive/40 bg-background/50 px-4 py-3 text-sm outline-none"
-              />
-            </label>
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={handleDeleteAccount}
-                disabled={deleting}
-                className="inline-flex items-center gap-2 rounded-full bg-destructive px-5 py-2.5 text-sm font-medium text-destructive-foreground disabled:opacity-60"
-              >
-                {deleting && <Loader2 className="h-4 w-4 animate-spin" />}
-                Confirmar exclusão
-              </button>
-              <button
-                onClick={() => {
-                  setDeleteOpen(false);
-                  setDeleteConfirmText("");
-                  setDeletePassword("");
-                }}
-                disabled={deleting}
-                className="rounded-full border border-border/60 px-5 py-2.5 text-sm hover:bg-secondary"
-              >
-                Cancelar
-              </button>
-            </div>
           </div>
-        )}
-      </section>
-
-      <p className="mt-8 text-center text-sm text-muted-foreground">
-        <Link to="/biblioteca" className="text-gold underline underline-offset-4">
-          Voltar à minha biblioteca
+          <ChevronRight className="h-[18px] w-[18px] shrink-0 text-faint" />
         </Link>
-      </p>
+      </motion.div>
+
+      <motion.ul {...rise(0.25)} className="surface-card mx-4 mt-3 px-4">
+        <Row
+          to="/desafios"
+          icon={Trophy}
+          tint="var(--butter)"
+          label="Desafios e conquistas"
+          hint={`Nível ${getLevelInfo(profile?.xp ?? 0).level} · ${nf.format(profile?.xp ?? 0)} XP`}
+        />
+        <Row
+          to="/diario"
+          icon={NotebookPen}
+          tint="var(--lilac)"
+          label="Diário de leitura"
+          hint="suas notas e trechos"
+        />
+        <Row
+          to="/ranking"
+          icon={Users}
+          tint="var(--sky)"
+          label="Ranking"
+          hint="leitores da comunidade"
+        />
+        <Row
+          to="/downloads"
+          icon={Download}
+          tint="var(--mint)"
+          label="Downloads e arquivos"
+          hint="livros neste aparelho"
+        />
+        <Row
+          to="/ajustes"
+          icon={Settings}
+          tint="var(--surface-2)"
+          label="Ajustes"
+          hint="perfil, aparência e conta"
+          last
+        />
+      </motion.ul>
     </div>
   );
 }
 
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  suffix,
+/* ------------------------------- pieces -------------------------------- */
+
+function Stat({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="surface-card min-w-0 rounded-[24px] px-3 py-3.5">
+      <p className="num font-display text-[26px] leading-none tracking-[-0.03em]">{value}</p>
+      <p className="mt-2 whitespace-nowrap text-[12.5px] text-muted-foreground">{label}</p>
+    </div>
+  );
+}
+
+const WEEKS = 17;
+const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+const WEEKDAY_ROWS = ["S", "", "Q", "", "S", "", "D"];
+
+/** This week as seven big, readable day markers inside the streak card. */
+function WeekDots({
+  week,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: number;
-  suffix?: string;
+  week: { key: string; label: string; minutes: number; today: boolean }[];
 }) {
   return (
-    <div className="rounded-2xl border border-border/60 bg-card/40 p-5">
-      <Icon className="h-5 w-5 text-gold" />
-      <p className="mt-3 font-display text-3xl font-medium">
-        {value}
-        {suffix && <span className="text-base text-muted-foreground">{suffix}</span>}
-      </p>
-      <p className="mt-1 text-sm text-muted-foreground">{label}</p>
+    <div className="mt-4 grid grid-cols-7 gap-1.5 rounded-[20px] bg-black/10 p-2">
+      {week.map((d) => {
+        const read = d.minutes > 0;
+        return (
+          <div key={d.key} className="flex flex-col items-center gap-1.5 py-1">
+            <span className="text-[11.5px] font-bold uppercase text-white/80">{d.label}</span>
+            <span
+              className={`grid h-8 w-8 place-items-center rounded-full text-[11px] font-bold transition ${
+                read
+                  ? "bg-white text-gold"
+                  : d.today
+                    ? "border-2 border-dashed border-white/80 text-white"
+                    : "bg-white/15 text-white/60"
+              }`}
+              title={read ? `${d.minutes} min` : "Sem leitura"}
+            >
+              {read ? <Flame className="h-4 w-4" strokeWidth={2.4} /> : d.today ? "hoje" : ""}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-function ReadingRecap({ label, value, suffix }: { label: string; value: number; suffix?: string }) {
+/** Last ~4 months of reading, one cell per day (Monday on top). */
+function Heatmap({ days, goal }: { days: RitualDays; goal: number }) {
+  const { cells, months, readDays } = useMemo(() => {
+    const today = new Date();
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+    const start = new Date(monday);
+    start.setDate(monday.getDate() - (WEEKS - 1) * 7);
+    const todayKey = dayKey(today);
+    const out: { key: string; level: number; future: boolean; today: boolean; minutes: number }[] =
+      [];
+    const monthMarks: { col: number; label: string }[] = [];
+    let count = 0;
+    for (let w = 0; w < WEEKS; w++) {
+      for (let d = 0; d < 7; d++) {
+        const date = new Date(start);
+        date.setDate(start.getDate() + w * 7 + d);
+        if (d === 0 && (w === 0 || date.getDate() <= 7)) {
+          const label = MONTHS[date.getMonth()];
+          if (!monthMarks.some((m) => m.label === label)) monthMarks.push({ col: w, label });
+        }
+        const key = dayKey(date);
+        const m = days[key] ?? 0;
+        const future = date > today && key !== todayKey;
+        if (m > 0 && !future) count++;
+        out.push({
+          key,
+          minutes: m,
+          level: m <= 0 ? 0 : m < goal / 2 ? 1 : m < goal ? 2 : m < goal * 2 ? 3 : 4,
+          future,
+          today: key === todayKey,
+        });
+      }
+    }
+    // Drop a first-column label that would collide with the next one.
+    if (monthMarks.length > 1 && monthMarks[1].col - monthMarks[0].col < 3) monthMarks.shift();
+    return { cells: out, months: monthMarks, readDays: count };
+  }, [days, goal]);
+
+  const SHADE = [
+    "var(--surface-2)",
+    "color-mix(in srgb, var(--gold) 28%, var(--surface-2))",
+    "color-mix(in srgb, var(--gold) 52%, var(--surface-2))",
+    "color-mix(in srgb, var(--gold) 76%, var(--surface-2))",
+    "var(--gold)",
+  ];
+  const fmt = (key: string) => {
+    const [y, mo, d] = key.split("-").map(Number);
+    return new Date(y, mo - 1, d).toLocaleDateString("pt-BR", { day: "numeric", month: "short" });
+  };
+
   return (
     <div>
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 font-display text-2xl font-medium tabular-nums">
-        {value.toLocaleString("pt-BR")}
-        {suffix && <span className="text-sm text-muted-foreground">{suffix}</span>}
-      </p>
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-[17px] font-bold tracking-[-0.01em]">Seu ritmo</h2>
+        <p className="num text-[13px] text-muted-foreground">
+          {readDays} {readDays === 1 ? "dia" : "dias"} de leitura
+        </p>
+      </div>
+      <div className="mt-3 flex gap-1.5">
+        <div
+          className="grid shrink-0 gap-[3px] pt-[18px] text-[9.5px] font-semibold leading-none text-faint"
+          style={{ gridTemplateRows: "repeat(7, minmax(0, 1fr))" }}
+          aria-hidden
+        >
+          {WEEKDAY_ROWS.map((l, i) => (
+            <span key={i} className="flex items-center">
+              {l}
+            </span>
+          ))}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div
+            className="relative mb-1.5 h-3 text-[10px] font-semibold leading-none text-faint"
+            aria-hidden
+          >
+            {months.map((m) => (
+              <span
+                key={m.label + m.col}
+                className="absolute top-0"
+                style={{ left: `${(m.col / WEEKS) * 100}%` }}
+              >
+                {m.label}
+              </span>
+            ))}
+          </div>
+          <div
+            className="grid grid-flow-col gap-[3px]"
+            style={{
+              gridTemplateRows: "repeat(7, minmax(0, 1fr))",
+              gridTemplateColumns: `repeat(${WEEKS}, minmax(0, 1fr))`,
+            }}
+            aria-label={`${readDays} dias de leitura nas últimas ${WEEKS} semanas`}
+            role="img"
+          >
+            {cells.map((c) => (
+              <span
+                key={c.key}
+                title={
+                  c.future
+                    ? undefined
+                    : `${fmt(c.key)} · ${c.minutes ? `${c.minutes} min` : "sem leitura"}`
+                }
+                className={`aspect-square rounded-[4px] ${c.today ? "ring-2 ring-foreground/70 ring-offset-1 ring-offset-card" : ""}`}
+                style={{
+                  background: c.future ? "transparent" : SHADE[c.level],
+                  boxShadow: c.future ? "inset 0 0 0 1px var(--border)" : undefined,
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="mt-3 flex items-center justify-end gap-1.5 text-[11px] font-semibold text-faint">
+        <span>Menos</span>
+        {SHADE.map((bg, i) => (
+          <i key={i} className="h-3 w-3 rounded-[3px]" style={{ background: bg }} />
+        ))}
+        <span>Mais</span>
+      </div>
     </div>
   );
 }
 
-function PasswordInput({
-  value,
-  onChange,
-  visible,
-  placeholder,
-  autoComplete,
+function WeekBars({
+  week,
 }: {
-  value: string;
-  onChange: (v: string) => void;
-  visible: boolean;
-  placeholder: string;
-  autoComplete?: string;
+  week: { key: string; label: string; minutes: number; today: boolean }[];
+}) {
+  const max = Math.max(1, ...week.map((d) => d.minutes));
+  return (
+    <div className="mt-4 grid grid-cols-7 gap-2.5">
+      {week.map((d) => {
+        const h = 26 + Math.round((d.minutes / max) * 82);
+        return (
+          <div key={d.key} className="flex flex-col items-center">
+            <div className="flex h-[108px] w-full items-end">
+              <motion.div
+                initial={{ height: 20 }}
+                animate={{ height: h }}
+                transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                title={`${d.minutes} min`}
+                className={`w-full rounded-[12px] ${d.today ? "bg-gold" : "bg-surface-2"}`}
+              />
+            </div>
+            <span
+              className={`mt-2 text-[12.5px] font-semibold ${d.today ? "text-foreground" : "text-faint"}`}
+            >
+              {d.label}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function Row({
+  to,
+  icon: Icon,
+  tint,
+  label,
+  hint,
+  last,
+}: {
+  to: "/desafios" | "/diario" | "/ranking" | "/downloads" | "/ajustes";
+  icon: typeof Trophy;
+  tint: string;
+  label: string;
+  hint: string;
+  last?: boolean;
 }) {
   return (
-    <input
-      type={visible ? "text" : "password"}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      autoComplete={autoComplete}
-      className="w-full rounded-xl border border-border bg-background/50 px-4 py-3 text-sm outline-none focus:border-gold/60"
-    />
+    <li className={last ? "" : "border-b border-border"}>
+      <Link to={to} className="press flex items-center gap-3.5 py-3">
+        <span
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] text-[#131313]"
+          style={{ background: tint }}
+        >
+          <Icon className="h-[19px] w-[19px]" strokeWidth={2} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[15px] font-semibold">{label}</p>
+          <p className="truncate text-[12.5px] text-muted-foreground">{hint}</p>
+        </div>
+        <ChevronRight className="h-[18px] w-[18px] shrink-0 text-faint" />
+      </Link>
+    </li>
+  );
+}
+
+/* -------------------------------- guest -------------------------------- */
+
+function GuestVoce() {
+  return (
+    <div className="mx-auto max-w-3xl pb-10 pt-[calc(env(safe-area-inset-top)+0.875rem)] lg:pt-10">
+      <header className="px-[22px] pt-2">
+        <h1 className="font-display text-[44px] leading-none tracking-[-0.035em] lg:text-[56px]">
+          Você
+        </h1>
+      </header>
+      <section className="mx-4 mt-5 overflow-hidden rounded-[30px] bg-gold px-6 pb-6 pt-5 text-white">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.14em]">
+              <Flame className="h-4 w-4" /> Sua sequência
+            </p>
+            <p className="mt-2 font-display text-[30px] leading-[1.05] tracking-[-0.03em]">
+              Guarde seus dias de leitura
+            </p>
+          </div>
+          <Lumi pose="celebrating" size={92} />
+        </div>
+        <p className="mt-2 text-[14.5px] text-white/90">
+          Com uma conta grátis, sua sequência, horas lidas, metas e estante ficam salvas em todos os
+          aparelhos.
+        </p>
+        <div className="mt-5 flex flex-wrap gap-2">
+          <Link
+            to="/auth"
+            search={{ redirect: "/perfil" }}
+            className="press inline-flex h-11 items-center rounded-full bg-white px-5 text-[14.5px] font-semibold text-[#131313]"
+          >
+            Criar conta grátis
+          </Link>
+          <Link
+            to="/auth"
+            search={{ redirect: "/perfil" }}
+            className="press inline-flex h-11 items-center rounded-full bg-white/20 px-5 text-[14.5px] font-semibold"
+          >
+            Já tenho conta
+          </Link>
+        </div>
+      </section>
+      <ul className="surface-card mx-4 mt-3 px-4">
+        <Row
+          to="/downloads"
+          icon={Download}
+          tint="var(--mint)"
+          label="Downloads e arquivos"
+          hint="livros neste aparelho"
+        />
+        <Row
+          to="/desafios"
+          icon={Trophy}
+          tint="var(--butter)"
+          label="Desafios"
+          hint="veja o que dá para conquistar"
+          last
+        />
+      </ul>
+    </div>
   );
 }

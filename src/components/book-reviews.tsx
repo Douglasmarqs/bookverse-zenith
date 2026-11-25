@@ -43,7 +43,9 @@ function Stars({
           type="button"
           disabled={!onChange}
           onClick={() => onChange?.(i)}
-          className={onChange ? "transition hover:scale-110" : "cursor-default"}
+          className={
+            onChange ? "-m-1.5 rounded-full p-1.5 transition hover:scale-110" : "cursor-default"
+          }
           aria-label={`${i} estrela${i > 1 ? "s" : ""}`}
         >
           <Star
@@ -176,7 +178,9 @@ function ReviewEditor({
     setSaving(true);
     try {
       const { isNew } = await saveReview(user, profile, bookId, { rating, text, spoiler });
-      toast.success(isNew ? `Resenha publicada! Você ganhou +${REVIEW_XP} XP.` : "Resenha atualizada.");
+      toast.success(
+        isNew ? `Resenha publicada! Você ganhou +${REVIEW_XP} XP.` : "Resenha atualizada.",
+      );
       setOpen(false);
     } catch (err) {
       toast.error(describeFirestoreError(err, "Não foi possível publicar sua resenha agora."));
@@ -216,7 +220,11 @@ function ReviewEditor({
             disabled={deleting}
             className="inline-flex items-center gap-1.5 rounded-full border border-border/60 px-4 py-1.5 text-xs font-medium text-muted-foreground hover:border-destructive/50 hover:text-destructive disabled:opacity-60"
           >
-            {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+            {deleting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Trash2 className="h-3.5 w-3.5" />
+            )}
             Apagar
           </button>
         </div>
@@ -287,10 +295,7 @@ function ReviewCard({
   const [liking, setLiking] = useState(false);
   const [revealed, setRevealed] = useState(false);
 
-  useEffect(
-    () => subscribeReviewLikes(bookId, review.id, setLikes),
-    [bookId, review.id],
-  );
+  useEffect(() => subscribeReviewLikes(bookId, review.id, setLikes), [bookId, review.id]);
 
   const liked = viewerUid ? likes.includes(viewerUid) : false;
   const hidden = review.spoiler && !revealed;

@@ -9,81 +9,45 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as TermosRouteImport } from './routes/termos'
-import { Route as SobreRouteImport } from './routes/sobre'
-import { Route as RankingRouteImport } from './routes/ranking'
-import { Route as PrivacidadeRouteImport } from './routes/privacidade'
-import { Route as PerfilRouteImport } from './routes/perfil'
-import { Route as MetasRouteImport } from './routes/metas'
-import { Route as DiarioRouteImport } from './routes/diario'
-import { Route as DescobrirRouteImport } from './routes/descobrir'
-import { Route as DesafiosRouteImport } from './routes/desafios'
-import { Route as ContatoRouteImport } from './routes/contato'
-import { Route as CatalogoRouteImport } from './routes/catalogo'
-import { Route as BibliotecaRouteImport } from './routes/biblioteca'
-import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ReaderBookIdRouteImport } from './routes/reader.$bookId'
+import { Route as AdicionarRouteImport } from './routes/adicionar'
+import { Route as AjustesRouteImport } from './routes/ajustes'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as BemVindoRouteImport } from './routes/bem-vindo'
+import { Route as BibliotecaRouteImport } from './routes/biblioteca'
+import { Route as CatalogoRouteImport } from './routes/catalogo'
+import { Route as CompartilharRouteImport } from './routes/compartilhar'
+import { Route as ContatoRouteImport } from './routes/contato'
+import { Route as DesafiosRouteImport } from './routes/desafios'
+import { Route as DescobrirRouteImport } from './routes/descobrir'
+import { Route as DiarioRouteImport } from './routes/diario'
+import { Route as DownloadsRouteImport } from './routes/downloads'
+import { Route as MetasRouteImport } from './routes/metas'
+import { Route as PerfilRouteImport } from './routes/perfil'
+import { Route as PrivacidadeRouteImport } from './routes/privacidade'
+import { Route as RankingRouteImport } from './routes/ranking'
+import { Route as SobreRouteImport } from './routes/sobre'
+import { Route as TermosRouteImport } from './routes/termos'
+import { Route as ApiLumiRouteImport } from './routes/api/lumi'
 import { Route as LivroSlugRouteImport } from './routes/livro.$slug'
+import { Route as ReaderBookIdRouteImport } from './routes/reader.$bookId'
+import { Route as ApiCatalogDownloadRouteImport } from './routes/api/catalog.download'
+import { Route as ApiCatalogSearchRouteImport } from './routes/api/catalog.search'
+import { Route as ApiImportLinkRouteImport } from './routes/api/import.link'
 
-const TermosRoute = TermosRouteImport.update({
-  id: '/termos',
-  path: '/termos',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SobreRoute = SobreRouteImport.update({
-  id: '/sobre',
-  path: '/sobre',
+const AdicionarRoute = AdicionarRouteImport.update({
+  id: '/adicionar',
+  path: '/adicionar',
   getParentRoute: () => rootRouteImport,
 } as any)
-const RankingRoute = RankingRouteImport.update({
-  id: '/ranking',
-  path: '/ranking',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PrivacidadeRoute = PrivacidadeRouteImport.update({
-  id: '/privacidade',
-  path: '/privacidade',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PerfilRoute = PerfilRouteImport.update({
-  id: '/perfil',
-  path: '/perfil',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MetasRoute = MetasRouteImport.update({
-  id: '/metas',
-  path: '/metas',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DiarioRoute = DiarioRouteImport.update({
-  id: '/diario',
-  path: '/diario',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DescobrirRoute = DescobrirRouteImport.update({
-  id: '/descobrir',
-  path: '/descobrir',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DesafiosRoute = DesafiosRouteImport.update({
-  id: '/desafios',
-  path: '/desafios',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ContatoRoute = ContatoRouteImport.update({
-  id: '/contato',
-  path: '/contato',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CatalogoRoute = CatalogoRouteImport.update({
-  id: '/catalogo',
-  path: '/catalogo',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BibliotecaRoute = BibliotecaRouteImport.update({
-  id: '/biblioteca',
-  path: '/biblioteca',
+const AjustesRoute = AjustesRouteImport.update({
+  id: '/ajustes',
+  path: '/ajustes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -91,14 +55,84 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const BemVindoRoute = BemVindoRouteImport.update({
+  id: '/bem-vindo',
+  path: '/bem-vindo',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ReaderBookIdRoute = ReaderBookIdRouteImport.update({
-  id: '/reader/$bookId',
-  path: '/reader/$bookId',
+const BibliotecaRoute = BibliotecaRouteImport.update({
+  id: '/biblioteca',
+  path: '/biblioteca',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CatalogoRoute = CatalogoRouteImport.update({
+  id: '/catalogo',
+  path: '/catalogo',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CompartilharRoute = CompartilharRouteImport.update({
+  id: '/compartilhar',
+  path: '/compartilhar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContatoRoute = ContatoRouteImport.update({
+  id: '/contato',
+  path: '/contato',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DesafiosRoute = DesafiosRouteImport.update({
+  id: '/desafios',
+  path: '/desafios',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DescobrirRoute = DescobrirRouteImport.update({
+  id: '/descobrir',
+  path: '/descobrir',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DiarioRoute = DiarioRouteImport.update({
+  id: '/diario',
+  path: '/diario',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DownloadsRoute = DownloadsRouteImport.update({
+  id: '/downloads',
+  path: '/downloads',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MetasRoute = MetasRouteImport.update({
+  id: '/metas',
+  path: '/metas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PerfilRoute = PerfilRouteImport.update({
+  id: '/perfil',
+  path: '/perfil',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacidadeRoute = PrivacidadeRouteImport.update({
+  id: '/privacidade',
+  path: '/privacidade',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RankingRoute = RankingRouteImport.update({
+  id: '/ranking',
+  path: '/ranking',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SobreRoute = SobreRouteImport.update({
+  id: '/sobre',
+  path: '/sobre',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermosRoute = TermosRouteImport.update({
+  id: '/termos',
+  path: '/termos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiLumiRoute = ApiLumiRouteImport.update({
+  id: '/api/lumi',
+  path: '/api/lumi',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LivroSlugRoute = LivroSlugRouteImport.update({
@@ -106,222 +140,242 @@ const LivroSlugRoute = LivroSlugRouteImport.update({
   path: '/livro/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ReaderBookIdRoute = ReaderBookIdRouteImport.update({
+  id: '/reader/$bookId',
+  path: '/reader/$bookId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCatalogDownloadRoute = ApiCatalogDownloadRouteImport.update({
+  id: '/api/catalog/download',
+  path: '/api/catalog/download',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCatalogSearchRoute = ApiCatalogSearchRouteImport.update({
+  id: '/api/catalog/search',
+  path: '/api/catalog/search',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiImportLinkRoute = ApiImportLinkRouteImport.update({
+  id: '/api/import/link',
+  path: '/api/import/link',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/adicionar': typeof AdicionarRoute
+  '/ajustes': typeof AjustesRoute
   '/auth': typeof AuthRoute
+  '/bem-vindo': typeof BemVindoRoute
   '/biblioteca': typeof BibliotecaRoute
   '/catalogo': typeof CatalogoRoute
+  '/compartilhar': typeof CompartilharRoute
   '/contato': typeof ContatoRoute
   '/desafios': typeof DesafiosRoute
   '/descobrir': typeof DescobrirRoute
   '/diario': typeof DiarioRoute
+  '/downloads': typeof DownloadsRoute
   '/metas': typeof MetasRoute
   '/perfil': typeof PerfilRoute
   '/privacidade': typeof PrivacidadeRoute
   '/ranking': typeof RankingRoute
   '/sobre': typeof SobreRoute
   '/termos': typeof TermosRoute
+  '/api/lumi': typeof ApiLumiRoute
   '/livro/$slug': typeof LivroSlugRoute
   '/reader/$bookId': typeof ReaderBookIdRoute
+  '/api/catalog/download': typeof ApiCatalogDownloadRoute
+  '/api/catalog/search': typeof ApiCatalogSearchRoute
+  '/api/import/link': typeof ApiImportLinkRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/adicionar': typeof AdicionarRoute
+  '/ajustes': typeof AjustesRoute
   '/auth': typeof AuthRoute
+  '/bem-vindo': typeof BemVindoRoute
   '/biblioteca': typeof BibliotecaRoute
   '/catalogo': typeof CatalogoRoute
+  '/compartilhar': typeof CompartilharRoute
   '/contato': typeof ContatoRoute
   '/desafios': typeof DesafiosRoute
   '/descobrir': typeof DescobrirRoute
   '/diario': typeof DiarioRoute
+  '/downloads': typeof DownloadsRoute
   '/metas': typeof MetasRoute
   '/perfil': typeof PerfilRoute
   '/privacidade': typeof PrivacidadeRoute
   '/ranking': typeof RankingRoute
   '/sobre': typeof SobreRoute
   '/termos': typeof TermosRoute
+  '/api/lumi': typeof ApiLumiRoute
   '/livro/$slug': typeof LivroSlugRoute
   '/reader/$bookId': typeof ReaderBookIdRoute
+  '/api/catalog/download': typeof ApiCatalogDownloadRoute
+  '/api/catalog/search': typeof ApiCatalogSearchRoute
+  '/api/import/link': typeof ApiImportLinkRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/adicionar': typeof AdicionarRoute
+  '/ajustes': typeof AjustesRoute
   '/auth': typeof AuthRoute
+  '/bem-vindo': typeof BemVindoRoute
   '/biblioteca': typeof BibliotecaRoute
   '/catalogo': typeof CatalogoRoute
+  '/compartilhar': typeof CompartilharRoute
   '/contato': typeof ContatoRoute
   '/desafios': typeof DesafiosRoute
   '/descobrir': typeof DescobrirRoute
   '/diario': typeof DiarioRoute
+  '/downloads': typeof DownloadsRoute
   '/metas': typeof MetasRoute
   '/perfil': typeof PerfilRoute
   '/privacidade': typeof PrivacidadeRoute
   '/ranking': typeof RankingRoute
   '/sobre': typeof SobreRoute
   '/termos': typeof TermosRoute
+  '/api/lumi': typeof ApiLumiRoute
   '/livro/$slug': typeof LivroSlugRoute
   '/reader/$bookId': typeof ReaderBookIdRoute
+  '/api/catalog/download': typeof ApiCatalogDownloadRoute
+  '/api/catalog/search': typeof ApiCatalogSearchRoute
+  '/api/import/link': typeof ApiImportLinkRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/adicionar'
+    | '/ajustes'
     | '/auth'
+    | '/bem-vindo'
     | '/biblioteca'
     | '/catalogo'
+    | '/compartilhar'
     | '/contato'
     | '/desafios'
     | '/descobrir'
     | '/diario'
+    | '/downloads'
     | '/metas'
     | '/perfil'
     | '/privacidade'
     | '/ranking'
     | '/sobre'
     | '/termos'
+    | '/api/lumi'
     | '/livro/$slug'
     | '/reader/$bookId'
+    | '/api/catalog/download'
+    | '/api/catalog/search'
+    | '/api/import/link'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/adicionar'
+    | '/ajustes'
     | '/auth'
+    | '/bem-vindo'
     | '/biblioteca'
     | '/catalogo'
+    | '/compartilhar'
     | '/contato'
     | '/desafios'
     | '/descobrir'
     | '/diario'
+    | '/downloads'
     | '/metas'
     | '/perfil'
     | '/privacidade'
     | '/ranking'
     | '/sobre'
     | '/termos'
+    | '/api/lumi'
     | '/livro/$slug'
     | '/reader/$bookId'
+    | '/api/catalog/download'
+    | '/api/catalog/search'
+    | '/api/import/link'
   id:
     | '__root__'
     | '/'
+    | '/adicionar'
+    | '/ajustes'
     | '/auth'
+    | '/bem-vindo'
     | '/biblioteca'
     | '/catalogo'
+    | '/compartilhar'
     | '/contato'
     | '/desafios'
     | '/descobrir'
     | '/diario'
+    | '/downloads'
     | '/metas'
     | '/perfil'
     | '/privacidade'
     | '/ranking'
     | '/sobre'
     | '/termos'
+    | '/api/lumi'
     | '/livro/$slug'
     | '/reader/$bookId'
+    | '/api/catalog/download'
+    | '/api/catalog/search'
+    | '/api/import/link'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdicionarRoute: typeof AdicionarRoute
+  AjustesRoute: typeof AjustesRoute
   AuthRoute: typeof AuthRoute
+  BemVindoRoute: typeof BemVindoRoute
   BibliotecaRoute: typeof BibliotecaRoute
   CatalogoRoute: typeof CatalogoRoute
+  CompartilharRoute: typeof CompartilharRoute
   ContatoRoute: typeof ContatoRoute
   DesafiosRoute: typeof DesafiosRoute
   DescobrirRoute: typeof DescobrirRoute
   DiarioRoute: typeof DiarioRoute
+  DownloadsRoute: typeof DownloadsRoute
   MetasRoute: typeof MetasRoute
   PerfilRoute: typeof PerfilRoute
   PrivacidadeRoute: typeof PrivacidadeRoute
   RankingRoute: typeof RankingRoute
   SobreRoute: typeof SobreRoute
   TermosRoute: typeof TermosRoute
+  ApiLumiRoute: typeof ApiLumiRoute
   LivroSlugRoute: typeof LivroSlugRoute
   ReaderBookIdRoute: typeof ReaderBookIdRoute
+  ApiCatalogDownloadRoute: typeof ApiCatalogDownloadRoute
+  ApiCatalogSearchRoute: typeof ApiCatalogSearchRoute
+  ApiImportLinkRoute: typeof ApiImportLinkRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/termos': {
-      id: '/termos'
-      path: '/termos'
-      fullPath: '/termos'
-      preLoaderRoute: typeof TermosRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/sobre': {
-      id: '/sobre'
-      path: '/sobre'
-      fullPath: '/sobre'
-      preLoaderRoute: typeof SobreRouteImport
+    '/adicionar': {
+      id: '/adicionar'
+      path: '/adicionar'
+      fullPath: '/adicionar'
+      preLoaderRoute: typeof AdicionarRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/ranking': {
-      id: '/ranking'
-      path: '/ranking'
-      fullPath: '/ranking'
-      preLoaderRoute: typeof RankingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/privacidade': {
-      id: '/privacidade'
-      path: '/privacidade'
-      fullPath: '/privacidade'
-      preLoaderRoute: typeof PrivacidadeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/perfil': {
-      id: '/perfil'
-      path: '/perfil'
-      fullPath: '/perfil'
-      preLoaderRoute: typeof PerfilRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/metas': {
-      id: '/metas'
-      path: '/metas'
-      fullPath: '/metas'
-      preLoaderRoute: typeof MetasRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/diario': {
-      id: '/diario'
-      path: '/diario'
-      fullPath: '/diario'
-      preLoaderRoute: typeof DiarioRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/descobrir': {
-      id: '/descobrir'
-      path: '/descobrir'
-      fullPath: '/descobrir'
-      preLoaderRoute: typeof DescobrirRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/desafios': {
-      id: '/desafios'
-      path: '/desafios'
-      fullPath: '/desafios'
-      preLoaderRoute: typeof DesafiosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/contato': {
-      id: '/contato'
-      path: '/contato'
-      fullPath: '/contato'
-      preLoaderRoute: typeof ContatoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/catalogo': {
-      id: '/catalogo'
-      path: '/catalogo'
-      fullPath: '/catalogo'
-      preLoaderRoute: typeof CatalogoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/biblioteca': {
-      id: '/biblioteca'
-      path: '/biblioteca'
-      fullPath: '/biblioteca'
-      preLoaderRoute: typeof BibliotecaRouteImport
+    '/ajustes': {
+      id: '/ajustes'
+      path: '/ajustes'
+      fullPath: '/ajustes'
+      preLoaderRoute: typeof AjustesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -331,18 +385,116 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/bem-vindo': {
+      id: '/bem-vindo'
+      path: '/bem-vindo'
+      fullPath: '/bem-vindo'
+      preLoaderRoute: typeof BemVindoRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/reader/$bookId': {
-      id: '/reader/$bookId'
-      path: '/reader/$bookId'
-      fullPath: '/reader/$bookId'
-      preLoaderRoute: typeof ReaderBookIdRouteImport
+    '/biblioteca': {
+      id: '/biblioteca'
+      path: '/biblioteca'
+      fullPath: '/biblioteca'
+      preLoaderRoute: typeof BibliotecaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/catalogo': {
+      id: '/catalogo'
+      path: '/catalogo'
+      fullPath: '/catalogo'
+      preLoaderRoute: typeof CatalogoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/compartilhar': {
+      id: '/compartilhar'
+      path: '/compartilhar'
+      fullPath: '/compartilhar'
+      preLoaderRoute: typeof CompartilharRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contato': {
+      id: '/contato'
+      path: '/contato'
+      fullPath: '/contato'
+      preLoaderRoute: typeof ContatoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/desafios': {
+      id: '/desafios'
+      path: '/desafios'
+      fullPath: '/desafios'
+      preLoaderRoute: typeof DesafiosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/descobrir': {
+      id: '/descobrir'
+      path: '/descobrir'
+      fullPath: '/descobrir'
+      preLoaderRoute: typeof DescobrirRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/diario': {
+      id: '/diario'
+      path: '/diario'
+      fullPath: '/diario'
+      preLoaderRoute: typeof DiarioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/downloads': {
+      id: '/downloads'
+      path: '/downloads'
+      fullPath: '/downloads'
+      preLoaderRoute: typeof DownloadsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/metas': {
+      id: '/metas'
+      path: '/metas'
+      fullPath: '/metas'
+      preLoaderRoute: typeof MetasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/perfil': {
+      id: '/perfil'
+      path: '/perfil'
+      fullPath: '/perfil'
+      preLoaderRoute: typeof PerfilRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacidade': {
+      id: '/privacidade'
+      path: '/privacidade'
+      fullPath: '/privacidade'
+      preLoaderRoute: typeof PrivacidadeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ranking': {
+      id: '/ranking'
+      path: '/ranking'
+      fullPath: '/ranking'
+      preLoaderRoute: typeof RankingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sobre': {
+      id: '/sobre'
+      path: '/sobre'
+      fullPath: '/sobre'
+      preLoaderRoute: typeof SobreRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/termos': {
+      id: '/termos'
+      path: '/termos'
+      fullPath: '/termos'
+      preLoaderRoute: typeof TermosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/lumi': {
+      id: '/api/lumi'
+      path: '/api/lumi'
+      fullPath: '/api/lumi'
+      preLoaderRoute: typeof ApiLumiRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/livro/$slug': {
@@ -352,26 +504,63 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LivroSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/reader/$bookId': {
+      id: '/reader/$bookId'
+      path: '/reader/$bookId'
+      fullPath: '/reader/$bookId'
+      preLoaderRoute: typeof ReaderBookIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/catalog/download': {
+      id: '/api/catalog/download'
+      path: '/api/catalog/download'
+      fullPath: '/api/catalog/download'
+      preLoaderRoute: typeof ApiCatalogDownloadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/catalog/search': {
+      id: '/api/catalog/search'
+      path: '/api/catalog/search'
+      fullPath: '/api/catalog/search'
+      preLoaderRoute: typeof ApiCatalogSearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/import/link': {
+      id: '/api/import/link'
+      path: '/api/import/link'
+      fullPath: '/api/import/link'
+      preLoaderRoute: typeof ApiImportLinkRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdicionarRoute: AdicionarRoute,
+  AjustesRoute: AjustesRoute,
   AuthRoute: AuthRoute,
+  BemVindoRoute: BemVindoRoute,
   BibliotecaRoute: BibliotecaRoute,
   CatalogoRoute: CatalogoRoute,
+  CompartilharRoute: CompartilharRoute,
   ContatoRoute: ContatoRoute,
   DesafiosRoute: DesafiosRoute,
   DescobrirRoute: DescobrirRoute,
   DiarioRoute: DiarioRoute,
+  DownloadsRoute: DownloadsRoute,
   MetasRoute: MetasRoute,
   PerfilRoute: PerfilRoute,
   PrivacidadeRoute: PrivacidadeRoute,
   RankingRoute: RankingRoute,
   SobreRoute: SobreRoute,
   TermosRoute: TermosRoute,
+  ApiLumiRoute: ApiLumiRoute,
   LivroSlugRoute: LivroSlugRoute,
   ReaderBookIdRoute: ReaderBookIdRoute,
+  ApiCatalogDownloadRoute: ApiCatalogDownloadRoute,
+  ApiCatalogSearchRoute: ApiCatalogSearchRoute,
+  ApiImportLinkRoute: ApiImportLinkRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -373,8 +373,12 @@ export async function parseEpubFile(file: File): Promise<Book> {
     if (item.mediaType && !/html|xml/.test(item.mediaType)) continue;
     try {
       const html = await readText(zip, item.href);
-      const chapterDir = item.href.includes("/") ? item.href.slice(0, item.href.lastIndexOf("/") + 1) : "";
+      const chapterDir = item.href.includes("/")
+        ? item.href.slice(0, item.href.lastIndexOf("/") + 1)
+        : "";
       const chapter = await extractChapter(html, index, zip, chapterDir, imageCache, imageBudget);
+      // Give the screen a frame between chapters so big books never freeze it.
+      await new Promise((r) => setTimeout(r, 0));
       const hasImages = chapter.blocks?.some((b) => b.type === "image") ?? false;
       if (chapter.paragraphs.length > 0 || hasImages) {
         chapters.push(chapter);

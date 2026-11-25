@@ -1,19 +1,6 @@
 import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
-import {
-  BookOpen,
-  Mail,
-  Lock,
-  User as UserIcon,
-  Loader2,
-  Eye,
-  EyeOff,
-  Check,
-  ArrowLeft,
-  Sparkles,
-  Library,
-  Trophy,
-} from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Mail, Lock, User as UserIcon, Loader2, Eye, EyeOff, Check, ArrowLeft } from "lucide-react";
 import {
   signInWithEmail,
   signInWithGoogle,
@@ -23,12 +10,19 @@ import {
   isFirebaseConfigured,
   getFirebaseKeyDebugInfo,
 } from "../lib/firebase";
-import heroImg from "@/assets/hero-library.webp";
-import { LumiMascot } from "@/components/lumi-mascot";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+
+import { BookArt } from "@/components/book-art";
+import { LogoMark } from "@/components/brand/logo";
+import { fauxBookFor } from "@/lib/faux-books";
+import { useLastBook } from "@/lib/nav";
 
 export const Route = createFileRoute("/auth")({
-  validateSearch: (search: Record<string, unknown>) => ({
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { redirect: string | undefined; modo?: "criar" } => ({
     redirect: typeof search.redirect === "string" ? search.redirect : undefined,
+    ...(search.modo === "criar" ? { modo: "criar" as const } : {}),
   }),
   head: () => ({
     meta: [
@@ -46,18 +40,16 @@ export const Route = createFileRoute("/auth")({
 
 type Mode = "signin" | "signup" | "reset";
 
-const BENEFITS = [
-  { icon: Library, text: "Sua biblioteca e progresso sincronizados em qualquer dispositivo" },
-  { icon: Sparkles, text: "Lumi, sua companhia de leitura com IA, dentro de cada livro" },
-  { icon: Trophy, text: "XP, metas e ranking para transformar leitura em hábito" },
-];
-
 function AuthPage() {
   const navigate = useNavigate();
   const router = useRouter();
   const search = Route.useSearch();
   const redirectTo = search.redirect || "/";
-  const [mode, setMode] = useState<Mode>("signin");
+  const [mode, setMode] = useState<Mode>(search.modo === "criar" ? "signup" : "signin");
+  // A brand-new account goes through the short onboarding before the app.
+  const justSignedUp = useRef(false);
+  // Leave /auth exactly once, however many auth events arrive.
+  const leavingRef = useRef(false);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -78,9 +70,18 @@ function AuthPage() {
     return subscribeAuth((u) => {
       const authed = !!u && !u.isAnonymous;
       setAlreadyAuthed(authed);
-      if (authed) {
-        router.invalidate();
-        navigate({ to: redirectTo, replace: true });
+      if (authed && !leavingRef.current) {
+        leavingRef.current = true;
+        if (justSignedUp.current) {
+          navigate({
+            to: "/bem-vindo",
+            search: { redirect: redirectTo },
+            replace: true,
+            viewTransition: false,
+          });
+        } else {
+          navigate({ to: redirectTo, replace: true, viewTransition: false });
+        }
       }
     });
   }, [navigate, redirectTo, router]);
@@ -119,13 +120,22 @@ function AuthPage() {
     setLoading("email");
     try {
       if (mode === "signup") {
+        justSignedUp.current = true;
         await signUpWithEmail(email, password, name);
+        router.invalidate();
+        navigate({
+          to: "/bem-vindo",
+          search: { redirect: redirectTo },
+          replace: true,
+          viewTransition: false,
+        });
       } else {
         await signInWithEmail(email, password);
+        router.invalidate();
+        navigate({ to: redirectTo, replace: true, viewTransition: false });
       }
-      router.invalidate();
-      navigate({ to: redirectTo, replace: true });
     } catch (err: unknown) {
+      justSignedUp.current = false;
       setError(friendlyError(err));
       setInvalidKey(isInvalidKeyError(err));
     } finally {
@@ -141,7 +151,7 @@ function AuthPage() {
     try {
       await signInWithGoogle();
       router.invalidate();
-      navigate({ to: redirectTo, replace: true });
+      navigate({ to: redirectTo, replace: true, viewTransition: false });
     } catch (err: unknown) {
       setError(friendlyError(err));
       setInvalidKey(isInvalidKeyError(err));
@@ -169,273 +179,407 @@ function AuthPage() {
     }
   }
 
+  const lastBook = useLastBook();
+  const [stage, setStage] = useState<"choose" | "email">(
+    search.modo === "criar" ? "email" : "choose",
+  );
+  const pct = lastBook?.progress ? Math.round(lastBook.progress * 100) : 0;
+
+  function skip() {
+    if (lastBook?.id) navigate({ to: "/reader/$bookId", params: { bookId: lastBook.id } });
+    else navigate({ to: search.redirect || "/descobrir", replace: true });
+  }
+
+  const heading =
+    mode === "reset"
+      ? "Redefinir senha"
+      : stage === "email"
+        ? mode === "signup"
+          ? "Crie sua estante"
+          : "Bom te ver de novo"
+        : pct > 0
+          ? "Guarde seu progresso"
+          : "Sua estante em todo lugar";
+
   return (
-    <div className="mx-auto grid min-h-[calc(100vh-8rem)] max-w-6xl grid-cols-1 items-center gap-0 px-5 py-10 md:px-8 lg:grid-cols-[1.05fr_1fr] lg:gap-10">
-      {/* Branding panel — hidden on small screens */}
-      <div className="glass-plate relative hidden overflow-hidden rounded-3xl p-10 lg:flex lg:flex-col lg:justify-between lg:self-stretch">
-        <div className="pointer-events-none absolute inset-0">
-          <img
-            src={heroImg}
-            alt=""
-            width={1920}
-            height={1280}
-            fetchPriority="high"
-            className="h-full w-full object-cover opacity-30"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-background/50 via-background/80 to-background" />
-        </div>
-        <div className="relative">
-          <Link to="/" className="inline-flex items-center gap-2.5">
-            <span className="grid h-9 w-9 place-items-center rounded-full bg-gold/10 ring-1 ring-gold/40">
-              <BookOpen className="h-4 w-4 text-gold" />
-            </span>
-            <span className="font-display text-xl font-semibold tracking-tight">
-              Book<span className="text-gold">verse</span>
-            </span>
-          </Link>
+    <div className="relative flex min-h-[100dvh] flex-col bg-background lg:grid lg:grid-cols-[1.1fr_1fr]">
+      <CoverWall />
 
-          <h2 className="mt-14 max-w-sm font-display text-4xl font-medium leading-tight">
-            Toda leitura merece um <span className="text-gradient-gold italic">santuário</span>.
-          </h2>
-
-          <ul className="mt-10 space-y-4">
-            {BENEFITS.map(({ icon: Icon, text }) => (
-              <li key={text} className="flex items-start gap-3 text-sm text-foreground/85">
-                <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gold/10 ring-1 ring-gold/30">
-                  <Icon className="h-3.5 w-3.5 text-gold" />
-                </span>
-                {text}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="relative flex items-center gap-4">
-          <LumiMascot size={64} />
-          <p className="max-w-[220px] text-xs leading-relaxed text-muted-foreground">
-            "Estou aqui pra ler junto com você." — Lumi, a coruja da BookVerse
-          </p>
-        </div>
-      </div>
-
-      {/* Form panel */}
-      <div className="w-full py-8 lg:py-0">
-        <div className="mx-auto w-full max-w-md">
-          {mode !== "reset" ? (
-            <div className="mb-8 text-center lg:text-left">
-              <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-gold/10 ring-1 ring-gold/40 lg:mx-0">
-                <BookOpen className="h-5 w-5 text-gold" />
-              </span>
-              <h1 className="mt-4 font-display text-3xl font-semibold">
-                {mode === "signup" ? "Crie sua conta" : "Bem-vindo de volta"}
-              </h1>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {mode === "signup"
-                  ? "Leva menos de um minuto — guarde seu progresso e biblioteca em qualquer dispositivo."
-                  : "Entre para sincronizar sua leitura entre dispositivos."}
-              </p>
+      <div className="relative z-[1] -mt-10 flex flex-1 flex-col lg:mt-0 lg:items-center lg:justify-center lg:px-10">
+        <motion.div
+          initial={{ y: 40, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+          className="flex flex-1 flex-col rounded-t-[34px] bg-card px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-20px_50px_-30px_rgba(0,0,0,.35)] lg:w-full lg:max-w-md lg:flex-none lg:rounded-[34px] lg:pb-8 lg:pt-8 lg:shadow-[0_30px_80px_-40px_rgba(0,0,0,.4)]"
+        >
+          <div className="mx-auto h-[5px] w-10 rounded-full bg-border lg:hidden" />
+          <div className="mx-auto w-full max-w-md">
+            <div className="mt-5 flex items-center justify-between">
+              <LogoMark size={40} />
+              {(stage === "email" || mode === "reset") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (mode === "reset") switchMode("signin");
+                    else setStage("choose");
+                  }}
+                  className="press inline-flex items-center gap-1 rounded-full px-2 py-1.5 text-[13.5px] font-semibold text-muted-foreground"
+                >
+                  <ArrowLeft className="h-4 w-4" /> Voltar
+                </button>
+              )}
             </div>
-          ) : (
-            <div className="mb-8 text-center lg:text-left">
-              <button
-                onClick={() => switchMode("signin")}
-                className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={heading}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
               >
-                <ArrowLeft className="h-3.5 w-3.5" /> Voltar para entrar
-              </button>
-              <h1 className="font-display text-3xl font-semibold">Redefinir senha</h1>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Informe seu e-mail e enviaremos um link para você criar uma nova senha.
-              </p>
-            </div>
-          )}
-
-          {configMissing && (
-            <div className="mb-4 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-              <strong>Login indisponível:</strong> a chave do Firebase (
-              <code className="font-mono">GOOGLE_API_KEY</code>) não foi configurada neste deploy.
-              Nenhuma conta pode ser criada até isso ser resolvido — veja{" "}
-              <code className="font-mono">DEPLOY.md</code> no projeto.
-            </div>
-          )}
-
-          {alreadyAuthed && (
-            <div className="mb-4 rounded-xl border border-gold/30 bg-gold/5 px-4 py-3 text-sm">
-              Você já está autenticado.{" "}
-              <Link to="/" className="text-gold underline underline-offset-4">
-                Voltar à biblioteca
-              </Link>
-              .
-            </div>
-          )}
-
-          {mode === "reset" ? (
-            resetSent ? (
-              <div className="rounded-2xl border border-gold/30 bg-gold/5 px-5 py-6 text-center">
-                <span className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-gold/15">
-                  <Check className="h-5 w-5 text-gold" />
-                </span>
-                <p className="mt-3 text-sm text-foreground/90">
-                  Se houver uma conta com o e-mail <strong>{email}</strong>, enviamos um link de
-                  redefinição de senha. Confira também sua caixa de spam.
+                <h1 className="mt-4 font-display text-[31px] leading-[1.05] tracking-[-0.035em] sm:text-[36px]">
+                  {heading}
+                </h1>
+                <p className="mt-2.5 text-[16px] leading-relaxed text-muted-foreground">
+                  {mode === "reset" ? (
+                    "Informe seu e-mail e enviaremos um link para criar uma nova senha."
+                  ) : stage === "email" ? (
+                    mode === "signup" ? (
+                      "Leva menos de um minuto. Seus livros e seu progresso vão junto para qualquer aparelho."
+                    ) : (
+                      "Entre para continuar exatamente da página em que parou."
+                    )
+                  ) : pct > 0 && lastBook?.title ? (
+                    <>
+                      Você leu {pct}% de{" "}
+                      <b className="font-semibold text-foreground">{lastBook.title}</b> sem conta.
+                      Entre para continuar de onde parou em qualquer aparelho.
+                    </>
+                  ) : (
+                    "Entre para guardar livros, progresso, metas e sequência — no celular e no computador."
+                  )}
                 </p>
-                <button
-                  onClick={() => switchMode("signin")}
-                  className="mt-5 inline-flex items-center gap-2 rounded-full bg-gold px-5 py-2.5 text-sm font-medium text-primary-foreground"
-                >
-                  Voltar para entrar
-                </button>
-              </div>
-            ) : (
-              <form onSubmit={handleReset} className="space-y-3">
-                <Field
-                  icon={<Mail className="h-4 w-4" />}
-                  type="email"
-                  placeholder="E-mail"
-                  value={email}
-                  onChange={setEmail}
-                  autoComplete="email"
-                  required
-                />
-                {fieldError && <ErrorBox>{fieldError}</ErrorBox>}
-                {error && <ErrorBox>{error}</ErrorBox>}
-                <button
-                  type="submit"
-                  disabled={loading !== null || configMissing}
-                  className="flex w-full items-center justify-center gap-2 rounded-full bg-gold px-5 py-3 text-sm font-medium text-primary-foreground transition-transform hover:scale-[1.01] active:scale-[0.99] disabled:opacity-60"
-                >
-                  {loading === "reset" && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Enviar link de redefinição
-                </button>
-              </form>
-            )
-          ) : (
-            <>
-              <button
-                onClick={handleGoogle}
-                disabled={loading !== null || configMissing}
-                className="flex w-full items-center justify-center gap-3 rounded-full border border-border bg-background px-5 py-3 text-sm font-medium transition hover:border-gold/40 hover:bg-secondary/50 disabled:opacity-60"
-              >
-                {loading === "google" ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <GoogleIcon />
-                )}
-                Continuar com Google
-              </button>
+              </motion.div>
+            </AnimatePresence>
 
-              <div className="my-6 flex items-center gap-3 text-xs uppercase tracking-widest text-muted-foreground">
-                <span className="h-px flex-1 bg-border" />
-                ou
-                <span className="h-px flex-1 bg-border" />
+            {configMissing && (
+              <div className="mt-4 rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                <strong>Login indisponível:</strong> a chave do Firebase (
+                <code className="font-mono">GOOGLE_API_KEY</code>) não foi configurada neste deploy.
+                Veja <code className="font-mono">DEPLOY.md</code> no projeto.
               </div>
+            )}
+            {alreadyAuthed && (
+              <div className="mt-4 rounded-2xl bg-accent-soft px-4 py-3 text-sm">
+                Você já está conectado.{" "}
+                <Link to="/" className="font-semibold text-gold">
+                  Ir para o início
+                </Link>
+              </div>
+            )}
 
-              <form onSubmit={handleEmail} className="space-y-3">
-                {mode === "signup" && (
+            {mode === "reset" ? (
+              resetSent ? (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.96 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="mt-6 rounded-[24px] bg-mint px-5 py-6 text-center text-[#1f4d35]"
+                >
+                  <span className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-white/70">
+                    <Check className="h-5 w-5" />
+                  </span>
+                  <p className="mt-3 text-sm">
+                    Se houver uma conta com <strong>{email}</strong>, enviamos o link. Confira
+                    também o spam.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => switchMode("signin")}
+                    className="press mt-4 h-11 rounded-full bg-foreground px-5 text-sm font-semibold text-background"
+                  >
+                    Voltar para entrar
+                  </button>
+                </motion.div>
+              ) : (
+                <form onSubmit={handleReset} className="mt-6 space-y-3">
                   <Field
-                    icon={<UserIcon className="h-4 w-4" />}
-                    type="text"
-                    placeholder="Seu nome"
-                    value={name}
-                    onChange={setName}
-                    autoComplete="name"
+                    icon={<Mail className="h-4 w-4" />}
+                    type="email"
+                    placeholder="E-mail"
+                    value={email}
+                    onChange={setEmail}
+                    autoComplete="email"
                     required
                   />
-                )}
-                <Field
-                  icon={<Mail className="h-4 w-4" />}
-                  type="email"
-                  placeholder="E-mail"
-                  value={email}
-                  onChange={setEmail}
-                  autoComplete="email"
-                  required
-                />
-                <PasswordField
-                  placeholder="Senha"
-                  value={password}
-                  onChange={setPassword}
-                  visible={showPassword}
-                  onToggleVisible={() => setShowPassword((v) => !v)}
-                  autoComplete={mode === "signup" ? "new-password" : "current-password"}
-                  required
-                  minLength={6}
-                />
-
-                {mode === "signin" && (
-                  <div className="flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => switchMode("reset")}
-                      className="text-xs text-muted-foreground hover:text-gold"
-                    >
-                      Esqueci minha senha
-                    </button>
-                  </div>
-                )}
-
-                {mode === "signup" && (
-                  <>
-                    {password.length > 0 && <PasswordStrengthMeter score={passwordStrength} />}
-                    <PasswordField
-                      placeholder="Confirme a senha"
-                      value={confirmPassword}
-                      onChange={setConfirmPassword}
-                      visible={showPassword}
-                      onToggleVisible={() => setShowPassword((v) => !v)}
-                      autoComplete="new-password"
-                      required
-                      minLength={6}
-                    />
-                    <label className="flex items-start gap-2.5 pt-1 text-xs leading-relaxed text-muted-foreground">
-                      <input
-                        type="checkbox"
-                        checked={acceptedTerms}
-                        onChange={(e) => setAcceptedTerms(e.target.checked)}
-                        className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-border accent-[var(--color-gold)]"
-                      />
-                      <span>
-                        Li e aceito os{" "}
-                        <Link to="/termos" className="text-gold underline underline-offset-2">
-                          Termos de uso
-                        </Link>{" "}
-                        e a{" "}
-                        <Link to="/privacidade" className="text-gold underline underline-offset-2">
-                          Política de privacidade
-                        </Link>
-                        .
-                      </span>
-                    </label>
-                  </>
-                )}
-
-                {fieldError && <ErrorBox>{fieldError}</ErrorBox>}
+                  {fieldError && <ErrorBox>{fieldError}</ErrorBox>}
+                  {error && <ErrorBox>{error}</ErrorBox>}
+                  <PrimaryButton
+                    disabled={loading !== null || configMissing}
+                    busy={loading === "reset"}
+                  >
+                    Enviar link de redefinição
+                  </PrimaryButton>
+                </form>
+              )
+            ) : stage === "choose" ? (
+              <div className="mt-7 space-y-3">
+                <button
+                  type="button"
+                  onClick={handleGoogle}
+                  disabled={loading !== null || configMissing}
+                  className="press flex h-[56px] w-full items-center justify-center gap-3 rounded-full bg-foreground text-[16.5px] font-semibold text-background disabled:opacity-60"
+                >
+                  {loading === "google" ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <span className="grid h-7 w-7 place-items-center rounded-full bg-white">
+                      <GoogleIcon />
+                    </span>
+                  )}
+                  Continuar com Google
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStage("email")}
+                  className="press flex h-[56px] w-full items-center justify-center gap-3 rounded-full bg-card text-[16.5px] font-semibold shadow-[inset_0_0_0_1.5px_var(--border)]"
+                >
+                  <Mail className="h-5 w-5" strokeWidth={2} /> Continuar com e-mail
+                </button>
                 {error && <ErrorBox>{error}</ErrorBox>}
                 {invalidKey && <KeyDebugBox />}
-
-                <button
-                  type="submit"
-                  disabled={loading !== null || configMissing}
-                  className="flex w-full items-center justify-center gap-2 rounded-full bg-gold px-5 py-3 text-sm font-medium text-primary-foreground transition-transform hover:scale-[1.01] active:scale-[0.99] disabled:opacity-60"
+              </div>
+            ) : (
+              <>
+                <div
+                  role="tablist"
+                  aria-label="Entrar ou criar conta"
+                  className="mt-6 grid grid-cols-2 rounded-[16px] bg-surface-2 p-1"
                 >
-                  {loading === "email" && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {mode === "signup" ? "Criar conta" : "Entrar"}
-                </button>
-              </form>
+                  {(
+                    [
+                      ["signin", "Entrar"],
+                      ["signup", "Criar conta"],
+                    ] as const
+                  ).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      role="tab"
+                      aria-selected={mode === id}
+                      onClick={() => switchMode(id)}
+                      className="press relative rounded-[12px] py-2.5 text-sm font-semibold"
+                    >
+                      {mode === id && (
+                        <motion.span
+                          layoutId="auth-tab"
+                          className="absolute inset-0 rounded-[12px] bg-card shadow-[0_2px_8px_rgba(0,0,0,.07)]"
+                          transition={{ type: "spring", stiffness: 450, damping: 34 }}
+                        />
+                      )}
+                      <span className={`relative ${mode === id ? "" : "text-muted-foreground"}`}>
+                        {label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <form onSubmit={handleEmail} className="mt-4 space-y-3">
+                  <AnimatePresence initial={false}>
+                    {mode === "signup" && (
+                      <motion.div
+                        key="name"
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                        className="overflow-hidden"
+                      >
+                        <Field
+                          icon={<UserIcon className="h-4 w-4" />}
+                          type="text"
+                          placeholder="Seu nome"
+                          value={name}
+                          onChange={setName}
+                          autoComplete="name"
+                          maxLength={40}
+                          required
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                  <Field
+                    icon={<Mail className="h-4 w-4" />}
+                    type="email"
+                    placeholder="E-mail"
+                    value={email}
+                    onChange={setEmail}
+                    autoComplete="email"
+                    required
+                  />
+                  <PasswordField
+                    placeholder="Senha"
+                    value={password}
+                    onChange={setPassword}
+                    visible={showPassword}
+                    onToggleVisible={() => setShowPassword((v) => !v)}
+                    autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                    required
+                    minLength={6}
+                  />
+                  {mode === "signin" && (
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => switchMode("reset")}
+                        className="-my-2 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground"
+                      >
+                        Esqueci minha senha
+                      </button>
+                    </div>
+                  )}
+                  <AnimatePresence initial={false}>
+                    {mode === "signup" && (
+                      <motion.div
+                        key="signup-extra"
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                        className="space-y-3 overflow-hidden"
+                      >
+                        {password.length > 0 && <PasswordStrengthMeter score={passwordStrength} />}
+                        <PasswordField
+                          placeholder="Confirme a senha"
+                          value={confirmPassword}
+                          onChange={setConfirmPassword}
+                          visible={showPassword}
+                          onToggleVisible={() => setShowPassword((v) => !v)}
+                          autoComplete="new-password"
+                          required
+                          minLength={6}
+                        />
+                        <label className="flex items-start gap-2.5 pt-1 text-xs leading-relaxed text-muted-foreground">
+                          <input
+                            type="checkbox"
+                            checked={acceptedTerms}
+                            onChange={(e) => setAcceptedTerms(e.target.checked)}
+                            className="mt-0.5 h-4 w-4 shrink-0 rounded border-border"
+                            style={{ accentColor: "var(--gold)" }}
+                          />
+                          <span>
+                            Li e aceito os{" "}
+                            <Link to="/termos" className="underline underline-offset-2">
+                              Termos de uso
+                            </Link>{" "}
+                            e a{" "}
+                            <Link to="/privacidade" className="underline underline-offset-2">
+                              Política de privacidade
+                            </Link>
+                            .
+                          </span>
+                        </label>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                  {fieldError && <ErrorBox>{fieldError}</ErrorBox>}
+                  {error && <ErrorBox>{error}</ErrorBox>}
+                  {invalidKey && <KeyDebugBox />}
+                  <PrimaryButton
+                    disabled={loading !== null || configMissing}
+                    busy={loading === "email"}
+                  >
+                    {mode === "signup" ? "Criar minha conta" : "Entrar"}
+                  </PrimaryButton>
+                </form>
+              </>
+            )}
 
-              <p className="mt-6 text-center text-sm text-muted-foreground">
-                {mode === "signup" ? "Já tem uma conta?" : "Não tem conta?"}{" "}
-                <button
-                  onClick={() => switchMode(mode === "signup" ? "signin" : "signup")}
-                  className="text-gold underline underline-offset-4"
-                >
-                  {mode === "signup" ? "Entrar" : "Criar agora"}
-                </button>
-              </p>
-            </>
-          )}
-        </div>
+            <button
+              type="button"
+              onClick={skip}
+              className="mx-auto mt-6 block py-2 text-[16px] font-semibold"
+            >
+              Agora não <span className="font-normal text-faint">· continuar lendo</span>
+            </button>
+            <p className="mt-3 text-center text-[13px] leading-relaxed text-faint">
+              Ao continuar você aceita os{" "}
+              <Link to="/termos" className="underline underline-offset-2">
+                Termos
+              </Link>{" "}
+              e a{" "}
+              <Link to="/privacidade" className="underline underline-offset-2">
+                Política de privacidade
+              </Link>
+              .
+            </p>
+          </div>
+        </motion.div>
       </div>
+    </div>
+  );
+}
+
+function PrimaryButton({
+  children,
+  disabled,
+  busy,
+}: {
+  children: React.ReactNode;
+  disabled: boolean;
+  busy: boolean;
+}) {
+  return (
+    <button
+      type="submit"
+      disabled={disabled}
+      className="press flex h-[54px] w-full items-center justify-center gap-2 rounded-full bg-foreground text-[16px] font-semibold text-background disabled:opacity-60"
+    >
+      {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+      {children}
+    </button>
+  );
+}
+
+const WALL = [
+  ["O Grande Gatsby", "Iracema", "Dom Casmurro", "Frankenstein", "Alice no País das Maravilhas"],
+  ["Os Sertões", "Contos Fluminenses", "Senhora", "Dom Quixote", "O Alienista"],
+  [
+    "A Metamorfose",
+    "Orgulho e Preconceito",
+    "O Cortiço",
+    "A Moreninha",
+    "Memórias Póstumas de Brás Cubas",
+  ],
+];
+
+/** A tilted wall of classic covers that drifts slowly. */
+function CoverWall() {
+  const reduce = useReducedMotion();
+  return (
+    <div
+      aria-hidden
+      className="relative h-[min(44dvh,400px)] shrink-0 overflow-hidden lg:sticky lg:top-0 lg:h-[100dvh]"
+    >
+      <div className="absolute left-1/2 top-1/2 flex w-[150%] -translate-x-1/2 -translate-y-1/2 -rotate-[8deg] flex-col gap-4 lg:w-[130%] lg:gap-7">
+        {WALL.map((row, r) => (
+          <motion.div
+            key={r}
+            className="flex gap-4 lg:gap-7"
+            initial={{ x: r % 2 ? -60 : 0 }}
+            animate={reduce ? undefined : { x: r % 2 ? [-60, 0, -60] : [0, -60, 0] }}
+            transition={{ duration: 26 + r * 4, repeat: Infinity, ease: "easeInOut" }}
+          >
+            {[...row, ...row].map((t, i) => {
+              const b = fauxBookFor(t);
+              return (
+                <div key={i} className="w-[104px] shrink-0 lg:w-[190px]">
+                  <BookArt title={b.title} author={b.author} />
+                </div>
+              );
+            })}
+          </motion.div>
+        ))}
+      </div>
+      <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-b from-transparent to-background/60 lg:hidden" />
     </div>
   );
 }
@@ -451,13 +595,13 @@ function Field({
   onChange: (v: string) => void;
 } & Omit<React.InputHTMLAttributes<HTMLInputElement>, "onChange" | "value">) {
   return (
-    <label className="flex items-center gap-3 rounded-xl border border-border bg-background/50 px-4 py-3 focus-within:border-gold/60">
+    <label className="flex items-center gap-3 rounded-[16px] bg-surface-2 px-4 py-3 transition focus-within:ring-2 focus-within:ring-foreground/20">
       <span className="text-muted-foreground">{icon}</span>
       <input
         {...rest}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+        className="min-w-0 flex-1 bg-transparent py-1 text-base outline-none placeholder:text-muted-foreground sm:text-sm"
       />
     </label>
   );
@@ -476,7 +620,7 @@ function PasswordField({
   onToggleVisible: () => void;
 } & Omit<React.InputHTMLAttributes<HTMLInputElement>, "onChange" | "value" | "type">) {
   return (
-    <label className="flex items-center gap-3 rounded-xl border border-border bg-background/50 px-4 py-3 focus-within:border-gold/60">
+    <label className="flex items-center gap-3 rounded-[16px] bg-surface-2 px-4 py-2 transition focus-within:ring-2 focus-within:ring-foreground/20">
       <span className="text-muted-foreground">
         <Lock className="h-4 w-4" />
       </span>
@@ -485,14 +629,14 @@ function PasswordField({
         type={visible ? "text" : "password"}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+        className="min-w-0 flex-1 bg-transparent py-1 text-base outline-none placeholder:text-muted-foreground sm:text-sm"
       />
       <button
         type="button"
         onClick={onToggleVisible}
         tabIndex={-1}
         aria-label={visible ? "Ocultar senha" : "Mostrar senha"}
-        className="text-muted-foreground hover:text-foreground"
+        className="-mr-2 grid h-10 w-10 shrink-0 place-items-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground"
       >
         {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
       </button>

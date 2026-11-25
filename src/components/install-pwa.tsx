@@ -78,14 +78,14 @@ export function InstallPwaBanner() {
   if (dismissed || (!deferred && !showIosTip)) return null;
 
   return (
-    <div className="fixed inset-x-4 bottom-4 z-40 mx-auto flex max-w-sm items-start gap-3 rounded-2xl border border-border/60 bg-card/95 p-4 shadow-2xl backdrop-blur-md sm:inset-x-auto sm:right-4">
+    <div className="fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-40 lg:bottom-4 mx-auto flex max-w-sm items-start gap-3 rounded-2xl border border-border/60 bg-card/95 p-4 shadow-2xl backdrop-blur-md sm:inset-x-auto sm:right-4">
       <LumiMascot size={40} blink={false} />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">Instale o BookVerse</p>
         {showIosTip ? (
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            Toque em <Share className="mx-0.5 inline h-3 w-3 align-[-1px]" /> Compartilhar, depois em
-            "Adicionar à Tela de Início".
+            Toque em <Share className="mx-0.5 inline h-3 w-3 align-[-1px]" /> Compartilhar, depois
+            em "Adicionar à Tela de Início".
           </p>
         ) : (
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">

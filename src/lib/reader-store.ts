@@ -9,9 +9,19 @@ import { collection, doc, getDoc, onSnapshot, setDoc, type Unsubscribe } from "f
 import { ensureUser, getFirebase } from "./firebase";
 import { withDeadline, withFallback } from "./async-utils";
 
-export type ReaderTheme = "light" | "paper" | "sepia" | "dark" | "amoled";
-export type ReaderFont = "serif" | "sans";
+/** Branco · Papel · Sépia · Cinza · Noite (amoled kept for old preferences). */
+export type ReaderTheme = "light" | "paper" | "sepia" | "gray" | "dark" | "amoled";
+/** literata = Literata · sans = Grotesca (Bricolage) · serif = Clássica
+ * (Newsreader) · atkinson = Legível+ (Atkinson Hyperlegible, low vision). */
+export type ReaderFont = "serif" | "sans" | "literata" | "atkinson";
+export type AmbientSound = "off" | "chuva" | "lareira" | "mar" | "foco";
 export type ReaderMode = "scroll" | "paginated";
+/** How a page turns in paginated mode. */
+export type TurnStyle = "folha" | "deslizar" | "esmaecer" | "instantaneo";
+/** Tap zones: default (left back / right forward), left-handed, or swipe only. */
+export type TapZones = "padrao" | "canhoto" | "deslizar";
+/** What the footer shows — tapping it cycles, like a Kindle. */
+export type FooterInfo = "pagina" | "capitulo" | "livro" | "percent" | "nada";
 export type ReaderAlignment = "justify" | "left";
 
 export interface ReaderSettings {
@@ -28,6 +38,26 @@ export interface ReaderSettings {
    * away like a paper leaf. Kept optional for backwards-compatible saved
    * preferences from older BookVerse versions. */
   pageTurn?: boolean;
+  /** Amber "night light" filter strength, 0–100. */
+  warmth?: number;
+  /** Extra dimming on top of the theme, 0–70 (%). */
+  dim?: number;
+  /** Generated ambient soundscape while reading. */
+  ambient?: AmbientSound;
+  ambientVolume?: number;
+  /** Page-turn animation. Unset = best for the device (Folha on touch
+   * screens, Deslizar with a mouse). */
+  turnStyle?: TurnStyle;
+  tapZones?: TapZones;
+  footer?: FooterInfo;
+  /** Brief black flash every 6 pages, for e-ink screens. */
+  einkRefresh?: boolean;
+  /** Hides every bit of chrome but the text. */
+  focusMode?: boolean;
+  /** Two pages side by side on wide screens. */
+  twoPage?: boolean;
+  /** Warm light switches on by itself after 20h. */
+  autoWarm?: boolean;
   /** Millisecond client timestamp used only to reconcile preferences across
    * devices. Reading settings are personal presentation data, not stats. */
   updatedAt?: number;
@@ -58,16 +88,36 @@ export interface StoredReadingProgress extends ReadingProgress {
 
 export const DEFAULT_SETTINGS: ReaderSettings = {
   theme: "paper",
-  font: "serif",
+  font: "literata",
   fontSize: 18,
-  lineHeight: 1.7,
-  paragraphSpacing: 0.85,
+  lineHeight: 1.62,
+  paragraphSpacing: 0,
   margin: 32,
   maxWidth: 66,
   alignment: "justify",
   mode: "paginated",
   pageTurn: true,
+  warmth: 0,
+  dim: 0,
+  ambient: "off",
+  ambientVolume: 0.35,
+  tapZones: "padrao",
+  footer: "capitulo",
+  einkRefresh: false,
+  focusMode: false,
+  twoPage: true,
+  autoWarm: true,
 };
+
+/** The page-turn style actually used: the saved one, or the device default. */
+export function resolveTurnStyle(s: ReaderSettings): TurnStyle {
+  if (s.turnStyle) return s.turnStyle;
+  if (s.pageTurn === false) return "instantaneo";
+  if (typeof window !== "undefined" && window.matchMedia?.("(pointer: fine)").matches) {
+    return "deslizar";
+  }
+  return "folha";
+}
 
 const SETTINGS_KEY = "bookverse:reader:settings";
 const PENDING_PROGRESS_KEY = "bookverse:reader:pending-progress:v1";
@@ -169,6 +219,8 @@ export function loadProgressLocal(bookId: string): ReadingProgress | null {
 /** Back-compat alias — returns local progress immediately (sync). */
 export const loadProgress = loadProgressLocal;
 
+const progressCache = new Map<string, StoredReadingProgress[]>();
+
 /** Live account progress for the library and Home dashboard. The reader still
  * works entirely offline; this listener is only attached for signed-in views. */
 export function subscribeReadingProgress(
@@ -177,14 +229,16 @@ export function subscribeReadingProgress(
 ): Unsubscribe {
   const fb = getFirebase();
   if (!fb) return () => undefined;
+  const cached = progressCache.get(uid);
+  if (cached) callback(cached);
   return onSnapshot(
     collection(fb.db, "users", uid, "progress"),
     (snapshot) => {
-      callback(
-        snapshot.docs
-          .map((item) => ({ bookId: item.id, ...(item.data() as ReadingProgress) }))
-          .sort((a, b) => b.updatedAt - a.updatedAt),
-      );
+      const items = snapshot.docs
+        .map((item) => ({ bookId: item.id, ...(item.data() as ReadingProgress) }))
+        .sort((a, b) => b.updatedAt - a.updatedAt);
+      progressCache.set(uid, items);
+      callback(items);
     },
     (error) => console.warn("[reader] subscribeReadingProgress failed", error),
   );

@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { PageHeader } from "@/components/page-header";
 import { useEffect, useMemo, useState } from "react";
 import { BookMarked, ChevronDown, Loader2, NotebookPen, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -14,6 +15,7 @@ import {
   type DiaryEntry,
   type DiaryReactionId,
 } from "@/lib/diary";
+import { TopBar } from "@/components/shell/top-bar";
 
 export const Route = createFileRoute("/diario")({
   head: () => ({
@@ -54,9 +56,10 @@ function GuardedDiaryPage() {
   return <DiaryPage uid={user.uid} />;
 }
 
-const REACTION_LABEL: Record<DiaryReactionId, { emoji: string; label: string }> = Object.fromEntries(
-  DIARY_REACTIONS.map((r) => [r.id, { emoji: r.emoji, label: r.label }]),
-) as Record<DiaryReactionId, { emoji: string; label: string }>;
+const REACTION_LABEL: Record<DiaryReactionId, { emoji: string; label: string }> =
+  Object.fromEntries(
+    DIARY_REACTIONS.map((r) => [r.id, { emoji: r.emoji, label: r.label }]),
+  ) as Record<DiaryReactionId, { emoji: string; label: string }>;
 
 function DiaryPage({ uid }: { uid: string }) {
   const [entries, setEntries] = useState<DiaryEntry[] | null>(null);
@@ -118,7 +121,11 @@ function DiaryPage({ uid }: { uid: string }) {
 
   const grouped = useMemo(() => {
     const list = entries ?? [];
-    const fmt = new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "long", year: "numeric" });
+    const fmt = new Intl.DateTimeFormat("pt-BR", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
     const groups: { day: string; items: DiaryEntry[] }[] = [];
     for (const e of list) {
       const millis = e.createdAt?.toMillis?.();
@@ -131,16 +138,15 @@ function DiaryPage({ uid }: { uid: string }) {
   }, [entries]);
 
   return (
-    <div className="mx-auto max-w-3xl px-5 py-12 md:px-8">
-      <p className="text-[11px] uppercase tracking-[0.28em] text-gold">Seu histórico</p>
-      <h1 className="mt-2 font-display text-4xl font-medium tracking-tight">Diário de leitura</h1>
-      <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">
-        Como foi a leitura de hoje? Registre a reação e um comentário — vira um histórico que conta
-        a sua história como leitor.
-      </p>
+    <div className="relative mx-auto max-w-4xl px-5 pb-12 md:px-10 lg:pt-10">
+      <TopBar title="Diário" fallback="/perfil" className="mb-3" />
+      <PageHeader eyebrow="Diário de leitura" title="O que os livros" accent="deixaram em você">
+        Como foi a leitura de hoje? Registre a reação e um comentário. Com o tempo, vira a sua
+        história como leitor.
+      </PageHeader>
 
       {/* New entry */}
-      <div className="mt-8 rounded-2xl border border-border/60 bg-card/50 p-6">
+      <div className="mt-8 rounded-[1.75rem] border border-border bg-card/60 backdrop-blur p-6">
         <div className="flex items-center gap-2 text-sm font-medium">
           <NotebookPen className="h-4 w-4 text-gold" />
           Novo registro
@@ -209,7 +215,11 @@ function DiaryPage({ uid }: { uid: string }) {
             disabled={saving || !bookId || !note.trim()}
             className="inline-flex w-fit items-center gap-2 rounded-full bg-gold px-6 py-3 text-sm font-medium text-primary-foreground transition enabled:hover:scale-[1.02] disabled:opacity-50"
           >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <BookMarked className="h-4 w-4" />}
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <BookMarked className="h-4 w-4" />
+            )}
             {saving ? "Salvando…" : "Registrar no diário"}
           </button>
         </div>
@@ -236,7 +246,7 @@ function DiaryPage({ uid }: { uid: string }) {
                   {group.items.map((e) => (
                     <article
                       key={e.id}
-                      className="group relative rounded-2xl border border-border/60 bg-card/50 p-5"
+                      className="group relative rounded-[1.75rem] border border-border bg-card/60 backdrop-blur p-5"
                     >
                       <div className="flex items-start gap-4">
                         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-gold/15 text-xl">

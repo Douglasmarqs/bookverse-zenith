@@ -36,6 +36,8 @@ export interface UserProfile {
    * clobbers a photo the person chose themselves. Takes priority over
    * `photoURL`. */
   customPhotoDataUrl?: string | null;
+  /** Optional emoji avatar chosen in the profile (used by reviews). */
+  avatarEmoji?: string | null;
   xp: number;
   booksCompleted: number;
   /** Total chapters finished across every book — the closest proxy we
@@ -93,6 +95,8 @@ export async function recordGamificationMilestone(
 ): Promise<void> {
   const fb = getFirebase();
   if (!fb || !resourceId) return;
+  // Guests read without an account; XP and rankings start once they create one.
+  if (fb.auth.currentUser?.isAnonymous) return;
   try {
     const call = httpsCallable<
       { type: GamificationMilestone; resourceId: string } & typeof details,
@@ -348,6 +352,9 @@ export async function deleteUserData(uid: string): Promise<void> {
 }
 
 /** Live-subscribes to a single user's profile doc. */
+/** Last known profile per reader, so screens open already filled in. */
+const profileCache = new Map<string, UserProfile>();
+
 export function subscribeUserProfile(
   uid: string,
   cb: (profile: UserProfile | null) => void,
@@ -357,10 +364,16 @@ export function subscribeUserProfile(
     cb(null);
     return () => {};
   }
+  const cached = profileCache.get(uid);
+  if (cached) cb(cached);
   const ref = doc(fb.db, "users", uid);
   return onSnapshot(
     ref,
-    (snap) => cb(snap.exists() ? ({ uid, ...snap.data() } as UserProfile) : null),
+    (snap) => {
+      const profile = snap.exists() ? ({ uid, ...snap.data() } as UserProfile) : null;
+      if (profile) profileCache.set(uid, profile);
+      cb(profile);
+    },
     (err) => {
       console.warn("[user-profile] subscribe failed", err);
       cb(null);
