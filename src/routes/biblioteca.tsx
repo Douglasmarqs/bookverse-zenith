@@ -440,7 +440,7 @@ function BibliotecaPage({ uid }: { uid: string }) {
             }}
           />
           <button
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => void navigate({ to: "/adicionar", search: {} })}
             disabled={uploading}
             className="btn-primary disabled:opacity-60"
           >
@@ -449,7 +449,7 @@ function BibliotecaPage({ uid }: { uid: string }) {
             ) : (
               <UploadCloud className="h-4 w-4" />
             )}
-            {uploading ? "Importando…" : "Importar EPUB/PDF"}
+            {uploading ? "Importando…" : "Adicionar livros"}
           </button>
         </div>
       </div>
@@ -535,10 +535,10 @@ function BibliotecaPage({ uid }: { uid: string }) {
               Descobrir livros
             </Link>
             <button
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => void navigate({ to: "/adicionar", search: {} })}
               className="inline-flex items-center gap-2 rounded-xl border border-border/70 bg-card px-5 py-2.5 text-sm font-semibold hover:border-gold/40 hover:text-gold"
             >
-              Ou importe EPUB ou PDF
+              Ou adicione seus arquivos
             </button>
           </div>
         </div>

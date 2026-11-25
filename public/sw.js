@@ -12,7 +12,8 @@
 // plugins) is fragile. Offline support here is "best effort for pages
 // you've already visited," not full offline-first.
 
-const CACHE_NAME = "bookverse-v1";
+const CACHE_NAME = "bookverse-v2";
+const SHARE_CACHE = "bookverse-share";
 const STATIC_ASSETS = ["/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", (event) => {
@@ -30,14 +31,53 @@ self.addEventListener("activate", (event) => {
     caches
       .keys()
       .then((keys) =>
-        Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))),
+        Promise.all(
+          keys.filter((k) => k !== CACHE_NAME && k !== SHARE_CACHE).map((k) => caches.delete(k)),
+        ),
       )
       .then(() => self.clients.claim()),
   );
 });
 
+// "Compartilhar → BookVerse" (manifest share_target): keep the shared
+// files for the page, then open the import screen that picks them up.
+async function receiveShare(request) {
+  try {
+    const form = await request.formData();
+    const cache = await caches.open(SHARE_CACHE);
+    let n = 0;
+    for (const file of form.getAll("files")) {
+      if (typeof file === "string") continue;
+      await cache.put(
+        `/__shared/${Date.now()}-${n++}`,
+        new Response(file, {
+          headers: {
+            "content-type": file.type || "application/octet-stream",
+            "x-file-name": encodeURIComponent(file.name || "livro"),
+          },
+        }),
+      );
+    }
+    const link = form.get("url") || form.get("text");
+    const target =
+      n > 0 || !link ? "/adicionar?compartilhado=1" : `/adicionar?link=${encodeURIComponent(link)}`;
+    return Response.redirect(target, 303);
+  } catch {
+    return Response.redirect("/adicionar", 303);
+  }
+}
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
+  const shareUrl = new URL(request.url);
+  if (
+    request.method === "POST" &&
+    shareUrl.origin === self.location.origin &&
+    shareUrl.pathname === "/compartilhar"
+  ) {
+    event.respondWith(receiveShare(request));
+    return;
+  }
   if (request.method !== "GET") return;
 
   const url = new URL(request.url);

@@ -367,6 +367,12 @@ function PerfilPage({ user }: { user: User }) {
       >
         Ver conquistas e missões
       </Link>
+      <Link
+        to="/downloads"
+        className="ml-4 mt-3 inline-flex items-center gap-1.5 text-xs text-gold underline underline-offset-4"
+      >
+        Downloads e arquivos
+      </Link>
 
       {/* Edit profile */}
       <section

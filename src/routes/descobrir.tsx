@@ -23,6 +23,7 @@ import {
 import { toast } from "sonner";
 
 import { BookArt } from "@/components/book-art";
+import { SOURCE_BADGE, SourceBadge } from "@/components/catalog/source-badge";
 import { Lumi, LumiFace } from "@/components/brand/lumi";
 import { formatMinutes } from "@/components/home/home-screen";
 import {
@@ -78,12 +79,6 @@ const ICONS = {
 };
 
 /** Source badges, as in the approved catalogue screens. */
-const SOURCE_BADGE: Record<CatalogSource, { short: string; bg: string; hint: string }> = {
-  gutenberg: { short: "PG", bg: "#2b2b2b", hint: "75 mil+ livros · EPUB" },
-  wikisource: { short: "W", bg: "#5a5a5a", hint: "Textos em português · EPUB" },
-  standard: { short: "SE", bg: "#0f6f6f", hint: "Edições caprichadas · EPUB" },
-  archive: { short: "IA", bg: "#1c1c1c", hint: "Digitalizações antigas · EPUB" },
-};
 
 export function bookHref(b: {
   title: string;
@@ -441,18 +436,6 @@ function CollectionTile({ c }: { c: Collection }) {
   );
 }
 
-function SourceBadge({ source, size = 44 }: { source: CatalogSource; size?: number }) {
-  const b = SOURCE_BADGE[source];
-  return (
-    <span
-      className="grid shrink-0 place-items-center rounded-[14px] font-display text-white"
-      style={{ width: size, height: size, background: b.bg, fontSize: size * 0.34 }}
-    >
-      {b.short}
-    </span>
-  );
-}
-
 /* ============================== Collection ============================== */
 
 function CollectionView({ collection: c }: { collection: Collection }) {
@@ -722,6 +705,9 @@ function SearchView({ initial, fonte }: { initial: string; fonte?: CatalogSource
             </p>
             <p className="mt-0.5 text-xs opacity-65">Fica disponível offline</p>
           </div>
+          <Link to="/downloads" className="px-1 text-[13px] font-semibold text-[#ff8a5b]">
+            Ver
+          </Link>
         </div>
       )}
     </div>

@@ -104,6 +104,7 @@ import { toast } from "sonner";
 import { describeFirestoreError } from "@/lib/async-utils";
 import { ReaderPageSkeleton } from "@/components/reader-page-skeleton";
 import { PdfPageViewer } from "@/components/reader/pdf-page-viewer";
+import { usePdfMode } from "@/lib/pdf-mode";
 
 export const Route = createFileRoute("/reader/$bookId")({
   head: () => ({
@@ -150,7 +151,7 @@ export const Route = createFileRoute("/reader/$bookId")({
 
 type ReaderSession =
   | { state: "loading" }
-  | { state: "ready"; user: User; guest: boolean }
+  | { state: "ready"; uid: string; guest: boolean }
   | { state: "redirecting" }
   | { state: "unavailable" };
 
@@ -172,14 +173,16 @@ function useReaderSession(allowGuest: boolean): ReaderSession {
     const unsub = subscribeAuth((u) => {
       if (cancelled) return;
       if (u && (!u.isAnonymous || allowGuest)) {
-        setSession({ state: "ready", user: u, guest: u.isAnonymous });
+        setSession({ state: "ready", uid: u.uid, guest: u.isAnonymous });
         return;
       }
       if (allowGuest) {
         if (triedGuest) return;
         triedGuest = true;
         void ensureUser().then((guest) => {
-          if (!cancelled && !guest) setSession({ state: "unavailable" });
+          // No guest session (anonymous sign-in off, or offline): the book
+          // still opens from this device; progress stays on this device.
+          if (!cancelled && !guest) setSession({ state: "ready", uid: OFFLINE_UID, guest: true });
         });
         return;
       }
@@ -200,15 +203,16 @@ function useReaderSession(allowGuest: boolean): ReaderSession {
   return session;
 }
 
+/** Reader id used when there is no Firebase session at all. */
+const OFFLINE_UID = "offline-reader";
+
 const ReaderGuestContext = createContext(false);
 
 function GuardedReaderPage() {
   const loaderData = Route.useLoaderData();
-  // Books saved on this device (free catalogue downloads) open for guests
-  // too; only cloud copies of personal files need an account. PDFs are
-  // always personal imports.
-  const privateFile = loaderData.source === "pdf";
-  const session = useReaderSession(!privateFile);
+  // Books saved on this device (downloads and imports) open for guests
+  // too; only cloud copies of personal files need an account.
+  const session = useReaderSession(true);
 
   if (session.state !== "ready") {
     return (
@@ -235,16 +239,16 @@ function GuardedReaderPage() {
     );
   }
 
-  const { user, guest } = session;
+  const { uid, guest } = session;
   let content: React.ReactNode;
   if (loaderData.source === "sample") {
-    content = <ReaderPage uid={user.uid} book={loaderData.book} />;
+    content = <ReaderPage uid={uid} book={loaderData.book} />;
   } else if (loaderData.source === "epub") {
-    content = <EpubBookLoader uid={user.uid} localId={loaderData.localId} />;
+    content = <EpubBookLoader uid={uid} localId={loaderData.localId} />;
   } else if (loaderData.source === "pdf") {
-    content = <PdfBookLoader uid={user.uid} localId={loaderData.localId} />;
+    content = <PdfBookLoader uid={uid} localId={loaderData.localId} />;
   } else {
-    content = <GutenbergBookLoader uid={user.uid} gutenbergId={loaderData.gutenbergId} />;
+    content = <GutenbergBookLoader uid={uid} gutenbergId={loaderData.gutenbergId} />;
   }
   return <ReaderGuestContext.Provider value={guest}>{content}</ReaderGuestContext.Provider>;
 }
@@ -325,6 +329,7 @@ function EpubBookLoader({ uid, localId }: { uid: string; localId: string }) {
 }
 
 function PdfBookLoader({ uid, localId }: { uid: string; localId: string }) {
+  const guest = useContext(ReaderGuestContext);
   const [book, setBook] = useState<PdfBook | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stage, setStage] = useState<"local" | "cloud">("local");
@@ -347,10 +352,17 @@ function PdfBookLoader({ uid, localId }: { uid: string; localId: string }) {
         setBook(upgraded);
         if (upgraded !== local) {
           void savePdfBook(upgraded).catch(() => {});
-          void uploadPdfBookToCloud(uid, upgraded).catch((error) =>
-            console.warn("[pdf] background text-layer sync failed", error),
-          );
+          if (!guest)
+            void uploadPdfBookToCloud(uid, upgraded).catch((error) =>
+              console.warn("[pdf] background text-layer sync failed", error),
+            );
         }
+        return;
+      }
+      if (guest) {
+        setError(
+          "Este PDF não está salvo neste aparelho. Entre na sua conta para buscá-lo na nuvem, ou importe-o de novo.",
+        );
         return;
       }
       setStage("cloud");
@@ -377,7 +389,7 @@ function PdfBookLoader({ uid, localId }: { uid: string; localId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [localId, uid]);
+  }, [localId, uid, guest]);
 
   if (error) {
     return (
@@ -404,7 +416,8 @@ function PdfBookLoader({ uid, localId }: { uid: string; localId: string }) {
 }
 
 function PdfReaderPage({ uid, book }: { uid: string; book: PdfBook }) {
-  if (book.readerBook) {
+  const pdfMode = usePdfMode();
+  if (book.readerBook && pdfMode === "leitura") {
     return <ReaderPage uid={uid} book={book.readerBook} />;
   }
 
@@ -2113,21 +2126,25 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
           </>
         )}
 
-        {settings.mode === "paginated" && showPageGestureHint && !panelOpen && !tocOpen && (
-          <button
-            type="button"
-            onClick={dismissPageGestureHint}
-            className="fixed bottom-[max(5.5rem,calc(env(safe-area-inset-bottom)+5.5rem))] left-1/2 z-[38] max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-full border px-4 py-2 text-center text-xs shadow-lg backdrop-blur-md transition hover:opacity-80"
-            style={{
-              borderColor: theme.rule,
-              color: theme.fg,
-              backgroundColor: theme.bg + "EB",
-              fontFamily: "var(--font-sans)",
-            }}
-          >
-            Toque na borda ou deslize para virar a página
-          </button>
-        )}
+        {settings.mode === "paginated" &&
+          showPageGestureHint &&
+          !controlsVisible &&
+          !panelOpen &&
+          !tocOpen && (
+            <button
+              type="button"
+              onClick={dismissPageGestureHint}
+              className="fixed bottom-[max(2.75rem,calc(env(safe-area-inset-bottom)+2.5rem))] left-1/2 z-[38] max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-full border px-4 py-2 text-center text-xs shadow-lg backdrop-blur-md transition hover:opacity-80"
+              style={{
+                borderColor: theme.rule,
+                color: theme.fg,
+                backgroundColor: theme.bg + "EB",
+                fontFamily: "var(--font-sans)",
+              }}
+            >
+              Toque na borda ou deslize para virar a página
+            </button>
+          )}
 
         {chapterCompletionOpen && (
           <div

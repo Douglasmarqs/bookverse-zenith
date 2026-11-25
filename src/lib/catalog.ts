@@ -19,6 +19,7 @@ import { getFirebase } from "./firebase";
 import { saveEpubBook, uploadEpubBookToCloud, deleteEpubBook } from "./epub-store";
 import { addToLibrary } from "./library";
 import { niceAuthor } from "./catalog-shared";
+import { forgetDeviceBook, rememberDeviceBook } from "./device-books";
 
 export type { CatalogBook, CatalogSource };
 
@@ -277,6 +278,15 @@ export async function downloadBook(book: CatalogBook): Promise<string> {
         // The local copy still works offline; the shelf entry can be retried.
       }
     }
+    rememberDeviceBook({
+      id: parsed.id,
+      title: parsed.title,
+      author: parsed.author,
+      kind: "epub",
+      bytes: blob.size,
+      addedAt: Date.now(),
+      origin: "catalogo",
+    });
     const map = readDownloaded();
     map[book.key] = parsed.id;
     try {
@@ -298,7 +308,10 @@ export async function downloadBook(book: CatalogBook): Promise<string> {
 export async function removeDownload(key: string): Promise<void> {
   const map = readDownloaded();
   const id = map[key];
-  if (id) await deleteEpubBook(id).catch(() => {});
+  if (id) {
+    await deleteEpubBook(id).catch(() => {});
+    forgetDeviceBook(id);
+  }
   delete map[key];
   try {
     localStorage.setItem(DOWNLOADED_KEY, JSON.stringify(map));
@@ -306,5 +319,25 @@ export async function removeDownload(key: string): Promise<void> {
     // ignore
   }
   states.delete(key);
+  emit();
+}
+
+/** Forgets the catalogue entry that points at a removed device book. */
+export function forgetDownloadedReaderId(readerId: string): void {
+  const map = readDownloaded();
+  let changed = false;
+  for (const [key, id] of Object.entries(map)) {
+    if (id === readerId) {
+      delete map[key];
+      states.delete(key);
+      changed = true;
+    }
+  }
+  if (!changed) return;
+  try {
+    localStorage.setItem(DOWNLOADED_KEY, JSON.stringify(map));
+  } catch {
+    // ignore
+  }
   emit();
 }

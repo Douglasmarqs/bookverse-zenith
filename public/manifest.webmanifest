@@ -34,5 +34,58 @@
       "type": "image/svg+xml",
       "purpose": "any"
     }
+  ],
+  "share_target": {
+    "action": "/compartilhar",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "files",
+          "accept": [
+            ".epub",
+            ".pdf",
+            ".mobi",
+            ".azw3",
+            ".fb2",
+            ".cbz",
+            ".txt",
+            "application/epub+zip",
+            "application/pdf",
+            "application/x-mobipocket-ebook",
+            "text/plain",
+            "application/octet-stream"
+          ]
+        }
+      ]
+    }
+  },
+  "shortcuts": [
+    {
+      "name": "Adicionar livros",
+      "short_name": "Adicionar",
+      "url": "/adicionar",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Explorar grátis",
+      "short_name": "Explorar",
+      "url": "/descobrir",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
   ]
 }

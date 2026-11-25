@@ -213,6 +213,9 @@ function RootComponent() {
   // First-time visitors see the marketing landing on "/" with its own header;
   // everywhere else (and for anyone already reading) it's the app shell.
   const landing = pathname === "/" && !member;
+  // Full-screen pages (book detail, import, downloads) hide the dock.
+  const fullScreen =
+    pathname.startsWith("/livro/") || pathname === "/adicionar" || pathname === "/downloads";
   const appChrome = !isReaderRoute && !landing;
 
   return (
@@ -222,7 +225,7 @@ function RootComponent() {
         {landing && <VisitorHeader />}
         {appChrome && <Sidebar />}
         <main
-          className={`relative z-[1] flex-1 ${appChrome ? (pathname.startsWith("/livro/") ? "pb-8 lg:pb-0" : "pb-44 lg:pb-0") : ""}`}
+          className={`relative z-[1] flex-1 ${appChrome ? (fullScreen ? "pb-8 lg:pb-0" : "pb-44 lg:pb-0") : ""}`}
         >
           {/* Keyed by path so every navigation gets a gentle entrance. */}
           <div key={pathname} className={isReaderRoute ? "" : "page-enter"}>
@@ -231,7 +234,7 @@ function RootComponent() {
         </main>
         {landing && <SiteFooter />}
         {/* A book's page is a full-screen detail on phones (mockup 07). */}
-        {appChrome && !pathname.startsWith("/livro/") && <Dock showMini={pathname !== "/"} />}
+        {appChrome && !fullScreen && <Dock showMini={pathname !== "/"} />}
         <CommandPalette />
         {/* The reader opens Lumi with a book/selection context. It must stay
             mounted there too; only the site chrome itself is suppressed. */}
