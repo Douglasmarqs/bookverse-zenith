@@ -132,7 +132,7 @@ export function ReaderPullSheet({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
             transition={{ duration: 0.25 }}
-            className="absolute bottom-[calc(max(1.1rem,env(safe-area-inset-bottom))+2.1rem)] left-1/2 z-[25] -translate-x-1/2 lg:bottom-[3.4rem]"
+            className="absolute bottom-[calc(max(1.1rem,env(safe-area-inset-bottom))+1.85rem)] left-1/2 z-[25] -translate-x-1/2 lg:bottom-[3.4rem]"
           >
             <AnimatePresence>
               {hint && !hintBlocked && (

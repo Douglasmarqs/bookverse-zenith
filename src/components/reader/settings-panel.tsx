@@ -291,7 +291,7 @@ export function ReaderSettingsPanel({
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", stiffness: 380, damping: 40 }}
-            className={`fixed inset-x-0 bottom-0 z-[61] mx-auto ${tab === "aparencia" ? "max-h-[64dvh]" : "max-h-[84dvh]"} w-full max-w-[520px] overflow-y-auto rounded-t-[34px] px-[22px] pb-[max(2rem,env(safe-area-inset-bottom))] pt-2.5 shadow-[0_-20px_60px_-20px_rgba(0,0,0,.35)] sm:bottom-4 sm:rounded-[34px]`}
+            className={`fixed inset-x-0 bottom-0 z-[61] mx-auto ${tab === "aparencia" ? "max-h-[64dvh]" : "max-h-[84dvh]"} w-full max-w-[520px] overflow-y-auto overscroll-contain rounded-t-[34px] px-[22px] pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-2.5 shadow-[0_-20px_60px_-20px_rgba(0,0,0,.35)] sm:bottom-4 sm:rounded-[34px]`}
             style={{ background: c.surface, color: c.ink, fontFamily: "var(--font-sans)" }}
           >
             <div

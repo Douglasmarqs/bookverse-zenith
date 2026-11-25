@@ -237,7 +237,7 @@ export function ListenMode({
               <span className="w-[42px]" />
             </div>
 
-            <div className="mx-auto mt-[18px] w-[min(190px,24dvh)]">
+            <div className="mx-auto mt-[min(18px,2dvh)] w-[min(190px,18dvh)]">
               <BookArt title={title} author={author} cover={cover} lift eager />
             </div>
 
@@ -252,7 +252,7 @@ export function ListenMode({
                 </p>
               ) : (
                 <p
-                  className="mt-3 max-h-[9.5em] overflow-hidden text-[21px] leading-[1.45] [mask-image:linear-gradient(#000_70%,transparent)]"
+                  className="mt-3 max-h-[min(9.5em,20dvh)] overflow-hidden text-[clamp(17px,2.7dvh,21px)] leading-[1.45] [mask-image:linear-gradient(#000_70%,transparent)]"
                   style={{ fontFamily: '"Literata Variable", serif' }}
                   aria-live="polite"
                 >

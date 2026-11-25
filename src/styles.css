@@ -173,6 +173,12 @@
     border-color: var(--color-border);
   }
 
+  :root {
+    /* Safe areas as variables, so inline styles (reader pages) can use them. */
+    --safe-top: env(safe-area-inset-top);
+    --safe-bottom: env(safe-area-inset-bottom);
+  }
+
   html {
     scroll-behavior: smooth;
     overflow-x: clip;
@@ -846,6 +852,7 @@
 
 @utility btn-primary {
   display: inline-flex;
+  white-space: nowrap;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
@@ -870,6 +877,7 @@
 
 @utility btn-ghost {
   display: inline-flex;
+  white-space: nowrap;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
@@ -1153,6 +1161,7 @@
 
 @utility chip {
   display: inline-flex;
+  white-space: nowrap;
   align-items: center;
   gap: 0.375rem;
   height: 2.25rem;

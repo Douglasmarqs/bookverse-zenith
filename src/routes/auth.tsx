@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { BackButton } from "@/components/shell/top-bar";
 import { Mail, Lock, User as UserIcon, Loader2, Eye, EyeOff, Check, ArrowLeft } from "lucide-react";
 import {
   signInWithEmail,
@@ -204,6 +205,10 @@ function AuthPage() {
   return (
     <div className="relative flex min-h-[100dvh] flex-col bg-background lg:grid lg:grid-cols-[1.1fr_1fr]">
       <CoverWall />
+      <BackButton
+        fallback="/"
+        className="!absolute left-3 top-[calc(env(safe-area-inset-top)+0.5rem)] z-[2] bg-background/85 shadow-[0_4px_14px_-6px_rgba(0,0,0,.35)] backdrop-blur-md lg:left-6 lg:top-6"
+      />
 
       <div className="relative z-[1] -mt-10 flex flex-1 flex-col lg:mt-0 lg:items-center lg:justify-center lg:px-10">
         <motion.div
@@ -580,6 +585,8 @@ function CoverWall() {
         ))}
       </div>
       <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-b from-transparent to-background/60 lg:hidden" />
+      {/* Keeps the clock/battery legible over the covers. */}
+      <div className="absolute inset-x-0 top-0 h-[calc(env(safe-area-inset-top)+1.75rem)] bg-gradient-to-b from-background/90 to-transparent lg:hidden" />
     </div>
   );
 }

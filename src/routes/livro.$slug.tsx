@@ -320,7 +320,7 @@ function BookPage() {
             type="button"
             onClick={() => void open()}
             disabled={busy || copy === undefined}
-            className="btn-primary h-[54px] flex-1 text-base disabled:opacity-70"
+            className="btn-primary h-[54px] min-w-0 flex-1 text-base disabled:opacity-70"
           >
             {busy ? (
               <>
@@ -331,7 +331,8 @@ function BookPage() {
               </>
             ) : copy === undefined ? (
               <>
-                <Loader2 className="h-[19px] w-[19px] animate-spin" /> Procurando cópia grátis…
+                <Loader2 className="h-[19px] w-[19px] shrink-0 animate-spin" />
+                <span className="truncate">Procurando…</span>
               </>
             ) : (
               <>
@@ -343,7 +344,7 @@ function BookPage() {
             type="button"
             onClick={() => void open(true)}
             disabled={busy || (!copy && !readerId)}
-            className="btn-ghost h-[54px] px-5 disabled:opacity-60"
+            className="btn-ghost h-[54px] shrink-0 px-5 disabled:opacity-60"
           >
             <Headphones className="h-[19px] w-[19px]" />{" "}
             <span className="hidden min-[380px]:inline">Ouvir</span>
@@ -353,7 +354,7 @@ function BookPage() {
             onClick={() => void save()}
             disabled={saving}
             aria-label={entry ? "Na sua biblioteca" : "Salvar na biblioteca"}
-            className="btn-ghost h-[54px] w-[54px] px-0"
+            className="btn-ghost h-[54px] w-[54px] shrink-0 px-0"
           >
             {entry ? (
               <BookmarkCheck className="h-5 w-5 text-gold" />
