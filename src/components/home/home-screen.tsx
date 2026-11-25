@@ -10,9 +10,13 @@ import {
   FileUp,
   Flame,
   Headphones,
+  Moon,
+  MoonStar,
   RefreshCw,
   Search,
   Sparkles,
+  Sun,
+  Sunrise,
 } from "lucide-react";
 
 import { BookArt } from "@/components/book-art";
@@ -212,6 +216,19 @@ export function HomeScreen({ user }: { user: User | null }) {
     (profile?.displayName || user?.displayName || "").trim().split(/\s+/)[0] || "leitor";
   const ritualRatio = Math.min(1, ritual.todayMinutes / Math.max(1, ritual.goal));
   const ritualLeft = Math.max(0, Math.ceil(ritual.goal - ritual.todayMinutes));
+  const hour = now.getHours();
+  const TimeIcon = hour < 5 ? MoonStar : hour < 12 ? Sunrise : hour < 18 ? Sun : Moon;
+  const rawDate = now
+    .toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })
+    .replace("-feira", "");
+  const dateLabel = rawDate.charAt(0).toUpperCase() + rawDate.slice(1);
+  const subtitle = current
+    ? ritualLeft > 0
+      ? `Faltam ${ritualLeft} min para sua meta de hoje — que tal seguir com “${current.entry.title}”?`
+      : `Meta de hoje cumprida. Mais um capítulo de “${current.entry.title}”?`
+    : ritualLeft > 0
+      ? `${ritualLeft} minutos de leitura fecham o seu dia. Escolha um livro e comece.`
+      : "Meta de hoje cumprida. Que tal descobrir o próximo livro?";
 
   const rise = (delay = 0) =>
     reduce
@@ -225,44 +242,59 @@ export function HomeScreen({ user }: { user: User | null }) {
   return (
     <div className="mx-auto max-w-6xl px-4 pb-10 pt-[calc(env(safe-area-inset-top)+0.875rem)] sm:px-6 lg:px-10 lg:pt-10">
       {/* Header */}
-      <motion.header {...rise()} className="flex items-start justify-between gap-4 px-1">
-        <div className="min-w-0">
-          <p className="text-[13px] font-semibold text-faint first-letter:uppercase">
-            {now
-              .toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })
-              .replace("-feira", "")}
+      <motion.header {...rise()} className="px-1">
+        <div className="flex items-center justify-between gap-3">
+          <p className="inline-flex min-w-0 items-center gap-1.5 rounded-full bg-card py-1.5 pl-2.5 pr-3 text-[12.5px] font-semibold text-muted-foreground shadow-[inset_0_0_0_1px_var(--border)]">
+            <TimeIcon className="h-[15px] w-[15px] shrink-0 text-gold" strokeWidth={2.2} />
+            <span className="truncate">{dateLabel}</span>
           </p>
-          <h1 className="mt-1.5 text-balance break-words text-[clamp(26px,7.6vw,32px)] leading-[1.05] lg:text-[44px]">
+          <div className="flex shrink-0 items-center gap-2 lg:hidden">
+            <button
+              type="button"
+              onClick={openCommandPalette}
+              aria-label="Buscar"
+              className="press grid h-[42px] w-[42px] place-items-center rounded-full bg-card shadow-[inset_0_0_0_1px_var(--border)]"
+            >
+              <Search className="h-[19px] w-[19px]" />
+            </button>
+            <AccountMenu />
+          </div>
+          <div className="hidden shrink-0 items-center gap-2.5 lg:flex">
+            <span className="inline-flex h-[42px] items-center gap-2 rounded-full bg-card px-4 text-sm font-bold shadow-[inset_0_0_0_1px_var(--border)]">
+              <Flame className="h-[18px] w-[18px] text-gold" /> {streak}{" "}
+              {streak === 1 ? "dia" : "dias"}
+            </span>
+            <button
+              type="button"
+              aria-label="Notificações"
+              className="press grid h-[42px] w-[42px] place-items-center rounded-full bg-card shadow-[inset_0_0_0_1px_var(--border)]"
+            >
+              <Bell className="h-[19px] w-[19px]" />
+            </button>
+            <AccountMenu />
+          </div>
+        </div>
+
+        <h1 className="mt-4 lg:mt-6">
+          <span
+            className={
+              guest
+                ? "block font-display text-[clamp(34px,10vw,44px)] leading-[1.02] tracking-[-0.03em] lg:text-[52px]"
+                : "block text-[clamp(19px,5.4vw,23px)] font-medium leading-tight tracking-[-0.01em] text-muted-foreground lg:text-[26px]"
+            }
+          >
             {greeting(now)}
             {guest ? "" : ","}
-            {!guest && <span className="whitespace-nowrap"> {firstName}</span>}
-          </h1>
-        </div>
-        <div className="flex shrink-0 items-center gap-2 lg:hidden">
-          <button
-            type="button"
-            onClick={openCommandPalette}
-            aria-label="Buscar"
-            className="press grid h-[42px] w-[42px] place-items-center rounded-full bg-card shadow-[inset_0_0_0_1px_var(--border)]"
-          >
-            <Search className="h-[19px] w-[19px]" />
-          </button>
-          <AccountMenu />
-        </div>
-        <div className="hidden shrink-0 items-center gap-2.5 lg:flex">
-          <span className="inline-flex h-[42px] items-center gap-2 rounded-full bg-card px-4 text-sm font-bold shadow-[inset_0_0_0_1px_var(--border)]">
-            <Flame className="h-[18px] w-[18px] text-gold" /> {streak}{" "}
-            {streak === 1 ? "dia" : "dias"}
           </span>
-          <button
-            type="button"
-            aria-label="Notificações"
-            className="press grid h-[42px] w-[42px] place-items-center rounded-full bg-card shadow-[inset_0_0_0_1px_var(--border)]"
-          >
-            <Bell className="h-[19px] w-[19px]" />
-          </button>
-          <AccountMenu />
-        </div>
+          {!guest && (
+            <span className="mt-0.5 block truncate font-display text-[clamp(34px,10vw,44px)] leading-[1.06] tracking-[-0.03em] lg:text-[52px]">
+              {firstName}
+            </span>
+          )}
+        </h1>
+        <p className="mt-2 line-clamp-2 max-w-[34rem] text-[14.5px] leading-snug text-muted-foreground">
+          {subtitle}
+        </p>
       </motion.header>
 
       {onboarded === false && (
