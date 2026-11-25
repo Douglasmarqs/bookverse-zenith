@@ -21,10 +21,15 @@ import { LUMI_PICKS } from "@/lib/editorial";
 import { bookPalette } from "@/lib/faux-books";
 import { computeGoalProgress, currentYear, subscribeReadingGoal } from "@/lib/goals";
 import { subscribeLibrary, type LibraryEntry } from "@/lib/library";
-import { DISCOVER_SEARCH, getLastBookInfo } from "@/lib/nav";
+import { useDeviceBooks } from "@/lib/device-books";
+import { DISCOVER_SEARCH, getLastBookInfo, OFFLINE_UID } from "@/lib/nav";
 import { getLocalOnboarding, loadOnboarding } from "@/lib/onboarding";
 import { gutenbergReaderId } from "@/lib/public-domain";
-import { subscribeReadingProgress, type StoredReadingProgress } from "@/lib/reader-store";
+import {
+  loadProgressLocal,
+  subscribeReadingProgress,
+  type StoredReadingProgress,
+} from "@/lib/reader-store";
 import { useRitual } from "@/lib/ritual";
 import { subscribeUserProfile, type UserProfile } from "@/lib/user-profile";
 
@@ -91,18 +96,22 @@ function Ring({ ratio, size = 52, stroke = 6 }: { ratio: number; size?: number; 
   );
 }
 
-export function HomeScreen({ user }: { user: User }) {
+export function HomeScreen({ user }: { user: User | null }) {
   const reduce = useReducedMotion();
   const year = currentYear();
+  const guest = !user || user.isAnonymous;
+  // Guests keep ritual and preferences under the same id the reader uses.
+  const uid = user?.uid ?? OFFLINE_UID;
+  const device = useDeviceBooks();
   const [now, setNow] = useState(() => new Date());
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [library, setLibrary] = useState<LibraryEntry[] | null>(null);
   const [progress, setProgress] = useState<StoredReadingProgress[]>([]);
   const [goalTarget, setGoalTarget] = useState<number | null>(null);
   const [onboarded, setOnboarded] = useState<boolean | null>(() =>
-    getLocalOnboarding(user.uid) ? true : null,
+    getLocalOnboarding(uid) ? true : null,
   );
-  const ritual = useRitual(user.uid);
+  const ritual = useRitual(uid);
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60_000);
@@ -110,27 +119,52 @@ export function HomeScreen({ user }: { user: User }) {
   }, []);
 
   useEffect(() => {
+    if (guest) return;
     const unsubs = [
-      subscribeUserProfile(user.uid, setProfile),
-      subscribeLibrary(user.uid, setLibrary),
-      subscribeReadingProgress(user.uid, setProgress),
-      subscribeReadingGoal(user.uid, year, (g) => setGoalTarget(g?.books ?? null)),
+      subscribeUserProfile(uid, setProfile),
+      subscribeLibrary(uid, setLibrary),
+      subscribeReadingProgress(uid, setProgress),
+      subscribeReadingGoal(uid, year, (g) => setGoalTarget(g?.books ?? null)),
     ];
     const timer = setTimeout(() => setLibrary((l) => l ?? []), 10000);
     return () => {
       unsubs.forEach((u) => u());
       clearTimeout(timer);
     };
-  }, [user.uid, year]);
+  }, [guest, uid, year]);
+
+  // Guests: the books saved on this device, with their local progress.
+  useEffect(() => {
+    if (!guest) return;
+    const prog: StoredReadingProgress[] = [];
+    const entries: LibraryEntry[] = device.map((d) => {
+      const p = loadProgressLocal(d.id);
+      if (p) prog.push({ ...p, bookId: d.id });
+      return {
+        id: d.id,
+        title: d.title,
+        author: d.author,
+        cover: null,
+        readerId: d.id,
+        status: p ? "lendo" : "quero-ler",
+      };
+    });
+    setProgress(prog);
+    setLibrary(entries);
+  }, [guest, device]);
 
   useEffect(() => {
     if (onboarded) return;
+    if (guest) {
+      setOnboarded(!!getLocalOnboarding(uid));
+      return;
+    }
     let alive = true;
-    void loadOnboarding(user.uid).then((p) => alive && setOnboarded(!!p));
+    void loadOnboarding(uid).then((p) => alive && setOnboarded(!!p));
     return () => {
       alive = false;
     };
-  }, [user.uid, onboarded]);
+  }, [guest, uid, onboarded]);
 
   const progressByReader = useMemo(() => new Map(progress.map((p) => [p.bookId, p])), [progress]);
   const reading = useMemo(
@@ -157,7 +191,7 @@ export function HomeScreen({ user }: { user: User }) {
   const goal = computeGoalProgress(library ?? [], goalTarget ?? 0);
   const streak = profile?.currentStreak ?? 0;
   const firstName =
-    (profile?.displayName || user.displayName || "").trim().split(/\s+/)[0] || "leitor";
+    (profile?.displayName || user?.displayName || "").trim().split(/\s+/)[0] || "leitor";
   const ritualRatio = Math.min(1, ritual.todayMinutes / Math.max(1, ritual.goal));
   const ritualLeft = Math.max(0, Math.ceil(ritual.goal - ritual.todayMinutes));
 
@@ -181,7 +215,8 @@ export function HomeScreen({ user }: { user: User }) {
               .replace("-feira", "")}
           </p>
           <h1 className="mt-1.5 truncate text-[32px] leading-none lg:text-[44px]">
-            {greeting(now)}, {firstName}
+            {greeting(now)}
+            {guest ? "" : `, ${firstName}`}
           </h1>
         </div>
         <div className="flex shrink-0 items-center gap-2 lg:hidden">

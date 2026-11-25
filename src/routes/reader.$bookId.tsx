@@ -5,7 +5,7 @@ import {
   useNavigate,
   useRouterState,
 } from "@tanstack/react-router";
-import { rememberLastBook } from "@/lib/nav";
+import { OFFLINE_UID, rememberLastBook } from "@/lib/nav";
 import {
   createContext,
   useCallback,
@@ -202,9 +202,6 @@ function useReaderSession(allowGuest: boolean): ReaderSession {
 
   return session;
 }
-
-/** Reader id used when there is no Firebase session at all. */
-const OFFLINE_UID = "offline-reader";
 
 const ReaderGuestContext = createContext(false);
 

@@ -4,6 +4,7 @@ import { useLayoutEffect, useState } from "react";
 import { LandingPage } from "@/components/landing/landing-page";
 import { HomeScreen } from "@/components/home/home-screen";
 import { SESSION_HINT_KEY, useAuthState } from "@/hooks/use-auth-user";
+import { useStarted } from "@/lib/nav";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -23,6 +24,7 @@ function Home() {
   const { user, ready } = useAuthState();
   const signedIn = Boolean(user && !user.isAnonymous);
   const [expectSession, setExpectSession] = useState(false);
+  const started = useStarted();
 
   // Runs before paint on the client; the server always renders the landing.
   useLayoutEffect(() => {
@@ -35,6 +37,8 @@ function Home() {
 
   if (signedIn && user) return <HomeScreen user={user} />;
   if (!ready && expectSession) return <DashboardSkeleton />;
+  // Guests who already use the app get Início with this device's books.
+  if (started) return <HomeScreen user={user} />;
   return <LandingPage />;
 }
 

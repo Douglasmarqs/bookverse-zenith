@@ -7,7 +7,7 @@ import {
   Trophy,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 /** Single source of truth for the app's navigation destinations. */
 export const DISCOVER_SEARCH = { q: undefined, categoria: undefined } as const;
@@ -121,6 +121,7 @@ export function rememberLastBook(
     };
     localStorage.setItem(LAST_BOOK_KEY, JSON.stringify(next));
     window.dispatchEvent(new Event(LAST_BOOK_EVENT));
+    markStarted();
   } catch {
     // storage unavailable — "Lendo agora" just stays hidden
   }
@@ -149,4 +150,47 @@ export function useLastBook(): LastBook | null {
     };
   }, []);
   return book;
+}
+
+/* ------------------------------ guests ------------------------------ */
+
+/** Reader id used for progress and ritual when there is no account. */
+export const OFFLINE_UID = "offline-reader";
+
+const STARTED_KEY = "bookverse:started";
+const STARTED_EVENT = "bookverse:started";
+
+/** Someone who already uses the app (read, downloaded or set it up) sees
+ * Início on "/" instead of the marketing landing, even without an account. */
+export function markStarted() {
+  try {
+    if (localStorage.getItem(STARTED_KEY) === "1") return;
+    localStorage.setItem(STARTED_KEY, "1");
+    window.dispatchEvent(new Event(STARTED_EVENT));
+  } catch {
+    // ignore
+  }
+}
+
+function readStarted(): boolean {
+  try {
+    return localStorage.getItem(STARTED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function useStarted(): boolean {
+  return useSyncExternalStore(
+    (cb) => {
+      window.addEventListener(STARTED_EVENT, cb);
+      window.addEventListener("storage", cb);
+      return () => {
+        window.removeEventListener(STARTED_EVENT, cb);
+        window.removeEventListener("storage", cb);
+      };
+    },
+    readStarted,
+    () => false,
+  );
 }

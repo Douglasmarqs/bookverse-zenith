@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useStarted } from "@/lib/nav";
 import {
   Outlet,
   Link,
@@ -25,7 +26,6 @@ import { Toaster } from "../components/ui/sonner";
 import { CommandPalette } from "../components/command-palette";
 import { Dock } from "../components/shell/dock";
 import { Sidebar } from "../components/shell/sidebar";
-import { VisitorHeader } from "../components/shell/top-bar";
 import { SESSION_HINT_KEY, useAuthState } from "../hooks/use-auth-user";
 import { THEME_BOOT_SCRIPT, applyTheme, getStoredTheme } from "../lib/theme";
 import { useSiteTheme } from "../hooks/use-site-theme";
@@ -212,7 +212,8 @@ function RootComponent() {
   const member = useShellMode();
   // First-time visitors see the marketing landing on "/" with its own header;
   // everywhere else (and for anyone already reading) it's the app shell.
-  const landing = pathname === "/" && !member;
+  const started = useStarted();
+  const landing = pathname === "/" && !member && !started;
   // Full-screen pages (book detail, import, downloads) hide the dock.
   const fullScreen =
     pathname.startsWith("/livro/") || pathname === "/adicionar" || pathname === "/downloads";
@@ -222,7 +223,6 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <div className={`flex min-h-screen flex-col ${appChrome ? "lg:pl-[264px]" : ""}`}>
         {!isReaderRoute && <ConfigBanner />}
-        {landing && <VisitorHeader />}
         {appChrome && <Sidebar />}
         <main
           className={`relative z-[1] flex-1 ${appChrome ? (fullScreen ? "pb-8 lg:pb-0" : "pb-44 lg:pb-0") : ""}`}

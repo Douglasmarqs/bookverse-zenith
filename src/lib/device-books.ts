@@ -6,6 +6,8 @@
  */
 import { useSyncExternalStore } from "react";
 
+import { markStarted } from "./nav";
+
 export type DeviceKind = "epub" | "pdf" | "mobi" | "fb2" | "cbz" | "txt";
 
 export interface DeviceBook {
@@ -46,6 +48,7 @@ function write(list: DeviceBook[]) {
 
 export function rememberDeviceBook(book: DeviceBook) {
   write([book, ...read().filter((b) => b.id !== book.id)]);
+  markStarted();
 }
 
 export function forgetDeviceBook(id: string) {
