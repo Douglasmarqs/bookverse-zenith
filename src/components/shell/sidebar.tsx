@@ -25,9 +25,6 @@ export function Sidebar() {
       >
         <Search className="h-[17px] w-[17px]" />
         Buscar
-        <kbd className="ml-auto rounded-md bg-card px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
-          ⌘K
-        </kbd>
       </button>
       <nav aria-label="Navegação" className="mt-5 flex flex-col gap-0.5">
         {DESKTOP_NAV.map((item) => {
