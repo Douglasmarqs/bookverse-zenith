@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Sparkles, X, Send, Loader2, Trash2 } from "lucide-react";
+import { AnimatePresence, motion, useDragControls } from "motion/react";
+import { ArrowUp, Loader2, Sparkles, Trash2, X } from "lucide-react";
+import { LumiFace } from "@/components/brand/lumi";
 import { LumiMascot } from "@/components/lumi-mascot";
 import {
   closeLumiPanel,
@@ -17,16 +19,36 @@ import {
 } from "@/lib/lumi-history";
 import type { User } from "firebase/auth";
 
-const SUGGESTIONS: Array<{ text: string; topic: NonNullable<LumiContext["topic"]> }> = [
-  { text: "Quem é a pessoa ou personagem mencionado aqui?", topic: "character" },
-  { text: "Resuma o capítulo até aqui sem revelar o que vem depois", topic: "summary" },
+const SUGGESTIONS: Array<{
+  label: string;
+  text: string;
+  topic: NonNullable<LumiContext["topic"]>;
+}> = [
   {
-    text: "Faça um resumo do que já li, somente com o contexto disponível",
+    label: "Quem é quem aqui?",
+    text: "Quem são as pessoas ou personagens mencionados neste trecho?",
+    topic: "character",
+  },
+  {
+    label: "Resumo até aqui",
+    text: "Resuma o que li até aqui, sem revelar o que vem depois.",
     topic: "summary",
   },
-  { text: "Crie 3 perguntas para eu revisar este capítulo", topic: "question" },
-  { text: "Crie flashcards curtos para revisar este trecho", topic: "flashcards" },
-  { text: "Qual é o contexto histórico ou cultural desta obra?", topic: "explanation" },
+  {
+    label: "Contexto da época",
+    text: "Qual é o contexto histórico ou cultural desta obra?",
+    topic: "explanation",
+  },
+  {
+    label: "Perguntas de revisão",
+    text: "Crie 3 perguntas curtas para eu revisar este capítulo.",
+    topic: "question",
+  },
+  {
+    label: "Flashcards",
+    text: "Crie flashcards curtos para revisar este trecho.",
+    topic: "flashcards",
+  },
 ];
 
 function greeting(context: LumiContext | null): LumiMessage {
@@ -47,6 +69,7 @@ export function LumiPanel() {
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const dragControls = useDragControls();
   const autoPromptRef = useRef<string | null>(null);
   const contextKey = contextKeyFor(context?.bookTitle, context?.topic);
   const canPersist = !!user && !user.isAnonymous;
@@ -139,129 +162,192 @@ export function LumiPanel() {
     }
   }
 
-  if (!open) return null;
+  const subtitle = context?.positionLabel
+    ? `sem spoilers além de ${context.positionLabel.toLowerCase()}`
+    : context?.bookTitle
+      ? context.bookTitle
+      : "sua companhia de leitura";
+  const fresh = messages.length <= 1 && !loading;
 
   return (
-    <div className="fixed inset-0 z-[100] flex justify-end bg-black/40 backdrop-blur-sm">
-      <button
-        aria-label="Fechar"
-        className="absolute inset-0 cursor-default"
-        onClick={closeLumiPanel}
-      />
-      <div className="relative flex h-full w-full max-w-md flex-col border-l border-border bg-background/95 shadow-2xl backdrop-blur-xl animate-in slide-in-from-right duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]">
-        <div className="flex items-center gap-3 border-b border-border/60 px-5 py-4">
-          <LumiMascot size={36} />
-          <div className="min-w-0 flex-1">
-            <p className="font-display text-2xl leading-none">Lumi</p>
-            <p className="truncate text-xs text-muted-foreground">
-              {context?.bookTitle
-                ? `${context.positionLabel ? `${context.positionLabel} · ` : ""}${context.bookTitle}`
-                : "IA literária"}
-            </p>
-            <p className="text-[10px] text-muted-foreground/75">
-              Conversa separada por assunto · expira em 24 h
-            </p>
-          </div>
-          <button
-            onClick={handleClear}
-            aria-label="Limpar conversa"
-            title="Limpar conversa"
-            className="grid h-9 w-9 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
-          <button
+    <AnimatePresence>
+      {open && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center lg:items-stretch lg:justify-end">
+          <motion.button
+            type="button"
+            aria-label="Fechar"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             onClick={closeLumiPanel}
-            aria-label="Fechar painel da Lumi"
-            className="grid h-9 w-9 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
-          {!historyLoaded ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-            </div>
-          ) : (
-            messages.map((m, i) => (
-              <div
-                key={i}
-                className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
-              >
-                <div
-                  className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-                    m.role === "user"
-                      ? "bg-gold text-primary-foreground"
-                      : "border border-border/60 bg-card text-foreground"
-                  }`}
-                >
-                  {m.text}
-                </div>
-              </div>
-            ))
-          )}
-          {loading && (
-            <div className="flex justify-start">
-              <div className="flex items-center gap-2 rounded-2xl border border-border/60 bg-card px-4 py-2.5 text-sm text-muted-foreground">
-                <LumiMascot size={20} blink={false} thinking />
-                Lumi está pensando…
-              </div>
-            </div>
-          )}
-          {error && (
-            <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-              {error}
-            </p>
-          )}
-        </div>
-
-        {messages.length <= 1 && (
-          <div className="flex flex-wrap gap-2 px-5 pb-3">
-            {SUGGESTIONS.map((suggestion) => (
-              <button
-                key={suggestion.text}
-                onClick={() => {
-                  if (context?.topic === suggestion.topic) void send(suggestion.text);
-                  else
-                    openLumiPanel({
-                      ...(context ?? {}),
-                      topic: suggestion.topic,
-                      initialPrompt: suggestion.text,
-                    });
-                }}
-                className="rounded-full border border-border/60 px-3 py-1.5 text-xs text-foreground/80 hover:border-gold/40 hover:text-gold"
-              >
-                {suggestion.text}
-              </button>
-            ))}
-          </div>
-        )}
-
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            send(input);
-          }}
-          className="flex items-center gap-2 border-t border-border/60 px-4 py-3"
-        >
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Pergunte algo à Lumi…"
-            className="flex-1 rounded-full border border-border bg-secondary/30 px-4 py-2.5 text-sm outline-none focus:border-gold/60"
+            className="absolute inset-0 cursor-default bg-black/35 backdrop-blur-[2px]"
           />
-          <button
-            type="submit"
-            disabled={loading || !input.trim()}
-            aria-label="Enviar"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gold text-primary-foreground transition disabled:opacity-40"
+          <motion.div
+            role="dialog"
+            aria-label="Lumi"
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", stiffness: 360, damping: 36 }}
+            drag="y"
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.5 }}
+            dragListener={false}
+            dragControls={dragControls}
+            onDragEnd={(_, i) => (i.offset.y > 100 || i.velocity.y > 600) && closeLumiPanel()}
+            className="relative flex max-h-[86dvh] w-full max-w-lg flex-col rounded-t-[30px] bg-card shadow-2xl lg:h-full lg:max-h-none lg:max-w-md lg:rounded-none lg:rounded-l-[30px]"
           >
-            <Send className="h-4 w-4" />
-          </button>
-        </form>
-      </div>
+            <div
+              className="flex cursor-grab touch-none justify-center pb-1 pt-3 lg:hidden"
+              onPointerDown={(e) => dragControls.start(e)}
+            >
+              <span className="h-[5px] w-10 rounded-full bg-border" />
+            </div>
+            <div className="flex items-center gap-3 px-5 pb-3 pt-2 lg:pt-6">
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-lilac text-[#5b4be0]">
+                <Sparkles className="h-[22px] w-[22px]" strokeWidth={2} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[18px] font-bold leading-tight tracking-[-0.01em]">
+                  {context?.selectedText ? "Lumi explica" : "Lumi"}
+                </p>
+                <p className="truncate text-[13px] text-muted-foreground">{subtitle}</p>
+              </div>
+              {messages.length > 1 && (
+                <button
+                  type="button"
+                  onClick={handleClear}
+                  aria-label="Limpar conversa"
+                  title="Limpar conversa"
+                  className="press grid h-9 w-9 place-items-center rounded-full text-faint hover:bg-surface-2"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={closeLumiPanel}
+                aria-label="Fechar painel da Lumi"
+                className="press grid h-10 w-10 place-items-center rounded-full hover:bg-surface-2"
+              >
+                <X className="h-5 w-5" strokeWidth={2.2} />
+              </button>
+            </div>
+
+            <div
+              ref={scrollRef}
+              className="min-h-[120px] flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 py-2"
+            >
+              {!historyLoaded ? (
+                <TypingDots />
+              ) : (
+                messages.map((m, i) =>
+                  m.role === "user" ? (
+                    <motion.div
+                      key={i}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="flex justify-end"
+                    >
+                      <p className="max-w-[85%] rounded-[20px] rounded-br-[6px] bg-surface-2 px-4 py-2.5 text-[15px] leading-relaxed">
+                        {m.text}
+                      </p>
+                    </motion.div>
+                  ) : (
+                    <motion.p
+                      key={i}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.35 }}
+                      className="whitespace-pre-line text-[16px] leading-[1.6] text-foreground/90"
+                    >
+                      {m.text}
+                    </motion.p>
+                  ),
+                )
+              )}
+              {loading && <TypingDots />}
+              {error && (
+                <p className="rounded-[14px] bg-rose px-3.5 py-2.5 text-[13px] text-[#9a1f45]">
+                  {error}
+                </p>
+              )}
+            </div>
+
+            {(fresh || messages.length <= 2) && !loading && (
+              <div className="no-scrollbar flex gap-2 overflow-x-auto px-5 pb-3 pt-1 lg:flex-wrap">
+                {SUGGESTIONS.map((suggestion) => (
+                  <button
+                    key={suggestion.label}
+                    type="button"
+                    onClick={() => {
+                      if (context?.topic === suggestion.topic) void send(suggestion.text);
+                      else
+                        openLumiPanel({
+                          ...(context ?? {}),
+                          topic: suggestion.topic,
+                          initialPrompt: suggestion.text,
+                        });
+                    }}
+                    className="press shrink-0 rounded-full bg-surface-2 px-4 py-2.5 text-[14px] font-semibold"
+                  >
+                    {suggestion.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void send(input);
+              }}
+              className="px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-1"
+            >
+              <div className="flex items-center gap-2 rounded-[22px] bg-surface-2 py-1.5 pl-4 pr-1.5">
+                <input
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder={
+                    context?.bookTitle ? "Pergunte sobre o livro…" : "Pergunte algo à Lumi…"
+                  }
+                  className="min-w-0 flex-1 bg-transparent py-2 text-[16px] outline-none placeholder:text-faint"
+                />
+                <button
+                  type="submit"
+                  disabled={loading || !input.trim()}
+                  aria-label="Enviar"
+                  className="press grid h-10 w-10 shrink-0 place-items-center rounded-full bg-foreground text-background transition disabled:opacity-30"
+                >
+                  {loading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ArrowUp className="h-[18px] w-[18px]" strokeWidth={2.4} />
+                  )}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+function TypingDots() {
+  return (
+    <div className="flex items-center gap-2.5 py-1 text-[14px] text-muted-foreground">
+      <LumiFace size={28} eyes="up" />
+      <span className="flex gap-1" aria-label="Lumi está pensando">
+        {[0, 1, 2].map((i) => (
+          <motion.i
+            key={i}
+            className="h-1.5 w-1.5 rounded-full bg-faint"
+            animate={{ opacity: [0.3, 1, 0.3], y: [0, -3, 0] }}
+            transition={{ duration: 0.9, repeat: Infinity, delay: i * 0.15 }}
+          />
+        ))}
+      </span>
     </div>
   );
 }

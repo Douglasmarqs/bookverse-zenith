@@ -147,17 +147,16 @@ async function importOne(id: string) {
       const { savePdfBook, uploadPdfBookToCloud } = await import("./pdf-store");
       await savePdfBook(pdf);
       if (member) {
-        patch(id, { stage: "Guardando na sua conta…" });
-        try {
-          await uploadPdfBookToCloud(member.uid, pdf);
-          await addToLibrary(
-            member.uid,
-            { title: pdf.title, author: pdf.author, cover: pdf.cover ?? null, readerId: pdf.id },
-            "lendo",
-          );
-        } catch {
-          // The device copy still opens; the cloud copy syncs on the next open.
-        }
+        // In the background: the device copy already opens.
+        void uploadPdfBookToCloud(member.uid, pdf)
+          .then(() =>
+            addToLibrary(
+              member.uid,
+              { title: pdf.title, author: pdf.author, cover: pdf.cover ?? null, readerId: pdf.id },
+              "lendo",
+            ),
+          )
+          .catch(() => {});
       }
       rememberDeviceBook({
         id: pdf.id,
@@ -185,17 +184,15 @@ async function importOne(id: string) {
       const { saveEpubBook, uploadEpubBookToCloud } = await import("./epub-store");
       await saveEpubBook(book);
       if (member) {
-        patch(id, { stage: "Guardando na sua conta…" });
-        try {
-          await uploadEpubBookToCloud(member.uid, book, file);
-          await addToLibrary(
-            member.uid,
-            { title: book.title, author: book.author, cover: book.cover, readerId: book.id },
-            "lendo",
-          );
-        } catch {
-          // Same as above: the local copy is enough to read now.
-        }
+        void uploadEpubBookToCloud(member.uid, book, file)
+          .then(() =>
+            addToLibrary(
+              member.uid,
+              { title: book.title, author: book.author, cover: book.cover, readerId: book.id },
+              "lendo",
+            ),
+          )
+          .catch(() => {});
       }
       rememberDeviceBook({
         id: book.id,

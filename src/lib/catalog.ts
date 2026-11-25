@@ -235,9 +235,17 @@ export async function downloadBook(book: CatalogBook): Promise<string> {
   }
   setState(book.key, { state: "downloading", progress: 0 });
   try {
-    const blob = await fetchWithProgress(downloadUrl(book), (progress) =>
-      setState(book.key, { state: "downloading", progress }),
-    );
+    const onProgress = (progress: number) =>
+      setState(book.key, { state: "downloading", progress });
+    let blob: Blob;
+    try {
+      blob = await fetchWithProgress(downloadUrl(book), onProgress);
+    } catch (first) {
+      // Sources like Wikisource build the EPUB on the first request; the
+      // second try usually comes straight from their cache.
+      if (!(first instanceof Error) || !/demorou|não entregou/i.test(first.message)) throw first;
+      blob = await fetchWithProgress(downloadUrl(book), onProgress);
+    }
     setState(book.key, { state: "preparing" });
     const file = new File([blob], `${book.title}.epub`, { type: "application/epub+zip" });
     const { parseEpubFile } = await import("./epub-parser");
@@ -260,23 +268,21 @@ export async function downloadBook(book: CatalogBook): Promise<string> {
     if (kept.length) parsed.chapters = kept;
     await saveEpubBook(parsed);
 
+    // Readable right away; the private cloud copy and the shelf entry
+    // follow in the background.
     const user = getFirebase()?.auth.currentUser;
     if (user && !user.isAnonymous) {
-      try {
-        await uploadEpubBookToCloud(user.uid, parsed, file);
-        await addToLibrary(
-          user.uid,
-          {
-            title: parsed.title,
-            author: parsed.author,
-            cover: parsed.cover ?? null,
-            readerId: parsed.id,
-          },
-          "quero-ler",
-        );
-      } catch {
-        // The local copy still works offline; the shelf entry can be retried.
-      }
+      void addToLibrary(
+        user.uid,
+        {
+          title: parsed.title,
+          author: parsed.author,
+          cover: parsed.cover ?? null,
+          readerId: parsed.id,
+        },
+        "quero-ler",
+      ).catch(() => {});
+      void uploadEpubBookToCloud(user.uid, parsed, file).catch(() => {});
     }
     rememberDeviceBook({
       id: parsed.id,

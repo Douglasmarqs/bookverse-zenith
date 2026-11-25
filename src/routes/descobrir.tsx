@@ -305,13 +305,13 @@ function ExploreHome() {
           >
             Coleção
           </span>
-          <p className="mt-2 max-w-[170px] font-display text-[27px] leading-[0.98] text-[#131313] lg:max-w-[240px] lg:text-[34px]">
+          <p className="mt-2 max-w-[min(170px,46%)] font-display text-[clamp(22px,7vw,27px)] leading-[0.98] text-[#131313] lg:max-w-[240px] lg:text-[34px]">
             {big!.title}
           </p>
           <p className="mt-2 text-[13px]" style={{ color: big!.ink }}>
             {big!.books.length} livros · {big!.subtitle}
           </p>
-          <div className="absolute right-6 top-[22px] h-[140px] w-[150px] lg:right-10 lg:top-8 lg:h-[180px] lg:w-[190px]">
+          <div className="absolute right-4 top-[22px] h-[140px] w-[min(150px,40%)] lg:right-10 lg:top-8 lg:h-[180px] lg:w-[190px]">
             <Fan books={[big!.books[0]!, big!.books[2]!, big!.books[3]!]} />
           </div>
         </Link>
@@ -425,11 +425,11 @@ function CollectionTile({ c }: { c: Collection }) {
       style={{ background: c.bg }}
     >
       <Icon className="h-5 w-5 text-[#131313]" strokeWidth={2} />
-      <p className="mt-2.5 max-w-[120px] font-display text-[19px] leading-[1.05] text-[#131313] lg:max-w-[160px] lg:text-[24px]">
+      <p className="mt-2.5 max-w-[120px] font-display text-[clamp(16px,5vw,19px)] leading-[1.05] text-[#131313] max-[359px]:max-w-[96px] lg:max-w-[160px] lg:text-[24px]">
         {c.title}
       </p>
       <p className="mt-1.5 text-[12.5px] text-[#5c5b56]">{c.subtitle}</p>
-      <div className="absolute -bottom-6 -right-2.5 w-[58px] rotate-[10deg] lg:w-[78px]">
+      <div className="absolute -bottom-6 -right-2.5 w-[58px] rotate-[10deg] max-[359px]:w-[44px] lg:w-[78px]">
         <BookArt title={cover.title} author={cover.author} />
       </div>
     </Link>

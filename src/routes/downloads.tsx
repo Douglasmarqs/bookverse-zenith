@@ -77,9 +77,10 @@ function DownloadsPage() {
           to="/adicionar"
           search={{}}
           aria-label="Adicionar livros"
-          className="press grid h-[42px] w-[42px] place-items-center rounded-full"
+          className="press inline-flex h-[38px] items-center gap-1 rounded-full bg-surface-2 pl-2.5 pr-3.5 text-[13.5px] font-semibold"
         >
-          <Plus className="h-[22px] w-[22px]" strokeWidth={2} />
+          <Plus className="h-[18px] w-[18px]" strokeWidth={2.2} />
+          Adicionar
         </Link>
       </header>
 

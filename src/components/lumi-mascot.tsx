@@ -1,89 +1,43 @@
-import { useEffect, useState } from "react";
-import owl from "@/assets/owl-mascot.webp";
+import { Lumi, LumiFace } from "@/components/brand/lumi";
 
 /**
- * The Lumi owl mascot, wherever it appears (hero, login screen, chat
- * header) — layered so float/breathe/blink can each animate independently:
- *   outer <div>  → lumi-float    (bob + gentle head-tilt)
- *   <img>        → lumi-breathe  (subtle scale pulse)
- *   eyelid spans → lumi-blink    (closed by default, briefly "shuts" to
- *                                 fake a blink — see src/styles.css)
- *
- * Eyelid positions are hand-measured percentages against the actual
- * artwork (src/assets/owl-mascot.png), so they track correctly at any
- * render size without per-usage tuning.
+ * Compatibility wrapper: every place that shows "the mascot" now shows the
+ * new Lumi. Small sizes use just her face (it reads better at icon size);
+ * larger ones the whole owl. `thinking` switches to the thinking pose.
  */
 export function LumiMascot({
   size = 64,
   className = "",
   thinking = false,
   interactive = false,
-  blink = false,
   onClick,
 }: {
-  /** Rendered width/height in px — the artwork is square. */
   size?: number;
   className?: string;
-  /** Faster, more energetic breathing — use while Lumi is generating a reply. */
   thinking?: boolean;
-  /** Adds a springy hover/focus wiggle for clickable instances. */
   interactive?: boolean;
-  /** Most instances should blink; disable for very small/decorative ones
-   * (under ~28px the blink is imperceptible and not worth the DOM cost). */
   blink?: boolean;
-  /** Makes the mascot itself clickable (e.g. opening the Lumi chat panel). */
   onClick?: () => void;
 }) {
-  // Small per-instance random offset so multiple mascots on the same
-  // screen don't breathe/blink in perfect, uncanny unison. Starts at "no
-  // offset" (stable for SSR) and only randomizes after mount, since
-  // picking randomly during the initial render would make the server and
-  // client disagree on the rendered style attribute.
-  const [delay, setDelay] = useState("0");
-  useEffect(() => {
-    setDelay((-(Math.random() * 3)).toFixed(2));
-  }, []);
-
-  return (
-    <div
-      role={onClick ? "button" : undefined}
-      tabIndex={onClick ? 0 : undefined}
-      onClick={onClick}
-      onKeyDown={
-        onClick
-          ? (e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                onClick();
-              }
-            }
-          : undefined
-      }
-      className={`lumi-float relative inline-block select-none ${interactive ? "lumi-interactive cursor-pointer" : ""} ${className}`}
-      style={{ width: size, height: size, animationDelay: `${delay}s` }}
-    >
-      <img
-        src={owl}
-        alt="Lumi"
-        width={size}
-        height={size}
-        className={`h-full w-full object-contain ${thinking ? "lumi-breathe-active" : "lumi-breathe"}`}
-        style={{ animationDelay: `${delay}s` }}
+  const art =
+    size <= 44 ? (
+      <LumiFace
+        size={size}
+        eyes={thinking ? "up" : "open"}
+        className={thinking ? "animate-pulse" : ""}
       />
-      {blink && size >= 28 && (
-        <>
-          <span
-            className="lumi-eyelid"
-            style={{ left: "29.7%", animationDelay: `${delay}s` }}
-            aria-hidden="true"
-          />
-          <span
-            className="lumi-eyelid"
-            style={{ left: "50%", animationDelay: `${(parseFloat(delay) - 0.35).toFixed(2)}s` }}
-            aria-hidden="true"
-          />
-        </>
-      )}
-    </div>
+    ) : (
+      <Lumi pose={thinking ? "thinking" : "hello"} size={size} shadow={false} bob={interactive} />
+    );
+  if (!onClick && !interactive) return <span className={`inline-flex ${className}`}>{art}</span>;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Lumi"
+      className={`press inline-flex rounded-full transition-transform hover:-rotate-6 ${className}`}
+    >
+      {art}
+    </button>
   );
 }

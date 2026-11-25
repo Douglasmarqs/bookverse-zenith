@@ -567,11 +567,11 @@ function ContinueButtons({
       <Link
         to="/reader/$bookId"
         params={{ bookId: entry.readerId! }}
-        className="press inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-full px-6 text-[15px] font-semibold lg:flex-none"
+        className="press inline-flex h-12 min-w-0 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-full px-5 text-[15px] font-semibold max-[359px]:px-3 max-[359px]:text-[14px] lg:flex-none"
         style={{ background: pal.fg, color: pal.bg }}
       >
         <BookOpen className="h-[18px] w-[18px]" strokeWidth={2.2} />
-        <span className="lg:hidden">
+        <span className="truncate lg:hidden">
           {chapter ? `Continuar · Cap. ${chapter}` : "Continuar leitura"}
         </span>
         <span className="hidden lg:inline">Continuar leitura</span>

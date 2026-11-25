@@ -343,32 +343,18 @@ function BibliotecaPage() {
   return (
     <div className="mx-auto max-w-5xl pb-10 pt-[max(1rem,env(safe-area-inset-top))] lg:px-6 lg:pt-10">
       <header className="flex items-center justify-between gap-3 px-[22px] pt-2 lg:px-4">
-        <h1 className="font-display text-[44px] leading-none tracking-[-0.035em] lg:text-[56px]">
+        <h1 className="min-w-0 font-display text-[clamp(30px,9vw,44px)] leading-none tracking-[-0.035em] lg:text-[56px]">
           Biblioteca
         </h1>
         <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={() => {
-              setSearchOpen((o) => !o);
-              if (searchOpen) setQuery("");
-            }}
-            aria-label={searchOpen ? "Fechar busca" : "Buscar na biblioteca"}
-            className="press grid h-[46px] w-[46px] place-items-center rounded-full bg-card shadow-[inset_0_0_0_1px_var(--border)]"
-          >
-            {searchOpen ? (
-              <X className="h-5 w-5" />
-            ) : (
-              <Search className="h-5 w-5" strokeWidth={2.1} />
-            )}
-          </button>
           <Link
             to="/adicionar"
             search={{}}
-            aria-label="Adicionar livros"
-            className="press grid h-[46px] w-[46px] place-items-center rounded-full bg-foreground text-background"
+            aria-label="Adicionar livros: importar arquivos ou baixar grátis"
+            className="press inline-flex h-[44px] items-center gap-1.5 rounded-full bg-foreground shrink-0 pl-3 pr-4 max-[339px]:pr-3 text-[14.5px] font-semibold text-background"
           >
-            <Plus className="h-[22px] w-[22px]" strokeWidth={2.2} />
+            <Plus className="h-[20px] w-[20px]" strokeWidth={2.4} />
+            <span className="max-[339px]:hidden">Adicionar</span>
           </Link>
         </div>
       </header>
@@ -474,7 +460,7 @@ function BibliotecaPage() {
                   type="button"
                   onClick={() => setSortOpen((o) => !o)}
                   aria-expanded={sortOpen}
-                  className="press flex items-center gap-2 text-[15px] font-semibold text-muted-foreground"
+                  className="press flex min-w-0 items-center gap-2 whitespace-nowrap text-[15px] font-semibold text-muted-foreground max-[359px]:text-[13.5px]"
                 >
                   <ArrowDownUp className="h-[17px] w-[17px]" strokeWidth={2.1} />
                   {query.trim() ? "Resultados" : SORT_LABEL[sort]}
@@ -516,6 +502,24 @@ function BibliotecaPage() {
               </div>
             )}
             <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchOpen((o) => !o);
+                  if (searchOpen) setQuery("");
+                }}
+                aria-label={searchOpen ? "Fechar busca" : "Buscar na biblioteca"}
+                aria-pressed={searchOpen}
+                className={`press grid h-[42px] w-[42px] place-items-center rounded-full transition ${
+                  searchOpen ? "bg-card shadow-[inset_0_0_0_1px_var(--border)]" : "text-faint"
+                }`}
+              >
+                {searchOpen ? (
+                  <X className="h-5 w-5" />
+                ) : (
+                  <Search className="h-5 w-5" strokeWidth={2} />
+                )}
+              </button>
               {(
                 [
                   ["grade", LayoutGrid, "Grade"],

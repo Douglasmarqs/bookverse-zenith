@@ -240,7 +240,7 @@ function BookPage() {
       />
       <div
         aria-hidden
-        className="absolute left-[-60px] right-[-60px] top-20 h-80"
+        className="absolute inset-x-0 top-20 h-80"
         style={{
           background: `radial-gradient(closest-side, color-mix(in oklab, ${pal.accent} 33%, transparent), transparent)`,
         }}

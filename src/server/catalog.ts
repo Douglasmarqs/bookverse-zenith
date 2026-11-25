@@ -267,18 +267,56 @@ export async function proxyEpub(source: CatalogSource, id: string): Promise<Resp
   const first = await resolveEpubUrl(source, id);
   if (!first)
     return Response.json({ error: "Este livro não tem EPUB disponível." }, { status: 404 });
-  const urls = source === "gutenberg" ? gutenbergMirrors(id) : [first];
-  let last: Response | null = null;
-  for (const url of urls) {
-    last = await proxyOne(url);
-    if (last.ok) return last;
-  }
-  return last!;
+  // Wikisource builds the EPUB on demand, so it gets more time to start.
+  const headerTimeout = {
+    wikisource: 45_000,
+    archive: 25_000,
+    standard: 15_000,
+    gutenberg: 12_000,
+  }[source];
+  if (source !== "gutenberg") return proxyOne(first, new AbortController(), headerTimeout);
+  return raceMirrors(gutenbergMirrors(id));
 }
 
-async function proxyOne(url: string): Promise<Response> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 55_000);
+/**
+ * Starts the mirrors a moment apart and keeps whichever answers first
+ * (the slow or refusing ones are cancelled), instead of waiting for each
+ * to time out in turn.
+ */
+async function raceMirrors(urls: string[]): Promise<Response> {
+  const ctrls = urls.map(() => new AbortController());
+  let last: Response | null = null;
+  let won = false;
+  try {
+    return await Promise.any(
+      urls.map(async (url, i) => {
+        await new Promise((r) => setTimeout(r, i * 700));
+        if (ctrls[i]!.signal.aborted) throw new Error("cancelled");
+        const res = await proxyOne(url, ctrls[i]!);
+        if (!res.ok || won) {
+          if (!res.ok) last = res;
+          else ctrls[i]!.abort();
+          throw new Error("mirror failed");
+        }
+        won = true;
+        ctrls.forEach((c, k) => k !== i && c.abort());
+        return res;
+      }),
+    );
+  } catch {
+    return (
+      last ?? Response.json({ error: "A fonte demorou demais para responder." }, { status: 504 })
+    );
+  }
+}
+
+async function proxyOne(
+  url: string,
+  ctrl = new AbortController(),
+  headerTimeout = 12_000,
+): Promise<Response> {
+  // Give up on a source that hasn't even started answering in time.
+  const timer = setTimeout(() => ctrl.abort(), headerTimeout);
   try {
     const r = await fetch(url, {
       signal: ctrl.signal,
