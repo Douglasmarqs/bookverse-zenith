@@ -62,19 +62,21 @@ const json = (body: unknown, status = 200) => Response.json(body, { status });
  * Which AI to call. On Vercel, AI Gateway accepts the deployment's own OIDC
  * identity (no key to manage); a GROQ_API_KEY still works as before.
  */
-/** Preferred first; the free AI Gateway tier doesn't serve every model, so
- * the first one that answers is remembered for the next requests. */
+/**
+ * Claude Haiku first; if it fails (not enabled on the plan, overloaded,
+ * slow or down), GPT takes over. A model that fails sits out for a few
+ * minutes and is then tried first again, so Haiku comes back on its own.
+ */
 const GATEWAY_MODELS = [
   "anthropic/claude-haiku-5.5",
   "anthropic/claude-haiku-4.5",
-  "google/gemini-2.5-flash",
   "openai/gpt-oss-120b",
-  "google/gemini-2.5-flash-lite",
   "openai/gpt-4.1-mini",
-  "meta/llama-3.3-70b",
-  "mistral/mistral-small",
+  "openai/gpt-oss-20b",
 ];
-let workingModel: string | null = null;
+const COOLDOWN_MS = 5 * 60_000;
+const resting = new Map<string, number>();
+const isResting = (m: string) => (resting.get(m) ?? 0) > Date.now();
 
 type Provider = { url: string; key: string; model: string; vision: string; gateway?: boolean };
 
@@ -87,8 +89,8 @@ function provider(request: Request): Provider | null {
     return {
       url: "https://ai-gateway.vercel.sh/v1/chat/completions",
       key: gatewayKey,
-      model: workingModel ?? GATEWAY_MODELS[0]!,
-      vision: workingModel ?? GATEWAY_MODELS[0]!,
+      model: GATEWAY_MODELS[0]!,
+      vision: GATEWAY_MODELS[0]!,
       gateway: true,
     };
   }
@@ -137,20 +139,7 @@ export async function handleLumi(request: Request): Promise<Response> {
     /^data:image\/(?:jpeg|png);base64,/.test(image) &&
     image.length <= 4_000_000;
 
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 28_000);
   try {
-    const call = (model: string) =>
-      fetch(ai.url, {
-        method: "POST",
-        signal: ctrl.signal,
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${ai.key}` },
-        body: JSON.stringify({
-          model,
-          max_tokens: 2000,
-          messages: chat,
-        }),
-      });
     const chat = [
       { role: "system", content: systemPrompt(ctx) },
       ...(hasImage
@@ -169,33 +158,52 @@ export async function handleLumi(request: Request): Promise<Response> {
         : []),
       ...messages.map((m) => ({ role: m.role, content: m.text })),
     ];
-    const candidates = ai.gateway
-      ? [...new Set([workingModel ?? "", ...GATEWAY_MODELS].filter(Boolean))]
-      : [hasImage ? ai.vision : ai.model];
+    // Each model gets its own time limit; a slow one hands over to the next.
+    const call = async (model: string, ms: number): Promise<Response | null> => {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), ms);
+      try {
+        return await fetch(ai.url, {
+          method: "POST",
+          signal: ctrl.signal,
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${ai.key}` },
+          body: JSON.stringify({ model, max_tokens: 2000, messages: chat }),
+        });
+      } catch {
+        return null;
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+    const all = ai.gateway ? GATEWAY_MODELS : [hasImage ? ai.vision : ai.model];
+    // Rested models go to the back of the line (still tried if all others fail).
+    const candidates = [...all.filter((m) => !isResting(m)), ...all.filter(isResting)];
     let r: Response | null = null;
-    for (const model of candidates) {
-      r = await call(model);
-      if (r.ok) {
-        if (ai.gateway) workingModel = model;
+    let used = "";
+    for (const [i, model] of candidates.entries()) {
+      const last = i === candidates.length - 1;
+      r = await call(model, model.startsWith("anthropic/") && !last ? 15_000 : 25_000);
+      if (r?.ok) {
+        used = model;
+        resting.delete(model);
         break;
       }
-      const detail = (await r.text().catch(() => "")).slice(0, 300);
-      console.warn("[lumi] provider error", model, r.status, detail);
-      // Only move on when this model isn't available to the account.
-      if (!ai.gateway || ![400, 402, 403, 404].includes(r.status)) break;
+      const detail = r ? (await r.text().catch(() => "")).slice(0, 200) : "timeout/rede";
+      console.warn("[lumi] model failed, trying next", model, r?.status ?? "-", detail);
+      resting.set(model, Date.now() + COOLDOWN_MS);
+      r = null;
     }
-    if (!r || !r.ok) return json({ error: "A Lumi não conseguiu responder agora." }, 502);
+    if (!r) return json({ error: "A Lumi não conseguiu responder agora. Tente de novo." }, 502);
     const data = (await r.json()) as {
       choices?: { message?: { content?: string }; finish_reason?: string }[];
     };
     if (data.choices?.[0]?.finish_reason === "length") console.warn("[lumi] reply cut by length");
     const reply = (data.choices?.[0]?.message?.content ?? "").trim();
-    return json({
-      reply: reply || "Não consegui pensar em uma resposta agora — tente reformular?",
-    });
+    return Response.json(
+      { reply: reply || "Não consegui pensar em uma resposta agora — tente reformular?" },
+      { headers: { "x-lumi-model": used } },
+    );
   } catch {
     return json({ error: "A Lumi demorou demais para responder." }, 504);
-  } finally {
-    clearTimeout(timer);
   }
 }
