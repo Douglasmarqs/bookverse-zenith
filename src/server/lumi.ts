@@ -70,8 +70,9 @@ const json = (body: unknown, status = 200) => Response.json(body, { status });
 const GATEWAY_MODELS = [
   "anthropic/claude-haiku-5.5",
   "anthropic/claude-haiku-4.5",
-  "openai/gpt-oss-120b",
   "openai/gpt-4.1-mini",
+  "openai/gpt-5-mini",
+  "openai/gpt-oss-120b",
   "openai/gpt-oss-20b",
 ];
 const COOLDOWN_MS = 5 * 60_000;
