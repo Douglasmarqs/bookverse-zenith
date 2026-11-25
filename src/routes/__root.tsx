@@ -57,6 +57,22 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: { error: unknown; reset: () => void }) {
   console.error(error);
   const router = useRouter();
+  // A code file from the previous deploy: reload once into the new one.
+  const stale =
+    /dynamically imported module|Importing a module script failed|error loading dynamically/i.test(
+      String((error as { message?: string })?.message ?? error),
+    );
+  useEffect(() => {
+    if (!stale) return;
+    try {
+      if (sessionStorage.getItem("bookverse:reloaded-for-update")) return;
+      sessionStorage.setItem("bookverse:reloaded-for-update", "1");
+    } catch {
+      // ignore
+    }
+    window.location.reload();
+  }, [stale]);
+  if (stale) return null;
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
@@ -199,6 +215,46 @@ function RootComponent() {
     };
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  // After a new deploy, a phone that kept the app open may ask for code
+  // files that no longer exist. Reload once into the new version instead
+  // of leaving a broken screen.
+  useEffect(() => {
+    const KEY = "bookverse:reloaded-for-update";
+    const onFail = (e: Event) => {
+      try {
+        if (sessionStorage.getItem(KEY)) return;
+        sessionStorage.setItem(KEY, "1");
+      } catch {
+        // ignore
+      }
+      e.preventDefault();
+      window.location.reload();
+    };
+    const onError = (e: PromiseRejectionEvent) => {
+      if (
+        /dynamically imported module|Importing a module script failed|error loading dynamically/i.test(
+          String(e.reason?.message ?? e.reason),
+        )
+      ) {
+        onFail(e);
+      }
+    };
+    window.addEventListener("vite:preloadError", onFail);
+    window.addEventListener("unhandledrejection", onError);
+    const t = setTimeout(() => {
+      try {
+        sessionStorage.removeItem(KEY);
+      } catch {
+        // ignore
+      }
+    }, 10_000);
+    return () => {
+      window.removeEventListener("vite:preloadError", onFail);
+      window.removeEventListener("unhandledrejection", onError);
+      clearTimeout(t);
+    };
   }, []);
 
   // Warm up the main screens' code right after the first paint, so moving
