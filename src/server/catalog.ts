@@ -277,9 +277,10 @@ export async function proxyEpub(source: CatalogSource, id: string): Promise<Resp
   if (source !== "gutenberg") return proxyOne(first, new AbortController(), headerTimeout);
   const res = await raceMirrors(gutenbergMirrors(id));
   // Heavily illustrated editions (20 MB+) are slow on phones: the
-  // text-only edition opens in a second and reads the same.
+  // text-only edition opens in a second and reads the same. When the size
+  // isn't announced we can't tell, so the light edition wins too.
   const len = Number(res.headers.get("content-length") ?? 0);
-  if (res.ok && len > 12 * 1024 * 1024) {
+  if (res.ok && (!len || len > 12 * 1024 * 1024)) {
     const light = await raceMirrors(gutenbergLightMirrors(id));
     if (light.ok) {
       void res.body?.cancel().catch(() => {});
