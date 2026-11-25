@@ -57,9 +57,39 @@ function systemPrompt(c: Ctx | null): string {
 
 const json = (body: unknown, status = 200) => Response.json(body, { status });
 
+/**
+ * Which AI to call. On Vercel, AI Gateway accepts the deployment's own OIDC
+ * identity (no key to manage); a GROQ_API_KEY still works as before.
+ */
+function provider(
+  request: Request,
+): { url: string; key: string; model: string; vision: string } | null {
+  const gatewayKey =
+    process.env.AI_GATEWAY_API_KEY ||
+    request.headers.get("x-vercel-oidc-token") ||
+    process.env.VERCEL_OIDC_TOKEN;
+  if (gatewayKey) {
+    return {
+      url: "https://ai-gateway.vercel.sh/v1/chat/completions",
+      key: gatewayKey,
+      model: "anthropic/claude-haiku-5.5",
+      vision: "anthropic/claude-haiku-5.5",
+    };
+  }
+  if (process.env.GROQ_API_KEY) {
+    return {
+      url: "https://api.groq.com/openai/v1/chat/completions",
+      key: process.env.GROQ_API_KEY,
+      model: MODEL,
+      vision: VISION_MODEL,
+    };
+  }
+  return null;
+}
+
 export async function handleLumi(request: Request): Promise<Response> {
-  const key = process.env.GROQ_API_KEY;
-  if (!key) return json({ error: "not-configured" }, 503);
+  const ai = provider(request);
+  if (!ai) return json({ error: "not-configured" }, 503);
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "anon";
   if (limited(ip)) return json({ error: "Muitas perguntas seguidas — espere um minutinho." }, 429);
 
@@ -94,13 +124,13 @@ export async function handleLumi(request: Request): Promise<Response> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 28_000);
   try {
-    const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    const r = await fetch(ai.url, {
       method: "POST",
       signal: ctrl.signal,
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${ai.key}` },
       body: JSON.stringify({
-        model: hasImage ? VISION_MODEL : MODEL,
-        max_completion_tokens: 600,
+        model: hasImage ? ai.vision : ai.model,
+        max_tokens: 600,
         messages: [
           { role: "system", content: systemPrompt(ctx) },
           ...(hasImage
@@ -121,7 +151,14 @@ export async function handleLumi(request: Request): Promise<Response> {
         ],
       }),
     });
-    if (!r.ok) return json({ error: "A Lumi não conseguiu responder agora." }, 502);
+    if (!r.ok) {
+      console.warn(
+        "[lumi] provider error",
+        r.status,
+        (await r.text().catch(() => "")).slice(0, 300),
+      );
+      return json({ error: "A Lumi não conseguiu responder agora." }, 502);
+    }
     const data = (await r.json()) as { choices?: { message?: { content?: string } }[] };
     const reply = (data.choices?.[0]?.message?.content ?? "").trim();
     return json({
