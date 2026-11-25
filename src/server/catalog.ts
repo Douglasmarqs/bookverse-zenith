@@ -22,7 +22,7 @@ import {
 
 export type { CatalogBook, CatalogSource };
 
-const UA = "BookVerse/1.0 (free public-domain reading app; +https://bookverse-zenith.vercel.app)";
+const UA = "BookVerse/1.0 (+https://bookverse-zenith.vercel.app)";
 const DEADLINE_MS = 6500;
 
 async function fetchJson<T>(url: string, ms = DEADLINE_MS): Promise<T | null> {

@@ -18,6 +18,7 @@ import {
 import { getFirebase } from "./firebase";
 import { saveEpubBook, uploadEpubBookToCloud, deleteEpubBook } from "./epub-store";
 import { addToLibrary } from "./library";
+import { niceAuthor } from "./catalog-shared";
 
 export type { CatalogBook, CatalogSource };
 
@@ -62,6 +63,32 @@ async function searchServer(
   }
 }
 
+/**
+ * Gutenberg through our server; when Gutendex refuses the server (it does
+ * for some cloud hosts) fall back to the app's existing Cloud Function /
+ * direct Gutendex search.
+ */
+async function searchGutenberg(q: string, signal?: AbortSignal): Promise<CatalogBook[]> {
+  const viaServer = await searchServer(q, "gutenberg", signal);
+  if (viaServer.length || signal?.aborted) return viaServer;
+  try {
+    const { searchPublicDomainBooks } = await import("./public-domain");
+    const r = await searchPublicDomainBooks(q, 16);
+    return r.map((b) => ({
+      key: `gutenberg:${b.id}`,
+      source: "gutenberg" as const,
+      id: String(b.id),
+      title: b.title.split(/[:;]/)[0]!.trim(),
+      author: niceAuthor(b.author.split(",").length > 2 ? b.author.split(/,(?=[^,]*,)/)[0]! : b.author),
+      language: b.languages?.[0] ?? null,
+      cover: b.cover,
+      readerId: `gutenberg-${b.id}`,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 /** Every free source at once, ranked together (Portuguese first). */
 export function searchCatalog(
   q: string,
@@ -74,7 +101,7 @@ export function searchCatalog(
   if (hit) return hit;
   const p = Promise.all([
     searchServer(query, "standard,archive"),
-    searchServer(query, "gutenberg"),
+    searchGutenberg(query),
     searchWikisourceDirect(query),
   ]).then((parts) => rankCatalog(parts.flat(), query, opts.lang));
   cache.set(key, p);
@@ -100,7 +127,7 @@ export function searchCatalogLive(
   const got: CatalogBook[] = [];
   const jobs = [
     searchServer(query, "standard,archive", ctrl.signal),
-    searchServer(query, "gutenberg", ctrl.signal),
+    searchGutenberg(query, ctrl.signal),
     searchWikisourceDirect(query, ctrl.signal),
   ];
   let pending = jobs.length;
