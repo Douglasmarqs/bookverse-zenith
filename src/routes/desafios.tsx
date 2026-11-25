@@ -187,7 +187,7 @@ function DesafiosPage() {
     reduce
       ? {}
       : {
-          initial: { opacity: 0, y: 14 },
+          initial: { opacity: 0.55, y: 14 },
           animate: { opacity: 1, y: 0 },
           transition: { delay: d, duration: 0.45, ease: [0.16, 1, 0.3, 1] as const },
         };

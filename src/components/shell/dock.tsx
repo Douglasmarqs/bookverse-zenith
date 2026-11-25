@@ -1,4 +1,5 @@
 import { motion } from "motion/react";
+import { useEffect, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 
 import { haptic } from "@/components/motion/interactive";
@@ -11,6 +12,9 @@ import { DISCOVER_SEARCH, MEMBER_NAV, isNavActive } from "@/lib/nav";
  */
 export function Dock({ showMini = true }: { showMini?: boolean }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  // The tapped tab lights up instantly, before the new page has rendered.
+  const [tapped, setTapped] = useState<string | null>(null);
+  useEffect(() => setTapped(null), [pathname]);
   return (
     <div className="vt-dock pointer-events-none fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 lg:hidden">
       {/* Fades the page out under the bar so text never collides with it. */}
@@ -22,14 +26,18 @@ export function Dock({ showMini = true }: { showMini?: boolean }) {
           className="glass-bar flex h-[66px] items-center justify-around rounded-[26px] px-2"
         >
           {MEMBER_NAV.map((item) => {
-            const active = isNavActive(pathname, item);
+            const active = tapped ? tapped === item.to : isNavActive(pathname, item);
             const Icon = item.icon;
             return (
               <Link
                 key={item.to}
                 to={item.to}
                 search={item.to === "/descobrir" ? DISCOVER_SEARCH : undefined}
-                onClick={() => haptic(5)}
+                onPointerDown={() => setTapped(item.to)}
+                onClick={() => {
+                  haptic(5);
+                  setTapped(item.to);
+                }}
                 aria-current={active ? "page" : undefined}
                 className={`press relative flex min-w-0 max-w-[84px] flex-1 flex-col items-center gap-1 py-2 text-[10.5px] font-semibold transition-colors ${
                   active ? "text-foreground" : "text-faint"

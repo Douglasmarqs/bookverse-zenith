@@ -682,7 +682,7 @@ function GridItem({
   return (
     <motion.li
       layout
-      initial={{ opacity: 0, y: 12 }}
+      initial={{ opacity: 0.55, y: 12 }}
       animate={{ opacity: 1, y: 0, transition: { delay: Math.min(index, 12) * 0.025 } }}
       exit={{ opacity: 0, scale: 0.94 }}
       className="group relative list-none"
@@ -773,7 +773,7 @@ function ListsView({
         return (
           <motion.li
             key={l.id}
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0.55, y: 10 }}
             animate={{ opacity: 1, y: 0, transition: { delay: i * 0.04 } }}
             className="list-none"
           >

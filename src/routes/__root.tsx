@@ -201,6 +201,30 @@ function RootComponent() {
     return () => mq.removeEventListener("change", onChange);
   }, []);
 
+  // Warm up the main screens' code right after the first paint, so moving
+  // between tabs never waits for a download (that wait was the blank blink).
+  const router = useRouter();
+  useEffect(() => {
+    const warm = () => {
+      for (const to of [
+        "/",
+        "/descobrir",
+        "/biblioteca",
+        "/perfil",
+        "/adicionar",
+        "/downloads",
+        "/desafios",
+        "/ajustes",
+        "/auth",
+      ] as const) {
+        void router.preloadRoute({ to }).catch(() => {});
+      }
+    };
+    const w = window as Window & { requestIdleCallback?: (cb: () => void) => number };
+    if (w.requestIdleCallback) w.requestIdleCallback(warm);
+    else setTimeout(warm, 600);
+  }, [router]);
+
   useEffect(() => {
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch((err) => {

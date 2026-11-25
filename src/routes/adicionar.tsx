@@ -129,7 +129,7 @@ function AdicionarPage() {
       />
       <motion.button
         type="button"
-        initial={{ opacity: 0, y: 10 }}
+        initial={{ opacity: 0.55, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         onClick={() => inputRef.current?.click()}
         onDragOver={(e) => {

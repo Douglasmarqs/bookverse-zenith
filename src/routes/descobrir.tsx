@@ -239,7 +239,7 @@ function ExploreHome() {
     reduce
       ? {}
       : {
-          initial: { opacity: 0, y: 14 },
+          initial: { opacity: 0.55, y: 14 },
           animate: { opacity: 1, y: 0 },
           transition: { duration: 0.55, ease: EASE, delay: d },
         };

@@ -678,7 +678,7 @@
 /* Route-level entrance, applied to <main> content on each navigation. */
 @keyframes page-enter {
   from {
-    opacity: 0;
+    opacity: 0.8;
     transform: translate3d(0, 10px, 0);
   }
   to {
@@ -687,7 +687,7 @@
   }
 }
 @utility page-enter {
-  animation: page-enter 520ms var(--ease-out-expo) both;
+  animation: page-enter 300ms var(--ease-out-expo) both;
 }
 
 /* Infinite cover marquee. Content is duplicated so -50% loops seamlessly. */

@@ -85,7 +85,7 @@ function DownloadsPage() {
       </header>
 
       <motion.section
-        initial={{ opacity: 0, y: 10 }}
+        initial={{ opacity: 0.55, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         className="surface-card mx-4 mt-3 p-4"
       >

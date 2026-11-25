@@ -19,7 +19,7 @@ export function PageHeader({
   const reduce = useReducedMotion();
   return (
     <motion.header
-      initial={reduce ? false : { opacity: 0, y: 16 }}
+      initial={reduce ? false : { opacity: 0.55, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
       className="relative flex flex-wrap items-end justify-between gap-5"

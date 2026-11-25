@@ -199,7 +199,7 @@ export function HomeScreen({ user }: { user: User | null }) {
     reduce
       ? {}
       : {
-          initial: { opacity: 0, y: 14 },
+          initial: { opacity: 0.55, y: 14 },
           animate: { opacity: 1, y: 0 },
           transition: { duration: 0.6, ease: EASE, delay },
         };
@@ -404,7 +404,7 @@ function Rail({
   const reduce = useReducedMotion();
   return (
     <motion.section
-      initial={reduce ? false : { opacity: 0, y: 14 }}
+      initial={reduce ? false : { opacity: 0.55, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, ease: EASE, delay }}
       className="mt-8"
