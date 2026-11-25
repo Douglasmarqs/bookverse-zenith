@@ -14,7 +14,6 @@ import {
   subscribeReadingGoal,
   type ReadingGoal,
 } from "@/lib/goals";
-import { TelegramCard } from "@/components/telegram-card";
 
 export const Route = createFileRoute("/metas")({
   head: () => ({
@@ -216,8 +215,6 @@ function MetasPage({ uid }: { uid: string }) {
           Ver desafios e conquistas
         </Link>
       </div>
-
-      <TelegramCard />
     </div>
   );
 }

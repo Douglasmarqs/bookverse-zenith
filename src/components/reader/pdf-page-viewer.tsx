@@ -11,6 +11,7 @@ import {
   Loader2,
   Settings2,
   Sparkles,
+  Type,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -25,6 +26,7 @@ import {
   type PdfRegionHighlight,
 } from "@/lib/annotations";
 import { openLumiPanel } from "@/lib/lumi-panel-store";
+import { setPdfMode } from "@/lib/pdf-mode";
 import { PdfDisplaySettingsPanel } from "@/components/reader/pdf-display-settings";
 import {
   loadPdfDisplaySettings,
@@ -366,19 +368,19 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
   }, [goTo, page]);
 
   return (
-    <div className="fixed inset-0 z-30 flex min-h-0 flex-col overflow-hidden bg-[#edf5ff] text-slate-950">
-      <header className="z-20 flex shrink-0 items-center justify-between gap-2 border-b border-blue-100 bg-white/95 px-2 py-2 shadow-sm backdrop-blur sm:px-5">
+    <div className="fixed inset-0 z-30 flex min-h-0 flex-col overflow-hidden bg-background text-foreground">
+      <header className="z-20 flex shrink-0 items-center justify-between gap-2 border-b border-border bg-background/95 px-2 py-2 shadow-sm backdrop-blur sm:px-5">
         <div className="flex min-w-0 items-center gap-1 sm:gap-2">
           <Link
             to="/biblioteca"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-full transition hover:bg-blue-50"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full transition hover:bg-surface-2"
             aria-label="Voltar à biblioteca"
           >
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <div className="min-w-0">
             <p className="truncate font-display text-sm font-medium">{book.title}</p>
-            <p className="truncate text-[11px] text-slate-500">PDF privado · modo página</p>
+            <p className="truncate text-[11px] text-muted-foreground">PDF privado · modo página</p>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
@@ -394,7 +396,7 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
             className={`grid h-9 w-9 place-items-center rounded-full border transition ${
               marking
                 ? "border-amber-300 bg-amber-100 text-amber-800"
-                : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                : "border-border text-foreground hover:bg-surface-2"
             }`}
           >
             <Highlighter className="h-4 w-4" />
@@ -409,7 +411,7 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
             }
             aria-label="Traduzir esta página com a Lumi"
             title="Traduzir página"
-            className="grid h-9 w-9 place-items-center rounded-full border border-slate-200 text-slate-600 transition hover:bg-blue-50 hover:text-blue-700"
+            className="hidden h-9 w-9 sm:grid place-items-center rounded-full border border-border text-foreground transition hover:bg-surface-2"
           >
             <Languages className="h-4 w-4" />
           </button>
@@ -418,16 +420,28 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
             onClick={() => openPageWithLumi("question")}
             aria-label="Perguntar à Lumi sobre esta página"
             title="Perguntar à Lumi"
-            className="grid h-9 w-9 place-items-center rounded-full border border-slate-200 text-slate-600 transition hover:bg-blue-50 hover:text-blue-700"
+            className="grid h-9 w-9 place-items-center rounded-full border border-border text-foreground transition hover:bg-surface-2"
           >
             <Sparkles className="h-4 w-4" />
           </button>
+          {book.readerBook && (
+            <button
+              type="button"
+              onClick={() => setPdfMode("leitura")}
+              aria-label="Abrir em modo leitura"
+              title="Modo leitura: texto ajustável"
+              className="inline-flex h-9 items-center gap-1.5 rounded-full bg-accent-soft px-3 text-xs font-semibold text-gold"
+            >
+              <Type className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Modo leitura</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
             aria-label="Ajustes do PDF"
             title="Ajustes do PDF"
-            className="grid h-9 w-9 place-items-center rounded-full border border-slate-200 text-slate-600 transition hover:bg-blue-50 hover:text-blue-700"
+            className="grid h-9 w-9 place-items-center rounded-full border border-border text-foreground transition hover:bg-surface-2"
           >
             <Settings2 className="h-4 w-4" />
           </button>
@@ -439,8 +453,8 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
             title={`${pageTurnEnabled ? "Desativar" : "Ativar"} efeito de folha`}
             className={`inline-flex h-9 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition sm:px-3 ${
               pageTurnEnabled
-                ? "border-blue-200 bg-blue-50 text-blue-700"
-                : "border-slate-200 text-slate-500 hover:bg-slate-50"
+                ? "border-transparent bg-foreground text-background"
+                : "border-border text-muted-foreground hover:bg-surface-2"
             }`}
           >
             <BookOpen className="h-3.5 w-3.5" />
@@ -449,7 +463,7 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
           <a
             href={url ?? undefined}
             download={book.sourceName}
-            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-blue-200 px-2.5 text-xs font-medium text-blue-700 transition hover:bg-blue-50 sm:px-3"
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border px-2.5 text-xs font-semibold text-foreground transition hover:bg-surface-2 sm:px-3"
           >
             <Download className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Baixar</span>
           </a>
@@ -458,7 +472,7 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
 
       <main
         ref={stageRef}
-        className="relative min-h-0 flex-1 touch-pan-y overflow-hidden bg-[radial-gradient(circle_at_50%_20%,#ffffff_0%,#edf5ff_70%)]"
+        className="relative min-h-0 flex-1 touch-pan-y overflow-hidden bg-surface-2"
         onTouchStart={(event) => {
           if (marking || settingsOpen) {
             touchStartRef.current = null;
@@ -489,7 +503,7 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
         >
           <div className="grid min-h-full min-w-full place-items-center">
             <div
-              className="relative shrink-0 shadow-2xl ring-1 ring-slate-900/10"
+              className="relative shrink-0 shadow-2xl ring-1 ring-black/10"
               style={{
                 filter: `brightness(${displaySettings.brightness}) contrast(${displaySettings.contrast})`,
               }}
@@ -585,8 +599,8 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
           </div>
         </div>
         {(loading || !pdfReady) && !error && (
-          <div className="pointer-events-none absolute inset-0 z-[5] grid place-items-center bg-[#edf5ff]/70">
-            <div className="rounded-full bg-white/95 px-4 py-2 text-xs text-slate-600 shadow-lg">
+          <div className="pointer-events-none absolute inset-0 z-[5] grid place-items-center bg-background/70">
+            <div className="rounded-full bg-card px-4 py-2 text-xs text-muted-foreground shadow-lg">
               <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin" /> Preparando página…
             </div>
           </div>
@@ -594,9 +608,9 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
         {error && (
           <div className="absolute inset-0 grid place-items-center p-6 text-center">
             <div className="max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-              <FileImage className="mx-auto h-6 w-6 text-blue-600" />
+              <FileImage className="mx-auto h-6 w-6 text-gold" />
               <p className="mt-3 font-medium">{error}</p>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-muted-foreground">
                 O arquivo original continua disponível para download.
               </p>
             </div>
@@ -604,7 +618,7 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
         )}
         {marking && !error && (
           <div className="pointer-events-none absolute inset-x-3 bottom-3 z-10 flex justify-center">
-            <p className="rounded-full bg-slate-950/90 px-4 py-2 text-xs font-medium text-white shadow-lg">
+            <p className="rounded-full bg-foreground/90 px-4 py-2 text-xs font-medium text-white shadow-lg">
               Arraste sobre o trecho que deseja marcar
             </p>
           </div>
@@ -613,7 +627,7 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
           onClick={() => goTo(page - 1)}
           disabled={page <= 1 || marking || settingsOpen}
           aria-label="Página anterior"
-          className="absolute inset-y-0 left-0 grid w-14 place-items-center text-slate-700 opacity-0 transition hover:bg-white/20 hover:opacity-100 disabled:pointer-events-none sm:w-24"
+          className="absolute inset-y-0 left-0 grid w-14 place-items-center text-foreground opacity-0 transition hover:bg-white/20 hover:opacity-100 disabled:pointer-events-none sm:w-24"
         >
           <ChevronLeft className="h-7 w-7 rounded-full bg-white/90 p-1 shadow" />
         </button>
@@ -621,14 +635,14 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
           onClick={() => goTo(page + 1)}
           disabled={page >= pageCount || marking || settingsOpen}
           aria-label="Próxima página"
-          className="absolute inset-y-0 right-0 grid w-14 place-items-center text-slate-700 opacity-0 transition hover:bg-white/20 hover:opacity-100 disabled:pointer-events-none sm:w-24"
+          className="absolute inset-y-0 right-0 grid w-14 place-items-center text-foreground opacity-0 transition hover:bg-white/20 hover:opacity-100 disabled:pointer-events-none sm:w-24"
         >
           <ChevronRight className="h-7 w-7 rounded-full bg-white/90 p-1 shadow" />
         </button>
       </main>
 
-      <footer className="z-20 shrink-0 border-t border-blue-100 bg-white/95 px-3 pb-[max(0.65rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur sm:px-6">
-        <div className="mx-auto flex max-w-4xl items-center gap-3 text-[11px] text-slate-500">
+      <footer className="z-20 shrink-0 border-t border-border bg-background/95 px-3 pb-[max(0.65rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur sm:px-6">
+        <div className="mx-auto flex max-w-4xl items-center gap-3 text-[11px] text-muted-foreground">
           <span className="tabular-nums">{Math.round((page / pageCount) * 100)}%</span>
           <input
             aria-label="Ir para página"
@@ -637,7 +651,7 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
             max={pageCount}
             value={page}
             onChange={(event) => goTo(Number(event.target.value))}
-            className="h-1 flex-1 accent-blue-600"
+            className="h-1 flex-1 accent-gold"
           />
           <span className="shrink-0 tabular-nums">
             Pág. {page}/{pageCount}
