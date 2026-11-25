@@ -293,7 +293,12 @@ async function proxyOne(url: string): Promise<Response> {
       );
     }
     const len = Number(r.headers.get("content-length") ?? 0);
-    if (len > MAX_BYTES) return Response.json({ error: "Arquivo grande demais." }, { status: 413 });
+    if (len > MAX_BYTES) {
+      return Response.json(
+        { error: "Esta edição é um escaneamento grande demais para o celular. Tente outra fonte." },
+        { status: 413 },
+      );
+    }
     return new Response(r.body, {
       headers: {
         "Content-Type": "application/epub+zip",

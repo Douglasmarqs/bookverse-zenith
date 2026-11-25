@@ -79,7 +79,9 @@ async function searchGutenberg(q: string, signal?: AbortSignal): Promise<Catalog
       source: "gutenberg" as const,
       id: String(b.id),
       title: b.title.split(/[:;]/)[0]!.trim(),
-      author: niceAuthor(b.author.split(",").length > 2 ? b.author.split(/,(?=[^,]*,)/)[0]! : b.author),
+      author: niceAuthor(
+        b.author.split(",").length > 2 ? b.author.split(/,(?=[^,]*,)/)[0]! : b.author,
+      ),
       language: b.languages?.[0] ?? null,
       cover: b.cover,
       readerId: `gutenberg-${b.id}`,
