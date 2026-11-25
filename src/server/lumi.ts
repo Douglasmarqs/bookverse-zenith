@@ -147,7 +147,7 @@ export async function handleLumi(request: Request): Promise<Response> {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${ai.key}` },
         body: JSON.stringify({
           model,
-          max_tokens: 600,
+          max_tokens: 2000,
           messages: chat,
         }),
       });
@@ -185,7 +185,10 @@ export async function handleLumi(request: Request): Promise<Response> {
       if (!ai.gateway || ![400, 402, 403, 404].includes(r.status)) break;
     }
     if (!r || !r.ok) return json({ error: "A Lumi não conseguiu responder agora." }, 502);
-    const data = (await r.json()) as { choices?: { message?: { content?: string } }[] };
+    const data = (await r.json()) as {
+      choices?: { message?: { content?: string }; finish_reason?: string }[];
+    };
+    if (data.choices?.[0]?.finish_reason === "length") console.warn("[lumi] reply cut by length");
     const reply = (data.choices?.[0]?.message?.content ?? "").trim();
     return json({
       reply: reply || "Não consegui pensar em uma resposta agora — tente reformular?",
