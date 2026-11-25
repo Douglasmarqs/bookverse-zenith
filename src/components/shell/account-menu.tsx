@@ -55,12 +55,12 @@ export function AccountMenu({ side = "bottom" }: { side?: "bottom" | "right" }) 
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild className="rounded-xl">
-          <Link to="/perfil" hash="configuracoes" className="flex items-center gap-2 px-3 py-2">
+          <Link to="/ajustes" className="flex items-center gap-2 px-3 py-2">
             <Settings className="h-4 w-4" /> Configurações
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild className="rounded-xl">
-          <Link to="/perfil" hash="aparencia" className="flex items-center gap-2 px-3 py-2">
+          <Link to="/ajustes" hash="aparencia" className="flex items-center gap-2 px-3 py-2">
             <Palette className="h-4 w-4" /> Aparência
           </Link>
         </DropdownMenuItem>

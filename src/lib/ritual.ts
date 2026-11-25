@@ -129,6 +129,8 @@ export interface RitualState {
   todayMinutes: number;
   /** This week, Monday first. */
   week: { key: string; label: string; minutes: number; met: boolean; today: boolean }[];
+  /** Every known day (local + account), YYYY-MM-DD → minutes. */
+  days: RitualDays;
 }
 
 const WEEKDAY = ["D", "S", "T", "Q", "Q", "S", "S"];
@@ -152,7 +154,7 @@ function buildState(days: RitualDays, goal: number): RitualState {
       today: key === todayKey,
     };
   });
-  return { goal, todayMinutes: days[dayKey()] ?? 0, week };
+  return { goal, todayMinutes: days[dayKey()] ?? 0, week, days };
 }
 
 /** Live ritual for the dashboard: local minutes merged with the account's. */
