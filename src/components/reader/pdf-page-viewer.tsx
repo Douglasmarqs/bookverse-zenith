@@ -369,7 +369,7 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
 
   return (
     <div className="fixed inset-0 z-30 flex min-h-0 flex-col overflow-hidden bg-background text-foreground">
-      <header className="z-20 flex shrink-0 items-center justify-between gap-2 border-b border-border bg-background/95 px-2 py-2 shadow-sm backdrop-blur sm:px-5">
+      <header className="z-20 flex shrink-0 items-center justify-between gap-2 border-b border-border bg-background/95 px-2 pb-2 pt-[calc(env(safe-area-inset-top)+0.4rem)] shadow-sm backdrop-blur sm:px-5">
         <div className="flex min-w-0 items-center gap-1 sm:gap-2">
           <Link
             to="/biblioteca"

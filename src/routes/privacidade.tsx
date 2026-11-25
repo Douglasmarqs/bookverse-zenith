@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { TopBar } from "@/components/shell/top-bar";
 
 export const Route = createFileRoute("/privacidade")({
   head: () => ({ meta: [{ title: "Privacidade — BookVerse" }] }),
   component: () => (
-    <div className="mx-auto max-w-3xl px-5 py-16 md:px-8">
+    <div className="mx-auto max-w-3xl px-5 pb-16 md:px-8 lg:pt-16">
+      <TopBar title="Privacidade" className="mb-4" />
       <p className="text-[11px] uppercase tracking-[0.28em] text-gold">Privacidade</p>
       <h1 className="mt-2 font-display text-4xl font-medium md:text-5xl">
         Política de privacidade

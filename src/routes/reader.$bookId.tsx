@@ -54,6 +54,8 @@ import "@fontsource-variable/newsreader/opsz-italic.css";
 
 import { getSampleBook, type Book } from "@/lib/sample-book";
 import { getPublicDomainBook, parseGutenbergReaderId } from "@/lib/public-domain";
+import { downloadBook, downloadedReaderId, useDownloads } from "@/lib/catalog";
+import { LumiMascot } from "@/components/lumi-mascot";
 import {
   downloadEpubBookFromCloud,
   getEpubBook,
@@ -431,49 +433,81 @@ function PdfOriginalViewer({ uid, book }: { uid: string; book: PdfBook }) {
 }
 
 function GutenbergBookLoader({ uid, gutenbergId }: { uid: string; gutenbergId: number }) {
+  const navigate = useNavigate();
   const [book, setBook] = useState<Book | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const key = `gutenberg:${gutenbergId}`;
+  const downloads = useDownloads();
+  const state = downloads.get(key);
 
+  // Same fast path as Explorar: the EPUB comes through our server (mirrors in
+  // parallel, light edition for heavy books, CDN cache) and stays on the
+  // device. The old text endpoint is only a last resort.
   useEffect(() => {
     let cancelled = false;
     setBook(null);
     setError(null);
-    getPublicDomainBook(gutenbergId)
-      .then((b) => {
-        if (!cancelled) setBook(b);
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          console.warn("[reader] failed to load public domain book", err);
-          setError(
-            err instanceof Error ? err.message : "Não foi possível carregar este livro agora.",
-          );
+    void (async () => {
+      try {
+        let readerId = downloadedReaderId(key);
+        let local = readerId ? await getEpubBook(readerId).catch(() => null) : null;
+        if (!local) {
+          readerId = await downloadBook({
+            key,
+            source: "gutenberg",
+            id: String(gutenbergId),
+            title: "",
+            author: "",
+          });
+          local = await getEpubBook(readerId);
         }
-      });
+        if (cancelled) return;
+        if (local && readerId) {
+          void navigate({ to: "/reader/$bookId", params: { bookId: readerId }, replace: true });
+          return;
+        }
+        throw new Error("missing");
+      } catch {
+        try {
+          const b = await getPublicDomainBook(gutenbergId);
+          if (!cancelled) setBook(b);
+        } catch {
+          if (!cancelled) {
+            setError(
+              "Não conseguimos baixar este livro agora. Confira sua internet e tente de novo — às vezes o acervo demora a responder.",
+            );
+          }
+        }
+      }
+    })();
     return () => {
       cancelled = true;
     };
-  }, [gutenbergId, attempt]);
+  }, [gutenbergId, attempt, key, navigate]);
 
   if (error) {
     return (
-      <div className="mx-auto max-w-md px-6 py-32 text-center">
-        <h2 className="font-display text-3xl">Não foi possível abrir este livro</h2>
-        <p className="mt-3 text-muted-foreground">{error}</p>
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+      <div className="mx-auto flex min-h-[100dvh] max-w-md flex-col items-center justify-center px-6 text-center">
+        <LumiMascot size={120} thinking />
+        <h2 className="mt-4 font-display text-[28px] leading-tight">
+          Não foi possível abrir este livro
+        </h2>
+        <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">{error}</p>
+        <div className="mt-6 flex w-full flex-col gap-2.5">
           <button
+            type="button"
             onClick={() => setAttempt((a) => a + 1)}
-            className="inline-block rounded-full bg-gold px-5 py-2.5 text-sm font-medium text-primary-foreground"
+            className="press h-[52px] rounded-full bg-gold text-[15.5px] font-semibold text-white"
           >
             Tentar novamente
           </button>
           <Link
             to="/descobrir"
-            search={{ q: undefined, categoria: undefined }}
-            className="inline-block rounded-full border border-border/60 px-5 py-2.5 text-sm hover:border-gold/40 hover:text-gold"
+            search={{}}
+            className="press flex h-[52px] items-center justify-center rounded-full bg-card text-[15.5px] font-semibold shadow-[inset_0_0_0_1px_var(--border)]"
           >
-            Voltar a Descobrir
+            Escolher outro livro
           </Link>
         </div>
       </div>
@@ -481,7 +515,23 @@ function GutenbergBookLoader({ uid, gutenbergId }: { uid: string; gutenbergId: n
   }
 
   if (!book) {
-    return <ReaderPageSkeleton label="Baixando o livro…" />;
+    const pct =
+      state?.state === "downloading"
+        ? Math.round(state.progress * 100)
+        : state?.state === "preparing"
+          ? 100
+          : 0;
+    return (
+      <ReaderPageSkeleton
+        label={
+          state?.state === "preparing"
+            ? "Preparando as páginas…"
+            : pct > 0
+              ? `Baixando o livro… ${pct}%`
+              : "Baixando o livro…"
+        }
+      />
+    );
   }
 
   return <ReaderPage uid={uid} book={book} />;
@@ -1739,7 +1789,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       {!settings.focusMode && (
         <p
           aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 z-20 truncate px-16 pt-[max(0.7rem,env(safe-area-inset-top))] text-center text-xs font-semibold transition-opacity duration-300 lg:hidden"
+          className="pointer-events-none absolute inset-x-0 top-0 z-20 truncate px-16 pt-[calc(env(safe-area-inset-top)+0.6rem)] text-center text-xs font-semibold transition-opacity duration-300 lg:hidden"
           style={{
             color: theme.muted,
             opacity: controlsVisible ? 0 : 1,
@@ -1766,7 +1816,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
           color: wide ? theme.fg : chrome.ink,
         }}
       >
-        <div className="mx-auto flex max-w-3xl items-center gap-1 px-3 pb-3 pt-[max(0.6rem,env(safe-area-inset-top))] lg:max-w-none lg:px-6 lg:pb-2 lg:pt-3">
+        <div className="mx-auto flex max-w-3xl items-center gap-1 px-3 pb-3 pt-[calc(env(safe-area-inset-top)+0.45rem)] lg:max-w-none lg:px-6 lg:pb-2 lg:pt-3">
           <Link
             to="/"
             className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-full transition hover:opacity-70"
@@ -1848,7 +1898,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
         <div
           data-reader-action="true"
           role="status"
-          className="absolute left-1/2 top-[calc(max(0.5rem,env(safe-area-inset-top))+3.6rem)] z-30 flex w-[min(92vw,32rem)] -translate-x-1/2 items-center gap-3 rounded-2xl px-4 py-2.5 text-xs shadow-lg"
+          className="absolute left-1/2 top-[calc(env(safe-area-inset-top)+4rem)] z-30 flex w-[min(92vw,32rem)] -translate-x-1/2 items-center gap-3 rounded-2xl px-4 py-2.5 text-xs shadow-lg"
           style={{ background: theme.fg, color: theme.bg, fontFamily: "var(--font-sans)" }}
         >
           <span className="min-w-0 flex-1 leading-snug">

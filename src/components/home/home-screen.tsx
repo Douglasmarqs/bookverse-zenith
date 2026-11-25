@@ -205,7 +205,7 @@ export function HomeScreen({ user }: { user: User | null }) {
         };
 
   return (
-    <div className="mx-auto max-w-6xl px-4 pb-10 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6 lg:px-10 lg:pt-10">
+    <div className="mx-auto max-w-6xl px-4 pb-10 pt-[calc(env(safe-area-inset-top)+0.875rem)] sm:px-6 lg:px-10 lg:pt-10">
       {/* Header */}
       <motion.header {...rise()} className="flex items-start justify-between gap-4 px-1">
         <div className="min-w-0">
@@ -214,9 +214,10 @@ export function HomeScreen({ user }: { user: User | null }) {
               .toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })
               .replace("-feira", "")}
           </p>
-          <h1 className="mt-1.5 truncate text-[32px] leading-none lg:text-[44px]">
+          <h1 className="mt-1.5 text-balance break-words text-[clamp(26px,7.6vw,32px)] leading-[1.05] lg:text-[44px]">
             {greeting(now)}
-            {guest ? "" : `, ${firstName}`}
+            {guest ? "" : ","}
+            {!guest && <span className="whitespace-nowrap"> {firstName}</span>}
           </h1>
         </div>
         <div className="flex shrink-0 items-center gap-2 lg:hidden">

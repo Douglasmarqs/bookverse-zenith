@@ -256,7 +256,7 @@ function ExploreHome() {
   const trend = LUMI_PICKS.slice(0, 5);
 
   return (
-    <div className="mx-auto max-w-5xl pb-10 pt-[max(1rem,env(safe-area-inset-top))] lg:pt-10">
+    <div className="mx-auto max-w-5xl pb-10 pt-[calc(env(safe-area-inset-top)+0.875rem)] lg:pt-10">
       <motion.div {...rise()} className="px-[22px] lg:px-10">
         <h1 className="text-[34px] leading-none lg:text-[44px]">Explorar</h1>
         <div className="mt-4">
@@ -440,7 +440,7 @@ function CollectionTile({ c }: { c: Collection }) {
 
 function CollectionView({ collection: c }: { collection: Collection }) {
   return (
-    <div className="mx-auto max-w-5xl pb-10 pt-[max(0.75rem,env(safe-area-inset-top))] lg:pt-10">
+    <div className="mx-auto max-w-5xl pb-10 pt-[calc(env(safe-area-inset-top)+0.75rem)] lg:pt-10">
       <div className="px-4 lg:px-10">
         <Link
           to="/descobrir"
@@ -561,7 +561,7 @@ function SearchView({ initial, fonte }: { initial: string; fonte?: CatalogSource
   );
 
   return (
-    <div className="mx-auto max-w-4xl pb-10 pt-[max(0.75rem,env(safe-area-inset-top))] lg:pt-10">
+    <div className="mx-auto max-w-4xl pb-10 pt-[calc(env(safe-area-inset-top)+0.75rem)] lg:pt-10">
       {fonte && (
         <div className="flex items-center gap-2.5 px-4 pb-3 lg:px-10">
           <Link

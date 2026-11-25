@@ -8,6 +8,7 @@ import { getLevelInfo } from "@/lib/achievements";
 import { UserAvatar } from "@/components/user-avatar";
 import { LumiMascot } from "@/components/lumi-mascot";
 import type { User } from "firebase/auth";
+import { TopBar } from "@/components/shell/top-bar";
 
 export const Route = createFileRoute("/ranking")({
   head: () => ({
@@ -117,7 +118,8 @@ function RankingPage() {
   const distance = myRow && nextRow ? Math.max(0, nextRow.value - myRow.value) : null;
 
   return (
-    <main className="relative mx-auto max-w-4xl px-5 pb-12 pt-8 md:px-10 md:pt-10">
+    <main className="relative mx-auto max-w-4xl px-5 pb-12 md:px-10 lg:pt-10">
+      <TopBar title="Ranking" fallback="/perfil" className="mb-3" />
       <PageHeader
         eyebrow={
           <>

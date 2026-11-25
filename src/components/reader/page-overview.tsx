@@ -61,7 +61,7 @@ export function PageOverview({
       className="fixed inset-0 z-[75] flex flex-col bg-[#2a2a2e] text-white"
       style={{ fontFamily: "var(--font-sans)" }}
     >
-      <div className="flex items-center justify-between px-4 pt-[max(0.9rem,env(safe-area-inset-top))]">
+      <div className="flex items-center justify-between px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
         <span className="rounded-full bg-[#141416] px-3.5 py-1.5 text-[12.5px] font-semibold">
           Visão geral
         </span>

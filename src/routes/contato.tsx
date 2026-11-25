@@ -1,10 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Mail } from "lucide-react";
+import { TopBar } from "@/components/shell/top-bar";
 
 export const Route = createFileRoute("/contato")({
   head: () => ({ meta: [{ title: "Contato — BookVerse" }] }),
   component: () => (
-    <div className="mx-auto max-w-3xl px-5 py-16 md:px-8">
+    <div className="mx-auto max-w-3xl px-5 pb-16 md:px-8 lg:pt-16">
+      <TopBar title="Contato" className="mb-4" />
       <p className="text-[11px] uppercase tracking-[0.28em] text-gold">Contato</p>
       <h1 className="mt-2 font-display text-4xl font-medium md:text-5xl">Fale com a gente</h1>
       <p className="mt-6 max-w-lg text-muted-foreground leading-relaxed">

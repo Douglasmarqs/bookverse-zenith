@@ -30,7 +30,7 @@ export function PageHeader({
       />
       <div className="max-w-3xl">
         <p className="eyebrow flex items-center gap-2">{eyebrow}</p>
-        <h1 className="mt-2 font-display text-5xl leading-[0.95] md:text-6xl">
+        <h1 className="mt-2 font-display text-[40px] leading-[0.98] sm:text-5xl md:text-6xl">
           {title} {accent && <span className="italic text-gold">{accent}</span>}
         </h1>
         {children && (

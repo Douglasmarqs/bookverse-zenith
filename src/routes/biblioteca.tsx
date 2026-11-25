@@ -343,7 +343,7 @@ function BibliotecaPage() {
   const showingLists = tab === "listas" && !list && !query.trim();
 
   return (
-    <div className="mx-auto max-w-5xl pb-10 pt-[max(1rem,env(safe-area-inset-top))] lg:px-6 lg:pt-10">
+    <div className="mx-auto max-w-5xl pb-10 pt-[calc(env(safe-area-inset-top)+0.875rem)] lg:px-6 lg:pt-10">
       <header className="flex items-center justify-between gap-3 px-[22px] pt-2 lg:px-4">
         <h1 className="min-w-0 font-display text-[clamp(30px,9vw,44px)] leading-none tracking-[-0.035em] lg:text-[56px]">
           Biblioteca

@@ -220,7 +220,7 @@ export function ListenMode({
               background: `radial-gradient(closest-side, color-mix(in oklab, ${pal.accent} 25%, transparent), transparent)`,
             }}
           />
-          <div className="relative mx-auto flex min-h-full max-w-md flex-col px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))]">
+          <div className="relative mx-auto flex min-h-full max-w-md flex-col px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[calc(env(safe-area-inset-top)+0.75rem)]">
             <div className="flex items-center justify-between">
               <button
                 type="button"

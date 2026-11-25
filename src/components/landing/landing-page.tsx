@@ -74,7 +74,7 @@ const FAN = [
 function MobileWelcome() {
   const reduce = useReducedMotion();
   return (
-    <section className="relative flex min-h-[100dvh] flex-col overflow-hidden bg-background px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] lg:hidden">
+    <section className="relative flex min-h-[100dvh] flex-col overflow-hidden bg-background px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-[calc(env(safe-area-inset-top)+0.875rem)] lg:hidden">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-0 h-[62%] bg-[radial-gradient(ellipse_at_50%_20%,#ffe1d3_0%,transparent_70%)] dark:opacity-30"

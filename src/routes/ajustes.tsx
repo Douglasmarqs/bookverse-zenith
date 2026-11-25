@@ -1,23 +1,32 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import {
   BellRing,
   Camera,
-  ChevronLeft,
+  ChevronDown,
+  ChevronRight,
   Eye,
   EyeOff,
+  FileText,
+  HardDriveDownload,
+  Info,
   KeyRound,
   Loader2,
+  Lock,
   LogOut,
-  Palette,
+  Mail,
   Save,
   ShieldAlert,
+  Target,
+  UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { User } from "firebase/auth";
 
 import { AmbiencePicker } from "@/components/ambience-picker";
 import { LumiMascot } from "@/components/lumi-mascot";
+import { TopBar } from "@/components/shell/top-bar";
 import { UserAvatar } from "@/components/user-avatar";
 import { useRequireAuth } from "@/hooks/use-require-auth";
 import { describeFirestoreError } from "@/lib/async-utils";
@@ -103,6 +112,7 @@ function AjustesPage({ user }: { user: User }) {
   const [deletePassword, setDeletePassword] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [open, setOpen] = useState<Panel | null>(null);
 
   const provider = getPrimaryProvider(user);
 
@@ -248,22 +258,27 @@ function AjustesPage({ user }: { user: User }) {
   const memberSince = formatMemberSince(profile?.createdAt);
   const displayName = profile?.displayName || user.displayName || "Leitor";
 
-  return (
-    <div className="mx-auto max-w-xl px-4 pb-12 pt-[max(0.75rem,env(safe-area-inset-top))] lg:pt-10">
-      <header className="-mx-1 flex items-center justify-between">
-        <Link
-          to="/perfil"
-          aria-label="Voltar"
-          className="press grid h-[42px] w-[42px] place-items-center rounded-full"
-        >
-          <ChevronLeft className="h-6 w-6" strokeWidth={2} />
-        </Link>
-        <h1 className="font-sans text-base font-bold tracking-normal">Ajustes</h1>
-        <span className="w-[42px]" />
-      </header>
+  const toggle = (k: Panel) => setOpen((cur) => (cur === k ? null : k));
+  const notifLabel =
+    notifSupport === "granted"
+      ? "Ativados"
+      : notifSupport === "denied"
+        ? "Bloqueados"
+        : notifSupport === "unsupported"
+          ? "Indisponível"
+          : "Desligados";
 
-      {/* Photo */}
-      <div className="surface-card mt-3 flex items-center gap-4 p-4">
+  return (
+    <div className="mx-auto max-w-xl px-4 pb-16 lg:pt-10">
+      <TopBar title="Ajustes" fallback="/perfil" />
+
+      {/* Who you are */}
+      <motion.div
+        initial={{ opacity: 0.6, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+        className="surface-card mt-2 flex items-center gap-4 p-4"
+      >
         <div className="relative shrink-0">
           <UserAvatar
             profile={profile}
@@ -274,6 +289,7 @@ function AjustesPage({ user }: { user: User }) {
           <label
             className={`absolute -bottom-1 -right-1 grid h-8 w-8 cursor-pointer place-items-center rounded-full bg-foreground text-background ring-2 ring-card transition hover:scale-105 ${photoSaving ? "pointer-events-none opacity-70" : ""}`}
             title="Trocar foto de perfil"
+            aria-label="Trocar foto de perfil"
           >
             {photoSaving ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -291,133 +307,93 @@ function AjustesPage({ user }: { user: User }) {
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-[17px] font-bold">{displayName}</p>
-          <p className="truncate text-[13px] text-muted-foreground">{user.email}</p>
-          {memberSince && <p className="mt-0.5 text-[12px] text-faint">Desde {memberSince}</p>}
-        </div>
-        {profile?.customPhotoDataUrl && (
-          <button
-            type="button"
-            onClick={handleRemovePhoto}
-            disabled={photoSaving}
-            className="shrink-0 rounded-full bg-surface-2 px-3 py-1.5 text-[12.5px] font-semibold disabled:opacity-60"
-          >
-            Remover foto
-          </button>
-        )}
-      </div>
-
-      {/* Edit profile */}
-      <section id="configuracoes" className="mt-3 scroll-mt-24 surface-card p-5">
-        <h2 className="text-[17px] font-bold">Perfil</h2>
-
-        <form onSubmit={handleSaveProfile} className="mt-5 grid gap-3 sm:grid-cols-2">
-          <label>
-            <span className="text-sm text-muted-foreground">Nome de exibição</span>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="mt-1.5 w-full rounded-[14px] border border-border bg-background px-4 py-3 text-sm outline-none focus:border-foreground/40"
-            />
-          </label>
-          <label>
-            <span className="text-sm text-muted-foreground">Identificador</span>
-            <div className="mt-1.5 flex items-center rounded-[14px] border border-border bg-background px-4 focus-within:border-foreground/40">
-              <span className="text-sm text-muted-foreground">@</span>
-              <input
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                maxLength={32}
-                placeholder="seu_nome"
-                className="min-w-0 flex-1 bg-transparent py-3 pl-1 text-sm outline-none"
-              />
-            </div>
-          </label>
-          <label className="sm:col-span-2">
-            <span className="text-sm text-muted-foreground">
-              Bio <span className="text-xs">({bio.length}/280)</span>
-            </span>
-            <textarea
-              value={bio}
-              onChange={(e) => setBio(e.target.value)}
-              maxLength={280}
-              rows={3}
-              placeholder="Conte brevemente o que você gosta de ler."
-              className="mt-1.5 w-full resize-y rounded-[14px] border border-border bg-background px-4 py-3 text-sm outline-none focus:border-foreground/40"
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={nameSaving}
-            className="inline-flex items-center justify-center gap-2 self-end rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-background disabled:opacity-60 sm:col-span-2 sm:justify-self-start"
-          >
-            {nameSaving ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4" />
-            )}
-            Salvar
-          </button>
-        </form>
-      </section>
-
-      {/* Appearance */}
-      <section id="aparencia" className="mt-3 scroll-mt-24 surface-card p-5">
-        <h2 className="flex items-center gap-2 text-[17px] font-bold">
-          <Palette className="h-4 w-4 " /> Aparência
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Escolha o ambiente de todo o aplicativo. O leitor tem suas próprias opções de tema,
-          independentes desta.
-        </p>
-        <div className="mt-4">
-          <AmbiencePicker />
-        </div>
-      </section>
-
-      {/* Reading reminders */}
-      <section className="mt-3 surface-card p-5">
-        <h2 className="flex items-center gap-2 text-[17px] font-bold">
-          <BellRing className="h-4 w-4 " /> Lembretes de leitura
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          A Lumi te avisa, no máximo uma vez por dia e só enquanto o app estiver aberto, se você
-          ainda não leu nada hoje.
-        </p>
-        <div className="mt-4 flex items-center gap-3">
-          <LumiMascot size={40} blink={false} />
-          {notifSupport === "unsupported" ? (
-            <p className="text-sm text-muted-foreground">Seu navegador não aceita notificações.</p>
-          ) : notifSupport === "granted" ? (
-            <p className="text-sm text-success">Ativados — bom te ter por perto. 🦉</p>
-          ) : notifSupport === "denied" ? (
-            <p className="text-sm text-muted-foreground">
-              Bloqueados nas configurações do navegador. Para ativar, libere notificações para este
-              site e recarregue a página.
-            </p>
-          ) : (
-            <button
-              onClick={handleEnableNotifications}
-              className="inline-flex items-center gap-1.5 rounded-full bg-foreground px-4 py-2 text-sm font-semibold text-background"
-            >
-              <BellRing className="h-3.5 w-3.5" /> Ativar lembretes
-            </button>
+          <p className="truncate text-[13px] text-muted-foreground">
+            {username ? `@${username}` : user.email}
+          </p>
+          {memberSince && (
+            <p className="mt-0.5 text-[12px] text-faint">Leitor desde {memberSince}</p>
           )}
         </div>
-      </section>
+      </motion.div>
 
-      {/* Security */}
-      <section className="mt-3 surface-card p-5">
-        <h2 className="flex items-center gap-2 text-[17px] font-bold">
-          <KeyRound className="h-4 w-4 " /> Segurança
-        </h2>
+      <Group title="Conta">
+        <Row
+          icon={UserRound}
+          tint="#ffe7dd"
+          label="Editar perfil"
+          hint="Nome, identificador e bio"
+          open={open === "perfil"}
+          onClick={() => toggle("perfil")}
+        />
+        <Expand open={open === "perfil"}>
+          <form onSubmit={handleSaveProfile} className="grid gap-3 pb-4 pt-1">
+            <Field label="Nome de exibição">
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoComplete="name"
+                className={INPUT}
+              />
+            </Field>
+            <Field label="Identificador">
+              <div className={`${INPUT} flex items-center !py-0`}>
+                <span className="text-muted-foreground">@</span>
+                <input
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  maxLength={32}
+                  placeholder="seu_nome"
+                  autoCapitalize="none"
+                  className="min-w-0 flex-1 bg-transparent py-3 pl-1 outline-none"
+                />
+              </div>
+            </Field>
+            <Field label={`Bio · ${bio.length}/280`}>
+              <textarea
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                maxLength={280}
+                rows={3}
+                placeholder="Conte brevemente o que você gosta de ler."
+                className={`${INPUT} resize-none`}
+              />
+            </Field>
+            {profile?.customPhotoDataUrl && (
+              <button
+                type="button"
+                onClick={handleRemovePhoto}
+                disabled={photoSaving}
+                className="justify-self-start text-[13px] font-semibold text-muted-foreground underline-offset-4 hover:underline disabled:opacity-60"
+              >
+                Remover foto de perfil
+              </button>
+            )}
+            <button type="submit" disabled={nameSaving} className={PRIMARY}>
+              {nameSaving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              Salvar alterações
+            </button>
+          </form>
+        </Expand>
 
-        {provider === "google.com" ? (
-          <p className="mt-3 text-sm text-muted-foreground">
-            Você entra com sua conta Google — a senha é gerenciada diretamente pelo Google.
-          </p>
-        ) : (
-          <form onSubmit={handleChangePassword} className="mt-4 space-y-3">
-            <div className="grid gap-3 sm:grid-cols-2">
+        <Row
+          icon={KeyRound}
+          tint="#e6e1ff"
+          label="Senha e acesso"
+          hint={provider === "google.com" ? "Entrada com Google" : "Trocar sua senha"}
+          open={open === "senha"}
+          onClick={() => toggle("senha")}
+        />
+        <Expand open={open === "senha"}>
+          {provider === "google.com" ? (
+            <p className="pb-4 pt-1 text-[13.5px] leading-relaxed text-muted-foreground">
+              Você entra com sua conta Google — a senha é gerenciada diretamente pelo Google.
+            </p>
+          ) : (
+            <form onSubmit={handleChangePassword} className="grid gap-2.5 pb-4 pt-1">
               <PasswordInput
                 placeholder="Senha atual"
                 value={currentPassword}
@@ -425,9 +401,8 @@ function AjustesPage({ user }: { user: User }) {
                 visible={showPasswords}
                 autoComplete="current-password"
               />
-              <div />
               <PasswordInput
-                placeholder="Nova senha"
+                placeholder="Nova senha (mín. 6 caracteres)"
                 value={newPassword}
                 onChange={setNewPassword}
                 visible={showPasswords}
@@ -440,48 +415,119 @@ function AjustesPage({ user }: { user: User }) {
                 visible={showPasswords}
                 autoComplete="new-password"
               />
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowPasswords((v) => !v)}
-              className="-my-2 inline-flex items-center gap-1.5 py-2 text-xs text-muted-foreground hover:text-foreground"
-            >
-              {showPasswords ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-              {showPasswords ? "Ocultar senhas" : "Mostrar senhas"}
-            </button>
-            <div>
               <button
-                type="submit"
-                disabled={passwordSaving}
-                className="inline-flex items-center gap-2 rounded-full bg-surface-2 px-5 py-2.5 text-sm font-semibold disabled:opacity-60"
+                type="button"
+                onClick={() => setShowPasswords((v) => !v)}
+                className="inline-flex items-center gap-1.5 justify-self-start py-1 text-[12.5px] font-semibold text-muted-foreground"
               >
+                {showPasswords ? (
+                  <EyeOff className="h-3.5 w-3.5" />
+                ) : (
+                  <Eye className="h-3.5 w-3.5" />
+                )}
+                {showPasswords ? "Ocultar senhas" : "Mostrar senhas"}
+              </button>
+              <button type="submit" disabled={passwordSaving} className={PRIMARY}>
                 {passwordSaving && <Loader2 className="h-4 w-4 animate-spin" />}
                 Alterar senha
               </button>
-            </div>
-          </form>
-        )}
-      </section>
+            </form>
+          )}
+        </Expand>
+      </Group>
 
-      {/* Danger zone */}
-      <section className="mt-3 rounded-[1.6rem] border border-destructive/30 bg-destructive/5 p-5">
-        <h2 className="flex items-center gap-2 text-[17px] font-bold text-destructive">
-          <ShieldAlert className="h-4 w-4" /> Zona de perigo
-        </h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Excluir sua conta remove permanentemente seu perfil, biblioteca e progresso de leitura.
-          Essa ação não pode ser desfeita.
-        </p>
+      <Group title="Aparência">
+        <div className="py-3.5">
+          <p className="text-[13px] leading-snug text-muted-foreground">
+            O ambiente de todo o app. O leitor tem temas próprios, que você troca dentro do livro.
+          </p>
+          <div className="mt-3">
+            <AmbiencePicker />
+          </div>
+        </div>
+      </Group>
 
+      <Group title="Leitura">
+        <Row
+          icon={BellRing}
+          tint="#fff1c7"
+          label="Lembretes da Lumi"
+          hint="Um toque por dia, se você ainda não leu"
+          value={notifLabel}
+          onClick={
+            notifSupport === "default"
+              ? () => void handleEnableNotifications()
+              : () => toggle("lembrete")
+          }
+          open={open === "lembrete"}
+          chevron={notifSupport !== "default"}
+        />
+        <Expand open={open === "lembrete"}>
+          <div className="flex items-center gap-3 pb-4 pt-1">
+            <LumiMascot size={36} blink={false} />
+            <p className="text-[13px] leading-snug text-muted-foreground">
+              {notifSupport === "granted"
+                ? "Ativados — a Lumi avisa no máximo uma vez por dia, enquanto o app estiver aberto."
+                : notifSupport === "denied"
+                  ? "Bloqueados no navegador. Libere notificações para este site e recarregue a página."
+                  : "Este navegador não aceita notificações."}
+            </p>
+          </div>
+        </Expand>
+        <LinkRow
+          to="/downloads"
+          icon={HardDriveDownload}
+          tint="#d7f2ec"
+          label="Downloads e arquivos"
+          hint="Livros salvos neste aparelho"
+        />
+        <LinkRow
+          to="/metas"
+          icon={Target}
+          tint="#ffe7dd"
+          label="Metas de leitura"
+          hint="Quantos livros neste ano"
+          last
+        />
+      </Group>
+
+      <Group title="Sobre">
+        <LinkRow to="/sobre" icon={Info} tint="#ecebe6" label="Sobre o BookVerse" />
+        <LinkRow to="/privacidade" icon={Lock} tint="#ecebe6" label="Privacidade" />
+        <LinkRow to="/termos" icon={FileText} tint="#ecebe6" label="Termos de uso" />
+        <LinkRow to="/contato" icon={Mail} tint="#ecebe6" label="Fale com a gente" last />
+      </Group>
+
+      <button
+        type="button"
+        onClick={() => {
+          void signOut().then(() => navigate({ to: "/", replace: true }));
+        }}
+        className="press surface-card mt-6 flex h-[52px] w-full items-center justify-center gap-2 text-[15px] font-semibold"
+      >
+        <LogOut className="h-[18px] w-[18px]" /> Sair da conta
+      </button>
+
+      {/* Danger zone — tucked away, but one tap to reach */}
+      <div className="mt-3">
         {!deleteOpen ? (
           <button
+            type="button"
             onClick={() => setDeleteOpen(true)}
-            className="mt-4 rounded-full border border-destructive/40 px-5 py-2.5 text-sm font-medium text-destructive hover:bg-destructive/10"
+            className="mx-auto flex items-center gap-1.5 rounded-full px-4 py-2.5 text-[13.5px] font-semibold text-destructive"
           >
-            Excluir minha conta
+            <ShieldAlert className="h-4 w-4" /> Excluir minha conta
           </button>
         ) : (
-          <div className="mt-4 space-y-3 rounded-xl border border-destructive/30 bg-background/40 p-4">
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-3 rounded-[22px] border border-destructive/30 bg-destructive/5 p-4"
+          >
+            <p className="text-[13.5px] leading-relaxed text-muted-foreground">
+              Isso remove para sempre seu perfil, biblioteca e progresso de leitura. Não dá para
+              desfazer.
+            </p>
             {provider === "password" && (
               <PasswordInput
                 placeholder="Confirme sua senha"
@@ -491,50 +537,172 @@ function AjustesPage({ user }: { user: User }) {
                 autoComplete="current-password"
               />
             )}
-            <label className="block">
-              <span className="text-sm text-muted-foreground">
-                Digite <strong>EXCLUIR</strong> para confirmar
-              </span>
+            <Field label="Digite EXCLUIR para confirmar">
               <input
                 value={deleteConfirmText}
                 onChange={(e) => setDeleteConfirmText(e.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-destructive/40 bg-background/50 px-4 py-3 text-sm outline-none"
+                autoCapitalize="characters"
+                className={`${INPUT} border-destructive/40`}
               />
-            </label>
-            <div className="flex flex-wrap gap-2">
+            </Field>
+            <div className="grid grid-cols-2 gap-2">
               <button
-                onClick={handleDeleteAccount}
-                disabled={deleting}
-                className="inline-flex items-center gap-2 rounded-full bg-destructive px-5 py-2.5 text-sm font-medium text-destructive-foreground disabled:opacity-60"
-              >
-                {deleting && <Loader2 className="h-4 w-4 animate-spin" />}
-                Confirmar exclusão
-              </button>
-              <button
+                type="button"
                 onClick={() => {
                   setDeleteOpen(false);
                   setDeleteConfirmText("");
                   setDeletePassword("");
                 }}
                 disabled={deleting}
-                className="rounded-full border border-border/60 px-5 py-2.5 text-sm hover:bg-secondary"
+                className="h-11 rounded-full bg-surface-2 text-[14px] font-semibold"
               >
                 Cancelar
               </button>
+              <button
+                type="button"
+                onClick={handleDeleteAccount}
+                disabled={deleting}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-destructive text-[14px] font-semibold text-white disabled:opacity-60"
+              >
+                {deleting && <Loader2 className="h-4 w-4 animate-spin" />}
+                Excluir
+              </button>
             </div>
-          </div>
+          </motion.div>
         )}
-      </section>
-      <button
-        type="button"
-        onClick={() => {
-          void signOut().then(() => navigate({ to: "/", replace: true }));
-        }}
-        className="press surface-card mt-3 flex h-[52px] w-full items-center justify-center gap-2 text-[15px] font-semibold"
-      >
-        <LogOut className="h-[18px] w-[18px]" /> Sair da conta
-      </button>
+      </div>
     </div>
+  );
+}
+
+type Panel = "perfil" | "senha" | "lembrete";
+
+const INPUT =
+  "w-full rounded-[14px] border border-border bg-background px-4 py-3 text-[15px] outline-none transition-colors focus:border-foreground/40";
+const PRIMARY =
+  "press inline-flex h-12 items-center justify-center gap-2 rounded-full bg-foreground px-5 text-[14.5px] font-semibold text-background disabled:opacity-60";
+
+function Group({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="mt-6">
+      <p className="eyebrow mb-2 px-2">{title}</p>
+      <div className="surface-card px-4">{children}</div>
+    </section>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-[12.5px] font-semibold text-muted-foreground">
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function RowBody({
+  icon: Icon,
+  tint,
+  label,
+  hint,
+  value,
+}: {
+  icon: typeof BellRing;
+  tint: string;
+  label: string;
+  hint?: string;
+  value?: string;
+}) {
+  return (
+    <>
+      <span
+        className="grid h-9 w-9 shrink-0 place-items-center rounded-[11px] text-[#131313]"
+        style={{ background: tint }}
+      >
+        <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
+      </span>
+      <span className="min-w-0 flex-1 text-left">
+        <span className="block text-[15px] font-semibold">{label}</span>
+        {hint && <span className="block truncate text-[12.5px] text-muted-foreground">{hint}</span>}
+      </span>
+      {value && <span className="shrink-0 text-[13px] text-faint">{value}</span>}
+    </>
+  );
+}
+
+function Row({
+  open,
+  onClick,
+  chevron = true,
+  ...body
+}: {
+  icon: typeof BellRing;
+  tint: string;
+  label: string;
+  hint?: string;
+  value?: string;
+  open: boolean;
+  onClick: () => void;
+  chevron?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-expanded={open}
+      className="press flex w-full items-center gap-3.5 border-b border-border py-3 last:border-b-0"
+    >
+      <RowBody {...body} />
+      {chevron && (
+        <ChevronDown
+          className={`h-[18px] w-[18px] shrink-0 text-faint transition-transform duration-300 ${open ? "rotate-180" : ""}`}
+        />
+      )}
+    </button>
+  );
+}
+
+function LinkRow({
+  to,
+  last,
+  ...body
+}: {
+  to: "/downloads" | "/metas" | "/sobre" | "/privacidade" | "/termos" | "/contato";
+  icon: typeof BellRing;
+  tint: string;
+  label: string;
+  hint?: string;
+  last?: boolean;
+}) {
+  return (
+    <Link
+      to={to}
+      className={`press flex items-center gap-3.5 py-3 ${last ? "" : "border-b border-border"}`}
+    >
+      <RowBody {...body} />
+      <ChevronRight className="h-[18px] w-[18px] shrink-0 text-faint" />
+    </Link>
+  );
+}
+
+/** Smooth open/close for a row's inline panel. */
+function Expand({ open, children }: { open: boolean; children: React.ReactNode }) {
+  return (
+    <AnimatePresence initial={false}>
+      {open && (
+        <motion.div
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: "auto", opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+          className="overflow-hidden border-b border-border"
+        >
+          {children}
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -558,7 +726,7 @@ function PasswordInput({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       autoComplete={autoComplete}
-      className="w-full rounded-xl border border-border bg-background/50 px-4 py-3 text-sm outline-none focus:border-gold/60"
+      className={INPUT}
     />
   );
 }

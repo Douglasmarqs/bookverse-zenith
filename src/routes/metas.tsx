@@ -14,6 +14,7 @@ import {
   subscribeReadingGoal,
   type ReadingGoal,
 } from "@/lib/goals";
+import { TopBar } from "@/components/shell/top-bar";
 
 export const Route = createFileRoute("/metas")({
   head: () => ({
@@ -100,7 +101,8 @@ function MetasPage({ uid }: { uid: string }) {
   }
 
   return (
-    <div className="relative mx-auto max-w-5xl px-5 pb-12 pt-8 md:px-10 md:pt-10">
+    <div className="relative mx-auto max-w-5xl px-5 pb-12 md:px-10 lg:pt-10">
+      <TopBar title="Metas" fallback="/perfil" className="mb-3" />
       <PageHeader
         eyebrow="Jornada · metas"
         title="Sua estante de"

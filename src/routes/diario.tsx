@@ -15,6 +15,7 @@ import {
   type DiaryEntry,
   type DiaryReactionId,
 } from "@/lib/diary";
+import { TopBar } from "@/components/shell/top-bar";
 
 export const Route = createFileRoute("/diario")({
   head: () => ({
@@ -137,7 +138,8 @@ function DiaryPage({ uid }: { uid: string }) {
   }, [entries]);
 
   return (
-    <div className="relative mx-auto max-w-4xl px-5 pb-12 pt-8 md:px-10 md:pt-10">
+    <div className="relative mx-auto max-w-4xl px-5 pb-12 md:px-10 lg:pt-10">
+      <TopBar title="Diário" fallback="/perfil" className="mb-3" />
       <PageHeader eyebrow="Diário de leitura" title="O que os livros" accent="deixaram em você">
         Como foi a leitura de hoje? Registre a reação e um comentário. Com o tempo, vira a sua
         história como leitor.

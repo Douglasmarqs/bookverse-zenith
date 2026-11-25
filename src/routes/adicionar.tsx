@@ -105,7 +105,7 @@ function AdicionarPage() {
   ];
 
   return (
-    <div className="mx-auto max-w-xl pb-12 pt-[max(0.75rem,env(safe-area-inset-top))] lg:pt-10">
+    <div className="mx-auto max-w-xl pb-12 pt-[calc(env(safe-area-inset-top)+0.75rem)] lg:pt-10">
       <header className="flex items-center justify-between px-4">
         <button
           type="button"

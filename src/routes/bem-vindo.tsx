@@ -124,7 +124,7 @@ function Onboarding() {
   };
 
   return (
-    <div className="mx-auto flex min-h-[100dvh] max-w-xl flex-col bg-background px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))]">
+    <div className="mx-auto flex min-h-[100dvh] max-w-xl flex-col bg-background px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-[calc(env(safe-area-inset-top)+0.75rem)]">
       <header className="-mx-1 flex items-center justify-between">
         <button
           type="button"

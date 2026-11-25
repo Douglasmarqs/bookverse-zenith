@@ -248,7 +248,7 @@ function BookPage() {
 
       <div className="relative mx-auto max-w-3xl">
         <div
-          className="flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] lg:pt-8"
+          className="flex items-center justify-between px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] lg:pt-8"
           style={{ color: pal.fg }}
         >
           <button

@@ -313,6 +313,15 @@ function RootComponent() {
             <Outlet />
           </div>
         </main>
+        {/* On iOS (Safari 26 and installed PWAs) the page runs under the
+            status bar; this strip keeps titles from sliding beneath the clock
+            and battery while scrolling. Zero-height wherever there's no inset. */}
+        {!isReaderRoute && (
+          <div
+            aria-hidden
+            className="pointer-events-none fixed inset-x-0 top-0 z-[70] h-[env(safe-area-inset-top)] bg-background/90 backdrop-blur-md lg:hidden"
+          />
+        )}
         {landing && <SiteFooter />}
         {/* A book's page is a full-screen detail on phones (mockup 07). */}
         {appChrome && !fullScreen && <Dock showMini={pathname !== "/"} />}

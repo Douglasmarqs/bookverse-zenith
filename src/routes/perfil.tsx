@@ -44,7 +44,7 @@ function VocePage() {
 function VoceSkeleton() {
   return (
     <div
-      className="mx-auto max-w-3xl px-4 pt-[max(1rem,env(safe-area-inset-top))] lg:pt-10"
+      className="mx-auto max-w-3xl px-4 pt-[calc(env(safe-area-inset-top)+0.875rem)] lg:pt-10"
       aria-busy="true"
     >
       <div className="mx-[6px] mt-2 h-11 w-32 animate-pulse rounded-xl bg-surface-2" />
@@ -141,7 +141,7 @@ function MemberVoce({ user }: { user: User }) {
         };
 
   return (
-    <div className="mx-auto max-w-3xl pb-10 pt-[max(1rem,env(safe-area-inset-top))] lg:pt-10">
+    <div className="mx-auto max-w-3xl pb-10 pt-[calc(env(safe-area-inset-top)+0.875rem)] lg:pt-10">
       <header className="flex items-center justify-between px-[22px] pt-2">
         <h1 className="font-display text-[44px] leading-none tracking-[-0.035em] lg:text-[56px]">
           Você
@@ -175,7 +175,7 @@ function MemberVoce({ user }: { user: User }) {
       {/* Streak */}
       <motion.section
         {...rise(0.05)}
-        className="relative mx-4 mt-5 overflow-hidden rounded-[30px] bg-gold px-5 pb-5 pt-5 text-white"
+        className="relative mx-4 mt-5 overflow-hidden rounded-[30px] bg-[linear-gradient(150deg,#ff6a3d,var(--gold)_55%,#e8400f)] px-5 pb-5 pt-5 text-white shadow-[0_14px_32px_-14px_rgba(255,77,26,.55)]"
       >
         <Flame
           aria-hidden
@@ -185,7 +185,7 @@ function MemberVoce({ user }: { user: User }) {
         <p className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.14em]">
           <Flame className="h-4 w-4" strokeWidth={2.2} /> Sequência
         </p>
-        <p className="mt-1.5 font-display text-[58px] leading-none tracking-[-0.04em]">
+        <p className="mt-1.5 font-display text-[52px] leading-none tracking-[-0.04em] sm:text-[58px]">
           {streak} {streak === 1 ? "dia" : "dias"}
         </p>
         <p className="mt-2.5 text-[15px] text-white/90">
@@ -195,6 +195,11 @@ function MemberVoce({ user }: { user: User }) {
               ? `Você já leu hoje. Seu recorde é ${record}.`
               : `Seu recorde é ${record}. Leia hoje para manter.`}
         </p>
+        <WeekDots week={ritual.week} />
+      </motion.section>
+
+      {/* Rhythm heatmap — on a neutral card so the levels are easy to read */}
+      <motion.section {...rise(0.08)} className="surface-card mx-4 mt-3 px-4 pb-4 pt-4 sm:px-5">
         <Heatmap days={ritual.days} goal={ritual.goal} />
       </motion.section>
 
@@ -309,54 +314,162 @@ function Stat({ value, label }: { value: string; label: string }) {
   );
 }
 
-const WEEKS = 23;
+const WEEKS = 17;
+const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+const WEEKDAY_ROWS = ["S", "", "Q", "", "S", "", "D"];
 
-/** Last ~23 weeks of reading, one cell per day (Monday on top). */
+/** This week as seven big, readable day markers inside the streak card. */
+function WeekDots({
+  week,
+}: {
+  week: { key: string; label: string; minutes: number; today: boolean }[];
+}) {
+  return (
+    <div className="mt-4 grid grid-cols-7 gap-1.5 rounded-[20px] bg-black/10 p-2">
+      {week.map((d) => {
+        const read = d.minutes > 0;
+        return (
+          <div key={d.key} className="flex flex-col items-center gap-1.5 py-1">
+            <span className="text-[11.5px] font-bold uppercase text-white/80">{d.label}</span>
+            <span
+              className={`grid h-8 w-8 place-items-center rounded-full text-[11px] font-bold transition ${
+                read
+                  ? "bg-white text-gold"
+                  : d.today
+                    ? "border-2 border-dashed border-white/80 text-white"
+                    : "bg-white/15 text-white/60"
+              }`}
+              title={read ? `${d.minutes} min` : "Sem leitura"}
+            >
+              {read ? <Flame className="h-4 w-4" strokeWidth={2.4} /> : d.today ? "hoje" : ""}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Last ~4 months of reading, one cell per day (Monday on top). */
 function Heatmap({ days, goal }: { days: RitualDays; goal: number }) {
-  const cells = useMemo(() => {
-    // Monday-first columns, oldest week on the left.
+  const { cells, months, readDays } = useMemo(() => {
     const today = new Date();
     const monday = new Date(today);
     monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
     const start = new Date(monday);
     start.setDate(monday.getDate() - (WEEKS - 1) * 7);
     const todayKey = dayKey(today);
-    const out: { key: string; level: number; future: boolean; today: boolean }[] = [];
+    const out: { key: string; level: number; future: boolean; today: boolean; minutes: number }[] =
+      [];
+    const monthMarks: { col: number; label: string }[] = [];
+    let count = 0;
     for (let w = 0; w < WEEKS; w++) {
       for (let d = 0; d < 7; d++) {
         const date = new Date(start);
         date.setDate(start.getDate() + w * 7 + d);
+        if (d === 0 && (w === 0 || date.getDate() <= 7)) {
+          const label = MONTHS[date.getMonth()];
+          if (!monthMarks.some((m) => m.label === label)) monthMarks.push({ col: w, label });
+        }
         const key = dayKey(date);
         const m = days[key] ?? 0;
+        const future = date > today && key !== todayKey;
+        if (m > 0 && !future) count++;
         out.push({
           key,
+          minutes: m,
           level: m <= 0 ? 0 : m < goal / 2 ? 1 : m < goal ? 2 : m < goal * 2 ? 3 : 4,
-          future: date > today && key !== todayKey,
+          future,
           today: key === todayKey,
         });
       }
     }
-    return out;
+    // Drop a first-column label that would collide with the next one.
+    if (monthMarks.length > 1 && monthMarks[1].col - monthMarks[0].col < 3) monthMarks.shift();
+    return { cells: out, months: monthMarks, readDays: count };
   }, [days, goal]);
-  const OPACITY = [0.16, 0.42, 0.62, 0.82, 1];
+
+  const SHADE = [
+    "var(--surface-2)",
+    "color-mix(in srgb, var(--gold) 28%, var(--surface-2))",
+    "color-mix(in srgb, var(--gold) 52%, var(--surface-2))",
+    "color-mix(in srgb, var(--gold) 76%, var(--surface-2))",
+    "var(--gold)",
+  ];
+  const fmt = (key: string) => {
+    const [y, mo, d] = key.split("-").map(Number);
+    return new Date(y, mo - 1, d).toLocaleDateString("pt-BR", { day: "numeric", month: "short" });
+  };
+
   return (
-    <div
-      className="mt-4 grid grid-flow-col gap-[3px]"
-      style={{
-        gridTemplateRows: "repeat(7, minmax(0, 1fr))",
-        gridTemplateColumns: `repeat(${WEEKS}, minmax(0, 1fr))`,
-      }}
-      aria-label="Dias de leitura nas últimas semanas"
-      role="img"
-    >
-      {cells.map((c) => (
-        <span
-          key={c.key}
-          title={c.key}
-          className="aspect-square rounded-[3px] bg-white"
-          style={{ opacity: c.future ? 0 : OPACITY[c.level] }}
-        />
-      ))}
+    <div>
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-[17px] font-bold tracking-[-0.01em]">Seu ritmo</h2>
+        <p className="num text-[13px] text-muted-foreground">
+          {readDays} {readDays === 1 ? "dia" : "dias"} de leitura
+        </p>
+      </div>
+      <div className="mt-3 flex gap-1.5">
+        <div
+          className="grid shrink-0 gap-[3px] pt-[18px] text-[9.5px] font-semibold leading-none text-faint"
+          style={{ gridTemplateRows: "repeat(7, minmax(0, 1fr))" }}
+          aria-hidden
+        >
+          {WEEKDAY_ROWS.map((l, i) => (
+            <span key={i} className="flex items-center">
+              {l}
+            </span>
+          ))}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div
+            className="relative mb-1.5 h-3 text-[10px] font-semibold leading-none text-faint"
+            aria-hidden
+          >
+            {months.map((m) => (
+              <span
+                key={m.label + m.col}
+                className="absolute top-0"
+                style={{ left: `${(m.col / WEEKS) * 100}%` }}
+              >
+                {m.label}
+              </span>
+            ))}
+          </div>
+          <div
+            className="grid grid-flow-col gap-[3px]"
+            style={{
+              gridTemplateRows: "repeat(7, minmax(0, 1fr))",
+              gridTemplateColumns: `repeat(${WEEKS}, minmax(0, 1fr))`,
+            }}
+            aria-label={`${readDays} dias de leitura nas últimas ${WEEKS} semanas`}
+            role="img"
+          >
+            {cells.map((c) => (
+              <span
+                key={c.key}
+                title={
+                  c.future
+                    ? undefined
+                    : `${fmt(c.key)} · ${c.minutes ? `${c.minutes} min` : "sem leitura"}`
+                }
+                className={`aspect-square rounded-[4px] ${c.today ? "ring-2 ring-foreground/70 ring-offset-1 ring-offset-card" : ""}`}
+                style={{
+                  background: c.future ? "transparent" : SHADE[c.level],
+                  boxShadow: c.future ? "inset 0 0 0 1px var(--border)" : undefined,
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="mt-3 flex items-center justify-end gap-1.5 text-[11px] font-semibold text-faint">
+        <span>Menos</span>
+        {SHADE.map((bg, i) => (
+          <i key={i} className="h-3 w-3 rounded-[3px]" style={{ background: bg }} />
+        ))}
+        <span>Mais</span>
+      </div>
     </div>
   );
 }
@@ -432,7 +545,7 @@ function Row({
 
 function GuestVoce() {
   return (
-    <div className="mx-auto max-w-3xl pb-10 pt-[max(1rem,env(safe-area-inset-top))] lg:pt-10">
+    <div className="mx-auto max-w-3xl pb-10 pt-[calc(env(safe-area-inset-top)+0.875rem)] lg:pt-10">
       <header className="px-[22px] pt-2">
         <h1 className="font-display text-[44px] leading-none tracking-[-0.035em] lg:text-[56px]">
           Você
