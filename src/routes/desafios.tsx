@@ -12,9 +12,9 @@ import {
   Share2,
 } from "lucide-react";
 import { toast } from "sonner";
-import type { User } from "firebase/auth";
 
 import { BookArt } from "@/components/book-art";
+import { useAccount } from "@/hooks/use-auth-user";
 import {
   ACHIEVEMENTS,
   WEEKLY_MISSIONS,
@@ -26,7 +26,6 @@ import {
 } from "@/lib/achievements";
 import { celebrateNewAchievements } from "@/lib/celebrate-achievements";
 import { READING_TRACKS } from "@/lib/editorial";
-import { subscribeAuth } from "@/lib/firebase";
 import { slugFor, subscribeLibrary, type LibraryEntry } from "@/lib/library";
 import { subscribeRanking, type RankingRow } from "@/lib/ranking";
 import { subscribeReadingProgress, type StoredReadingProgress } from "@/lib/reader-store";
@@ -97,15 +96,14 @@ function ratio(p?: StoredReadingProgress): number {
 function DesafiosPage() {
   const router = useRouter();
   const reduce = useReducedMotion();
-  const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [library, setLibrary] = useState<LibraryEntry[]>([]);
   const [progress, setProgress] = useState<StoredReadingProgress[]>([]);
   const [club, setClub] = useState<RankingRow[] | null>(null);
   const [showAll, setShowAll] = useState(false);
 
-  useEffect(() => subscribeAuth(setUser), []);
-  const signedIn = !!user && !user.isAnonymous;
+  const { state: account, user } = useAccount();
+  const signedIn = account === "member";
   useEffect(() => {
     if (!user || user.isAnonymous) {
       setProfile(null);
@@ -325,7 +323,7 @@ function DesafiosPage() {
             {showAll ? "Mostrar menos" : `Ver todas as ${ACHIEVEMENTS.length}`}
           </button>
         )}
-        {!signedIn && (
+        {account === "guest" && (
           <p className="mx-[22px] mt-2 text-center text-[13px] text-muted-foreground">
             <Link to="/auth" search={{ redirect: "/desafios" }} className="font-semibold text-gold">
               Entre

@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "motion/react";
-import { BookOpen, Headphones } from "lucide-react";
+import { useEffect, useState } from "react";
+import { BookOpen, Headphones, X } from "lucide-react";
 
 import { FauxCover } from "@/components/faux-cover";
 import { haptic } from "@/components/motion/interactive";
@@ -11,8 +12,38 @@ import { useLastBook } from "@/lib/nav";
  * "Lendo agora" — the book you're reading, one tap away from every screen
  * (like a music player's now-playing bar). It wears the book's colours.
  */
+const HIDDEN_KEY = "bookverse:mini-hidden";
+
+/** Dismissed until the next time a book is opened (its updatedAt moves on). */
+function useHiddenUntil(): [number, (v: number) => void] {
+  const [hidden, setHidden] = useState(0);
+  useEffect(() => {
+    try {
+      setHidden(Number(localStorage.getItem(HIDDEN_KEY) ?? 0));
+    } catch {
+      // ignore
+    }
+  }, []);
+  const set = (v: number) => {
+    setHidden(v);
+    try {
+      localStorage.setItem(HIDDEN_KEY, String(v));
+    } catch {
+      // ignore
+    }
+  };
+  return [hidden, set];
+}
+
 export function MiniPlayer({ compact = false }: { compact?: boolean }) {
-  const book = useLastBook();
+  const last = useLastBook();
+  const [hiddenUntil, setHiddenUntil] = useHiddenUntil();
+  const book = last && (last.updatedAt ?? 1) > hiddenUntil ? last : null;
+  const dismiss = () => {
+    haptic(8);
+    setHiddenUntil(last?.updatedAt ?? Date.now());
+    if (typeof window !== "undefined") window.speechSynthesis?.cancel();
+  };
   const navigate = useNavigate();
   const title = book?.title ?? "Continuar leitura";
   const pal = bookPalette(title, book?.author);
@@ -36,9 +67,16 @@ export function MiniPlayer({ compact = false }: { compact?: boolean }) {
           key="mini"
           initial={{ opacity: 0, y: 16, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 16, scale: 0.98 }}
+          exit={{ opacity: 0, y: 24, scale: 0.96 }}
           transition={{ type: "spring", stiffness: 420, damping: 34 }}
-          className="relative flex h-[62px] items-center gap-3 overflow-hidden rounded-[22px] pl-3 pr-2 shadow-[0_18px_36px_-18px_rgb(0_0_0/0.55)]"
+          drag={compact ? false : "x"}
+          dragSnapToOrigin
+          dragElastic={0.5}
+          onDragEnd={(_, i) => {
+            if (Math.abs(i.offset.x) > 110 || Math.abs(i.velocity.x) > 700) dismiss();
+          }}
+          whileTap={{ scale: 0.985 }}
+          className="vt-mini relative flex h-[62px] touch-pan-y items-center gap-2.5 overflow-hidden rounded-[22px] pl-3 pr-2 shadow-[0_18px_36px_-18px_rgb(0_0_0/0.55)]"
           style={{ background: pal.bg, color: pal.fg }}
         >
           <Link
@@ -88,6 +126,14 @@ export function MiniPlayer({ compact = false }: { compact?: boolean }) {
           >
             <BookOpen className="h-[19px] w-[19px]" strokeWidth={2.1} />
           </Link>
+          <button
+            type="button"
+            aria-label="Fechar barra Lendo agora"
+            onClick={dismiss}
+            className="press relative -mr-0.5 grid h-[34px] w-[30px] shrink-0 place-items-center rounded-full opacity-70 hover:opacity-100"
+          >
+            <X className="h-[17px] w-[17px]" strokeWidth={2.2} />
+          </button>
           <i
             className="pointer-events-none absolute bottom-0 left-0 h-[3px]"
             style={{ width: `${pct}%`, background: pal.accent }}

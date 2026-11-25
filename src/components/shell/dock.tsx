@@ -11,7 +11,7 @@ import { DISCOVER_SEARCH, MEMBER_NAV, isNavActive } from "@/lib/nav";
 export function Dock({ showMini = true }: { showMini?: boolean }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   return (
-    <div className="pointer-events-none fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 lg:hidden">
+    <div className="vt-dock pointer-events-none fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 lg:hidden">
       {/* Fades the page out under the bar so text never collides with it. */}
       <div className="absolute inset-x-[-12px] -bottom-6 -top-16 -z-10 bg-gradient-to-b from-transparent via-background/85 to-background" />
       <div className="pointer-events-auto mx-auto flex max-w-md flex-col gap-2">

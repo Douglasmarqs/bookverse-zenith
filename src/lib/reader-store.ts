@@ -219,6 +219,8 @@ export function loadProgressLocal(bookId: string): ReadingProgress | null {
 /** Back-compat alias — returns local progress immediately (sync). */
 export const loadProgress = loadProgressLocal;
 
+const progressCache = new Map<string, StoredReadingProgress[]>();
+
 /** Live account progress for the library and Home dashboard. The reader still
  * works entirely offline; this listener is only attached for signed-in views. */
 export function subscribeReadingProgress(
@@ -227,14 +229,16 @@ export function subscribeReadingProgress(
 ): Unsubscribe {
   const fb = getFirebase();
   if (!fb) return () => undefined;
+  const cached = progressCache.get(uid);
+  if (cached) callback(cached);
   return onSnapshot(
     collection(fb.db, "users", uid, "progress"),
     (snapshot) => {
-      callback(
-        snapshot.docs
-          .map((item) => ({ bookId: item.id, ...(item.data() as ReadingProgress) }))
-          .sort((a, b) => b.updatedAt - a.updatedAt),
-      );
+      const items = snapshot.docs
+        .map((item) => ({ bookId: item.id, ...(item.data() as ReadingProgress) }))
+        .sort((a, b) => b.updatedAt - a.updatedAt);
+      progressCache.set(uid, items);
+      callback(items);
     },
     (error) => console.warn("[reader] subscribeReadingProgress failed", error),
   );

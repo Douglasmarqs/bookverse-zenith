@@ -25,7 +25,7 @@ import { toast } from "sonner";
 
 import { BookArt } from "@/components/book-art";
 import { Lumi } from "@/components/brand/lumi";
-import { useAuthUser } from "@/hooks/use-auth-user";
+import { useAccount } from "@/hooks/use-auth-user";
 import { describeFirestoreError } from "@/lib/async-utils";
 import { forgetDownloadedReaderId } from "@/lib/catalog";
 import { forgetDeviceBook, useDeviceBooks, type DeviceBook } from "@/lib/device-books";
@@ -166,9 +166,9 @@ const isPersonalFile = (id?: string | null) => !!id && (isEpubReaderId(id) || is
 /* --------------------------------- page --------------------------------- */
 
 function BibliotecaPage() {
-  const user = useAuthUser();
-  const member = !!user && !user.isAnonymous;
-  const uid = member ? user.uid : null;
+  const { state: account, user } = useAccount();
+  const member = account === "member";
+  const uid = member && user ? user.uid : null;
   const navigate = useNavigate();
   const reduce = useReducedMotion();
   const device = useDeviceBooks();
@@ -236,6 +236,7 @@ function BibliotecaPage() {
 
   const books: ShelfBook[] | null = useMemo(() => {
     const byReader = new Map(device.map((d) => [d.id, d]));
+    if (account === "loading") return null;
     if (uid) {
       if (!entries) return null;
       return entries.map((e) => {
@@ -273,7 +274,7 @@ function BibliotecaPage() {
         device: d,
       };
     });
-  }, [uid, entries, progress, device]);
+  }, [account, uid, entries, progress, device]);
 
   const inTab = (b: ShelfBook, t: Tab) =>
     t === "lendo"
@@ -436,7 +437,7 @@ function BibliotecaPage() {
         })}
       </div>
 
-      {!member && (
+      {account === "guest" && (
         <div className="mx-4 mt-3 flex items-center gap-3 rounded-[18px] bg-accent-soft px-3.5 py-3">
           <p className="min-w-0 flex-1 text-[12.5px] leading-snug text-[#7a2c12]">
             Mostrando os livros deste aparelho. Entre para guardar sua estante e ler em qualquer

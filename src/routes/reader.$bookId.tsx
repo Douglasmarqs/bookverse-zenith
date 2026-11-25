@@ -643,7 +643,10 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     active: boolean;
     dir: 1 | -1;
     p: number;
+    target?: number;
   } | null>(null);
+  const turnRef = useRef<typeof turn>(null);
+  turnRef.current = turn;
   const cancelTweenRef = useRef<(() => void) | null>(null);
   const pagesTurnedRef = useRef(0);
   const [einkFlash, setEinkFlash] = useState(false);
@@ -1142,6 +1145,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
         const followable = turnStyle === "folha" || turnStyle === "deslizar";
         if (!followable || target < 0 || target >= pageCount) return;
         d.dir = dir;
+        d.target = target;
         d.active = beginTurn(target, "drag");
         if (!d.active) return;
       }
@@ -1160,12 +1164,16 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       const dx = touch.clientX - d.x;
       const dy = touch.clientY - d.y;
 
-      if (d.active && turn) {
+      // Read the turn from a ref: on a fast swipe the finger can lift before
+      // React has committed the stage, and the leaf must still settle.
+      if (d.active) {
+        const style =
+          turnRef.current?.style ?? (turnStyle === "instantaneo" ? "deslizar" : turnStyle);
         const elapsed = Math.max(1, performance.now() - d.t);
         const flick = Math.abs(dx) / elapsed > 0.5 && Math.sign(-dx) === d.dir;
         const complete = d.p > 0.25 || flick;
-        const ms = TURN_MS[turn.style] * (complete ? 1 - d.p : d.p) + 120;
-        const target = turn.to;
+        const ms = TURN_MS[style] * (complete ? 1 - d.p : d.p) + 120;
+        const target = turnRef.current?.to ?? d.target ?? null;
         suppressPageNavigationUntilRef.current = Date.now() + 450;
         cancelTweenRef.current = tween(
           d.p,
@@ -1174,7 +1182,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
           (p) => stageRef.current?.set(p),
           () => finishTurn(complete ? target : null),
         );
-        dismissPageGestureHint();
+        if (complete) dismissPageGestureHint();
         return;
       }
       dragRef.current = null;
@@ -1194,8 +1202,35 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       // Like a paper book (and a Kindle): swipe left for the next page.
       goToPage(pageIndex + (dx < 0 ? 1 : -1));
     },
-    [dismissPageGestureHint, finishTurn, goToPage, pageIndex, selectedPassage, turn],
+    [dismissPageGestureHint, finishTurn, goToPage, pageIndex, selectedPassage, turnStyle],
   );
+
+  // The browser can take over a long edge-to-edge drag (touchcancel). Let
+  // the leaf fall back instead of leaving the page stuck mid-turn.
+  const handlePaginatedTouchCancel = useCallback(() => {
+    const d = dragRef.current;
+    if (!d?.active) {
+      dragRef.current = null;
+      return;
+    }
+    cancelTweenRef.current?.();
+    cancelTweenRef.current = tween(
+      d.p,
+      0,
+      TURN_MS[turnRef.current?.style ?? "deslizar"] * d.p + 120,
+      (p) => stageRef.current?.set(p),
+      () => finishTurn(null),
+    );
+  }, [finishTurn]);
+
+  // Safety net: a drag turn with no finger on the page settles on its own.
+  useEffect(() => {
+    if (!turn || turnModeRef.current !== "drag") return;
+    const id = window.setInterval(() => {
+      if (turnRef.current === turn && !dragRef.current) finishTurn(null);
+    }, 1500);
+    return () => window.clearInterval(id);
+  }, [turn, finishTurn]);
 
   useEffect(() => {
     if (!hydrated || settings.mode !== "paginated") return;
@@ -1836,9 +1871,15 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
           chrome, like a Kindle. Side zones (paginated) turn pages. */}
       <div
         className="relative flex-1 overflow-hidden"
+        style={
+          settings.mode === "paginated"
+            ? { touchAction: "pan-y pinch-zoom", overscrollBehavior: "none" }
+            : undefined
+        }
         onTouchStart={settings.mode === "paginated" ? handlePaginatedTouchStart : undefined}
         onTouchMove={settings.mode === "paginated" ? handlePaginatedTouchMove : undefined}
         onTouchEnd={settings.mode === "paginated" ? handlePaginatedTouchEnd : undefined}
+        onTouchCancel={settings.mode === "paginated" ? handlePaginatedTouchCancel : undefined}
         onClick={(e) => {
           const target = e.target as HTMLElement;
           if (target.closest("[data-reader-action],button,a,input,textarea,mark,label")) return;

@@ -55,7 +55,7 @@ function Page({
   return (
     <div
       className={`absolute inset-0 overflow-hidden ${className}`}
-      style={{ background: bg, color: fg }}
+      style={{ background: bg, color: fg, contain: "strict" }}
     >
       <div
         style={{
@@ -156,7 +156,6 @@ export const TurnStage = forwardRef<TurnStageHandle, Props>(function TurnStage(
       flap.current.style.transform = `matrix(${a},${b},${c},${d},${e},${g})`;
       flap.current.style.clipPath = right;
       flap.current.style.background = `linear-gradient(90deg, color-mix(in oklab, ${bg} 82%, #000) ${xmin}px, color-mix(in oklab, ${bg} 96%, #fff) ${xmin + 50}px, color-mix(in oklab, ${bg} 92%, #000) ${xmin + 160}px, color-mix(in oklab, ${bg} 86%, #000) ${W}px)`;
-      flapWrap.current.style.filter = `drop-shadow(0 0 14px rgba(0,0,0,${0.22 * sn + 0.04}))`;
       flapWrap.current.style.visibility = f <= 0.001 ? "hidden" : "visible";
     }
   };
@@ -184,11 +183,7 @@ export const TurnStage = forwardRef<TurnStageHandle, Props>(function TurnStage(
       </div>
       {style === "folha" && (
         <div ref={flapWrap} className="absolute inset-0">
-          <div ref={flap} className="absolute inset-0" style={{ transformOrigin: "0 0" }}>
-            <div className="absolute inset-0 opacity-[.07]" style={{ transform: "none" }}>
-              <Page {...pageProps} index={topIndex} />
-            </div>
-          </div>
+          <div ref={flap} className="absolute inset-0" style={{ transformOrigin: "0 0" }} />
         </div>
       )}
     </div>

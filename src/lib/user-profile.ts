@@ -352,6 +352,9 @@ export async function deleteUserData(uid: string): Promise<void> {
 }
 
 /** Live-subscribes to a single user's profile doc. */
+/** Last known profile per reader, so screens open already filled in. */
+const profileCache = new Map<string, UserProfile>();
+
 export function subscribeUserProfile(
   uid: string,
   cb: (profile: UserProfile | null) => void,
@@ -361,10 +364,16 @@ export function subscribeUserProfile(
     cb(null);
     return () => {};
   }
+  const cached = profileCache.get(uid);
+  if (cached) cb(cached);
   const ref = doc(fb.db, "users", uid);
   return onSnapshot(
     ref,
-    (snap) => cb(snap.exists() ? ({ uid, ...snap.data() } as UserProfile) : null),
+    (snap) => {
+      const profile = snap.exists() ? ({ uid, ...snap.data() } as UserProfile) : null;
+      if (profile) profileCache.set(uid, profile);
+      cb(profile);
+    },
     (err) => {
       console.warn("[user-profile] subscribe failed", err);
       cb(null);

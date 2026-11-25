@@ -14,7 +14,7 @@ export function Sidebar() {
   const { user } = useAuthState();
   const signedIn = Boolean(user && !user.isAnonymous);
   return (
-    <aside className="fixed inset-y-0 left-0 z-40 hidden w-[264px] flex-col border-r border-border bg-card px-4 py-5 lg:flex">
+    <aside className="vt-sidebar fixed inset-y-0 left-0 z-40 hidden w-[264px] flex-col border-r border-border bg-card px-4 py-5 lg:flex">
       <div className="px-2">
         <Logo size={30} />
       </div>

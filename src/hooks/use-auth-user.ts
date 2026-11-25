@@ -69,6 +69,24 @@ export function useAuthState(): { user: User | null; ready: boolean } {
   return { user, ready: ready || timedOut };
 }
 
+/** "loading" while a returning member's session is still being restored
+ * (so pages show a calm placeholder instead of the guest version), then
+ * "member" or "guest". */
+export function useAccount(): { state: "loading" | "member" | "guest"; user: User | null } {
+  const { user, ready } = useAuthState();
+  const [hint, setHint] = useState(false);
+  useEffect(() => {
+    try {
+      setHint(localStorage.getItem(SESSION_HINT_KEY) === "1");
+    } catch {
+      // ignore
+    }
+  }, []);
+  if (user && !user.isAnonymous) return { state: "member", user };
+  if (!ready && hint) return { state: "loading", user };
+  return { state: "guest", user };
+}
+
 /** True once the element is (or has been) scrolled near the viewport —
  * used to defer fetching/rendering of offscreen shelves. */
 export function useInView<T extends Element>(ref: React.RefObject<T | null>, rootMargin = "400px") {

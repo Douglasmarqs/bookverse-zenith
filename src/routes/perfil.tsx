@@ -15,7 +15,7 @@ import type { User } from "firebase/auth";
 
 import { Lumi } from "@/components/brand/lumi";
 import { UserAvatar } from "@/components/user-avatar";
-import { useAuthUser } from "@/hooks/use-auth-user";
+import { useAccount } from "@/hooks/use-auth-user";
 import { getLevelInfo } from "@/lib/achievements";
 import { computeGoalProgress, currentYear, subscribeReadingGoal } from "@/lib/goals";
 import { subscribeLibrary, type LibraryEntry } from "@/lib/library";
@@ -35,9 +35,26 @@ export const Route = createFileRoute("/perfil")({
 });
 
 function VocePage() {
-  const user = useAuthUser();
-  if (!user || user.isAnonymous) return <GuestVoce />;
+  const { state, user } = useAccount();
+  if (state === "loading") return <VoceSkeleton />;
+  if (state === "guest" || !user) return <GuestVoce />;
   return <MemberVoce user={user} />;
+}
+
+function VoceSkeleton() {
+  return (
+    <div
+      className="mx-auto max-w-3xl px-4 pt-[max(1rem,env(safe-area-inset-top))] lg:pt-10"
+      aria-busy="true"
+    >
+      <div className="mx-[6px] mt-2 h-11 w-32 animate-pulse rounded-xl bg-surface-2" />
+      <div className="mt-6 flex items-center gap-4 px-[6px]">
+        <div className="h-[62px] w-[62px] animate-pulse rounded-full bg-surface-2" />
+        <div className="h-5 w-40 animate-pulse rounded bg-surface-2" />
+      </div>
+      <div className="mt-5 h-[300px] animate-pulse rounded-[30px] bg-surface-2" />
+    </div>
+  );
 }
 
 const MOMENT: Record<ReadingMoment, string> = {
