@@ -9,6 +9,7 @@
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { getFirebase } from "./firebase";
+import { celebrate } from "./celebration";
 import { getLocalOnboarding } from "./onboarding";
 
 export type RitualDays = Record<string, number>;
@@ -80,14 +81,54 @@ export async function flushRitual(): Promise<void> {
   }
 }
 
+/** Days in a row (ending today) with any reading. */
+function streakFrom(days: RitualDays): number {
+  let n = 0;
+  const d = new Date();
+  while ((days[dayKey(d)] ?? 0) > 0) {
+    n += 1;
+    d.setDate(d.getDate() - 1);
+  }
+  return n;
+}
+
+function celebrateDailyGoal(uid: string, key: string, goal: number, days: RitualDays) {
+  const flag = `bookverse:goal-party:${uid}:${key}`;
+  try {
+    if (localStorage.getItem(flag)) return;
+    localStorage.setItem(flag, "1");
+  } catch {
+    return;
+  }
+  const streak = streakFrom(days);
+  celebrate(
+    streak > 1
+      ? {
+          eyebrow: "Meta cumprida",
+          title: `${streak} dias seguidos!`,
+          body: `Você leu ${goal} minutos hoje. Volte amanhã para manter a sequência.`,
+          share: `${streak} dias seguidos lendo no BookVerse!`,
+        }
+      : {
+          eyebrow: "Meta cumprida",
+          title: "Meta de hoje feita!",
+          body: `Você leu ${goal} minutos hoje. Amanhã tem mais.`,
+          share: "Bati minha meta de leitura de hoje no BookVerse!",
+        },
+  );
+}
+
 /** Adds active reading seconds to today's ritual. */
 export function addReadingSeconds(uid: string, seconds: number) {
   if (seconds <= 0) return;
   const days = readLocal(uid);
   const key = dayKey();
-  const minutes = Math.round(((days[key] ?? 0) + seconds / 60) * 100) / 100;
+  const before = days[key] ?? 0;
+  const minutes = Math.round((before + seconds / 60) * 100) / 100;
   days[key] = Math.min(24 * 60, minutes);
   writeLocal(uid, days);
+  const goal = getLocalOnboarding(uid)?.dailyMinutes ?? 20;
+  if (before < goal && minutes >= goal) celebrateDailyGoal(uid, key, goal, days);
   listeners.forEach((l) => l());
   scheduleSync(uid);
 }

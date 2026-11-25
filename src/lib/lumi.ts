@@ -10,6 +10,9 @@ import type { LumiContext } from "./lumi-panel-store";
 export interface LumiMessage {
   role: "user" | "assistant";
   text: string;
+  /** What the reader sees instead of `text` (e.g. the quoted passage for
+   * a reader action, rather than the internal instruction). */
+  display?: string;
 }
 
 interface AskLumiResponse {

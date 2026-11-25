@@ -5,6 +5,8 @@ import { createPortal } from "react-dom";
 import {
   ArrowDownUp,
   BookOpen,
+  Compass,
+  FileUp,
   Check,
   ChevronLeft,
   Download,
@@ -545,7 +547,7 @@ function BibliotecaPage() {
           {books === null ? (
             <GridSkeleton />
           ) : visible.length === 0 ? (
-            <EmptyShelf tab={tab} list={list} query={query} />
+            <EmptyShelf tab={tab} list={list} query={query} total={books.length} />
           ) : view === "grade" ? (
             <ul className="mt-4 grid grid-cols-3 gap-x-4 gap-y-7 px-[22px] sm:grid-cols-4 lg:grid-cols-6 lg:px-4">
               <AnimatePresence initial={false}>
@@ -816,8 +818,48 @@ function ListsView({
 
 /* ------------------------------ empty states ---------------------------- */
 
-function EmptyShelf({ tab, list, query }: { tab: Tab; list: ListId | null; query: string }) {
+function EmptyShelf({
+  tab,
+  list,
+  query,
+  total,
+}: {
+  tab: Tab;
+  list: ListId | null;
+  query: string;
+  total: number;
+}) {
   const q = query.trim();
+  // M5 · "Estado vazio": nothing on the shelf at all yet.
+  if (!q && !list && total === 0) {
+    return (
+      <div className="flex flex-col items-center px-6 pb-6 pt-6 text-center">
+        <Lumi pose="reading" size={200} bob />
+        <p className="mt-2 font-display text-[30px] leading-[1.02] tracking-[-0.03em]">
+          Sua estante está esperando
+        </p>
+        <p className="mt-2.5 max-w-[300px] text-[15.5px] leading-relaxed text-muted-foreground">
+          Salve um livro ou importe seus EPUBs e PDFs. A Lumi guarda tudo aqui.
+        </p>
+        <div className="mt-6 w-full max-w-sm space-y-2.5">
+          <Link
+            to="/descobrir"
+            search={{}}
+            className="press flex h-[54px] items-center justify-center gap-2 rounded-full bg-foreground text-[16px] font-semibold text-background"
+          >
+            <Compass className="h-5 w-5" /> Explorar livros grátis
+          </Link>
+          <Link
+            to="/adicionar"
+            search={{}}
+            className="press flex h-[54px] items-center justify-center gap-2 rounded-full bg-card text-[16px] font-semibold shadow-[inset_0_0_0_1.5px_var(--border)]"
+          >
+            <FileUp className="h-5 w-5" /> Importar arquivo
+          </Link>
+        </div>
+      </div>
+    );
+  }
   const copy = q
     ? {
         pose: "thinking" as const,

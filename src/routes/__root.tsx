@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { CelebrationOverlay } from "@/components/celebration-overlay";
 import { useStarted } from "@/lib/nav";
 import {
   Outlet,
@@ -319,6 +320,7 @@ function RootComponent() {
         {/* The reader opens Lumi with a book/selection context. It must stay
             mounted there too; only the site chrome itself is suppressed. */}
         <LumiPanel />
+        <CelebrationOverlay />
         {!isReaderRoute && <InstallPwaBanner />}
         <AppToaster />
       </div>

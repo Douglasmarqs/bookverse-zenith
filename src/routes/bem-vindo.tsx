@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { Lumi } from "@/components/brand/lumi";
 import { haptic } from "@/components/motion/interactive";
 import { useAuthUser } from "@/hooks/use-auth-user";
 import { markStarted, OFFLINE_UID } from "@/lib/nav";
@@ -133,12 +134,12 @@ function Onboarding() {
         >
           <ChevronLeft className="h-6 w-6" strokeWidth={2} />
         </button>
-        <div className="flex items-center gap-1.5" aria-label={`Passo ${step + 2} de 3`}>
+        <div className="flex items-center gap-1.5" aria-label={`Passo ${step + 1} de 3`}>
           {[0, 1, 2].map((i) => (
             <span
               key={i}
               className={`h-[6px] rounded-full transition-all duration-300 ${
-                i <= step + 1 ? "w-[22px] bg-foreground" : "w-[6px] bg-border"
+                i <= step ? "w-[22px] bg-foreground" : "w-[6px] bg-border"
               }`}
             />
           ))}
@@ -164,6 +165,36 @@ function Onboarding() {
           className="flex flex-1 flex-col"
         >
           {step === 0 ? (
+            <div className="flex flex-1 flex-col items-center text-center">
+              <div className="relative mt-[6vh]">
+                <div
+                  aria-hidden
+                  className="absolute inset-x-[-40px] top-6 h-[220px] rounded-full bg-[radial-gradient(closest-side,#ffe1d3,transparent)] dark:opacity-30"
+                />
+                <Lumi pose="hello" size={220} bob />
+              </div>
+              <motion.div
+                initial={{ opacity: 0, y: 12, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ delay: 0.25, type: "spring", stiffness: 300, damping: 24 }}
+                className="mt-3 max-w-[320px] rounded-[22px] bg-card px-5 py-4 text-[16.5px] leading-snug shadow-[0_16px_34px_-18px_rgba(0,0,0,.3),inset_0_0_0_1px_var(--border)]"
+              >
+                Oi! Eu sou a <b>Lumi</b>. Vou te ajudar a ler mais — e melhor. 📖
+              </motion.div>
+              <p className="mt-5 max-w-[300px] text-[15px] text-muted-foreground">
+                Duas perguntas rápidas e sua estante fica com a sua cara.
+              </p>
+              <div className="mt-auto w-full pt-6">
+                <button
+                  type="button"
+                  onClick={() => go(1)}
+                  className="press flex h-[56px] w-full items-center justify-center rounded-full bg-gold text-[16.5px] font-semibold text-white shadow-[0_14px_30px_-14px_#ff4d1a]"
+                >
+                  Vamos lá
+                </button>
+              </div>
+            </div>
+          ) : step === 1 ? (
             <>
               <h1 className="mt-6 font-display text-[36px] leading-[1.02] tracking-[-0.04em]">
                 O que você gosta de ler?
@@ -212,7 +243,7 @@ function Onboarding() {
                 <button
                   type="button"
                   disabled={tastes.length < 3}
-                  onClick={() => go(1)}
+                  onClick={() => go(2)}
                   className="press flex h-[56px] w-full items-center justify-center rounded-full bg-foreground text-[16.5px] font-semibold text-background transition-opacity disabled:opacity-35"
                 >
                   {tastes.length < 3

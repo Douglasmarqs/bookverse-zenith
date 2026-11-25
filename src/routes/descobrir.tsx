@@ -662,7 +662,7 @@ function SearchView({ initial, fonte }: { initial: string; fonte?: CatalogSource
       {q.trim().length >= 2 && (
         <div className="mx-[22px] mb-2.5 mt-[22px] flex items-baseline justify-between lg:mx-10">
           <p className="font-display text-lg">
-            {results === null
+            {results === null || (pending > 0 && shown.length === 0)
               ? "Buscando nos acervos…"
               : `${shown.length} ${shown.length === 1 ? "livro" : "livros"}`}
           </p>
@@ -677,14 +677,20 @@ function SearchView({ initial, fonte }: { initial: string; fonte?: CatalogSource
       )}
 
       <div className="px-4 lg:px-10">
-        {results === null && q.trim().length >= 2 && <ResultSkeleton />}
+        {results === null && q.trim().length >= 2 && (
+          <>
+            <LumiSearching />
+            <ResultSkeleton />
+          </>
+        )}
         {results !== null && shown.length === 0 && pending === 0 && <NoResults q={q} />}
         <ul>
           {shown.map((b, i) => (
             <ResultRow key={b.key} book={b} q={q} last={i === shown.length - 1} />
           ))}
         </ul>
-        {results !== null && pending > 0 && (
+        {results !== null && pending > 0 && shown.length === 0 && <LumiSearching />}
+        {results !== null && pending > 0 && shown.length > 0 && (
           <p className="flex items-center justify-center gap-2 py-4 text-xs font-semibold text-faint">
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Consultando mais acervos…
           </p>
@@ -820,6 +826,22 @@ function ResultRow({ book: b, q, last }: { book: CatalogBook; q: string; last: b
         </button>
       )}
     </li>
+  );
+}
+
+/** M4 · "Lumi está procurando…" while the catalogues answer. */
+function LumiSearching() {
+  return (
+    <div className="mb-2 flex items-center gap-4 rounded-[24px] bg-card px-4 py-3 shadow-[inset_0_0_0_1px_var(--border)]">
+      <Lumi pose="thinking" size={64} bob />
+      <div className="min-w-0 flex-1">
+        <p className="eyebrow">Carregando</p>
+        <p className="mt-1 text-[15.5px] font-bold">Lumi está procurando…</p>
+        <div className="mt-2 h-[5px] overflow-hidden rounded-full bg-accent-soft">
+          <div className="h-full w-1/3 animate-[lumi-search_1.2s_ease-in-out_infinite] rounded-full bg-gold" />
+        </div>
+      </div>
+    </div>
   );
 }
 

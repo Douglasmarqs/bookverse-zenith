@@ -2235,10 +2235,11 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
             const W = Math.min(354, vw - 36);
             const centre = r ? (r.left + r.right) / 2 : vw / 2;
             const left = Math.max(18, Math.min(vw - W - 18, centre - W / 2));
-            const above = r ? r.top > 150 : false;
+            const tall = !activeHighlight;
+            const above = r ? r.top > (tall ? 200 : 150) : false;
             const pos: React.CSSProperties = r
               ? above
-                ? { top: r.top - 124, left }
+                ? { top: r.top - (tall ? 176 : 124), left }
                 : { top: r.bottom + 16, left }
               : { bottom: "max(5rem, calc(env(safe-area-inset-bottom) + 5rem))", left };
             const close = () => {
@@ -2315,9 +2316,22 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                       askLumiAboutPassage("Traduza para português do Brasil", "translation"),
                   },
                   {
-                    icon: LumiIcon as unknown as typeof List,
-                    label: "Lumi",
-                    on: () => askLumiAboutPassage("Explique em linguagem simples", "explanation"),
+                    icon: Share2,
+                    label: "Citar",
+                    on: () => {
+                      const quote = `“${selectedPassage!.text.trim()}” — ${book.author}, ${book.title}`;
+                      const done = () => close();
+                      if (navigator.share)
+                        void navigator
+                          .share({ text: quote })
+                          .catch(() => {})
+                          .finally(done);
+                      else
+                        void navigator.clipboard
+                          ?.writeText(quote)
+                          .then(() => toast.success("Citação copiada"))
+                          .finally(done);
+                    },
                   },
                 ];
             return (
@@ -2368,6 +2382,19 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                     </button>
                   ))}
                 </div>
+                {tall && (
+                  <button
+                    type="button"
+                    data-reader-action="true"
+                    onClick={() =>
+                      askLumiAboutPassage("Explique em linguagem simples", "explanation")
+                    }
+                    className="mt-2.5 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-lilac pl-1.5 pr-4 text-[14.5px] font-semibold text-[#131313] transition active:scale-[0.98]"
+                  >
+                    <LumiFace size={32} />
+                    Explicar trecho
+                  </button>
+                )}
                 {r && (
                   <i
                     aria-hidden

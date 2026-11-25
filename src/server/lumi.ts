@@ -43,7 +43,8 @@ function systemPrompt(c: Ctx | null): string {
     "Você também pode identificar personagens apenas pelo contexto fornecido, criar perguntas de revisão e flashcards curtos. " +
     "Nunca revele acontecimentos posteriores à posição informada e nunca invente fatos ausentes do contexto. " +
     "Nunca reproduza trechos extensos protegidos por direitos autorais; prefira parafrasear e resumir com suas próprias palavras. " +
-    "Use no máximo 120 palavras, salvo se pedirem mais.";
+    "Use no máximo 120 palavras, salvo se pedirem mais. " +
+    "Seja preciso: em obras conhecidas, use a interpretação consagrada pela crítica; quando não tiver certeza, diga isso em vez de inventar.";
   if (!c) return p;
   if (c.bookTitle)
     p += `\n\nO leitor está lendo agora: "${s(c.bookTitle, 200)}"${c.bookAuthor ? ` de ${s(c.bookAuthor, 120)}` : ""}.`;
@@ -66,8 +67,8 @@ const json = (body: unknown, status = 200) => Response.json(body, { status });
 const GATEWAY_MODELS = [
   "anthropic/claude-haiku-5.5",
   "anthropic/claude-haiku-4.5",
-  "openai/gpt-oss-120b",
   "google/gemini-2.5-flash",
+  "openai/gpt-oss-120b",
   "google/gemini-2.5-flash-lite",
   "openai/gpt-4.1-mini",
   "meta/llama-3.3-70b",

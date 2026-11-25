@@ -111,11 +111,11 @@ export function LumiPanel() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
-  async function send(text: string) {
+  async function send(text: string, display?: string) {
     const trimmed = text.trim();
     if (!trimmed || loading) return;
     setError(null);
-    const next = [...messages, { role: "user", text: trimmed } as LumiMessage];
+    const next = [...messages, { role: "user", text: trimmed, display } as LumiMessage];
     setMessages(next);
     setInput("");
     setLoading(true);
@@ -144,7 +144,11 @@ export function LumiPanel() {
     const key = `${contextKey}:${prompt}`;
     if (autoPromptRef.current === key) return;
     autoPromptRef.current = key;
-    void send(prompt);
+    const quote = context?.selectedText?.trim();
+    void send(
+      prompt,
+      quote ? `“${quote.length > 160 ? `${quote.slice(0, 160)}…` : quote}”` : undefined,
+    );
     // `send` is intentionally excluded: its identity changes every render,
     // while this effect is keyed to a newly opened contextual action.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -246,7 +250,7 @@ export function LumiPanel() {
                       className="flex justify-end"
                     >
                       <p className="max-w-[82%] rounded-[20px] rounded-br-[6px] bg-foreground px-4 py-2.5 text-[15px] leading-relaxed text-background">
-                        {m.text}
+                        {m.display ?? m.text}
                       </p>
                     </motion.div>
                   ) : (
@@ -307,9 +311,7 @@ export function LumiPanel() {
                 <input
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder={
-                    context?.bookTitle ? "Pergunte sobre o livro…" : "Pergunte algo à Lumi…"
-                  }
+                  placeholder="Pergunte à Lumi…"
                   className="min-w-0 flex-1 bg-transparent py-2 text-[16px] outline-none placeholder:text-faint"
                 />
                 <button
