@@ -15,6 +15,8 @@ export type ImportStatus = "waiting" | "working" | "done" | "error";
 
 export interface ImportItem {
   id: string;
+  /** Order the file was added in — the queue works oldest first. */
+  seq: number;
   name: string;
   kind: ImportKind | null;
   bytes: number;
@@ -63,6 +65,14 @@ export function dismissImport(id: string) {
 
 const files = new Map<string, File>();
 let running = false;
+let seq = 0;
+
+/** Ask before closing the page while files are still being imported. */
+function guardUnload(e: BeforeUnloadEvent) {
+  if (items.some((i) => i.status === "working" || i.status === "waiting")) {
+    e.preventDefault();
+  }
+}
 
 /** Adds files to the queue and starts working through them. */
 export function enqueueFiles(list: Iterable<File>): ImportItem[] {
@@ -72,6 +82,7 @@ export function enqueueFiles(list: Iterable<File>): ImportItem[] {
     const kind = kindOf(file);
     const item: ImportItem = {
       id,
+      seq: seq++,
       name: file.name,
       kind,
       bytes: file.size,
@@ -102,14 +113,18 @@ function creep(id: string, from: number, cap: number): () => void {
 async function run() {
   if (running) return;
   running = true;
+  window.addEventListener("beforeunload", guardUnload);
   try {
     for (;;) {
-      const next = [...items].reverse().find((i) => i.status === "waiting");
+      const next = items
+        .filter((i) => i.status === "waiting")
+        .reduce<ImportItem | null>((a, b) => (!a || b.seq < a.seq ? b : a), null);
       if (!next) break;
       await importOne(next.id);
     }
   } finally {
     running = false;
+    window.removeEventListener("beforeunload", guardUnload);
   }
 }
 

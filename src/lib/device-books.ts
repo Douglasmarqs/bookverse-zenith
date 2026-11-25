@@ -74,6 +74,7 @@ export function useDeviceBooks(): DeviceBook[] {
 }
 
 export function formatBytes(n: number): string {
+  if (n <= 0) return "0 KB";
   if (n >= 1024 * 1024 * 1024) return `${(n / 1024 ** 3).toFixed(1).replace(".", ",")} GB`;
   if (n >= 1024 * 1024) {
     const mb = n / 1024 ** 2;
