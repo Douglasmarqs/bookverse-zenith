@@ -19,6 +19,7 @@ import type { User } from "firebase/auth";
 import { BookArt } from "@/components/book-art";
 import { BookReviews } from "@/components/book-reviews";
 import { LumiAskBar } from "@/components/lumi-ask-bar";
+import { flyToLibrary, playBookOpen } from "@/lib/book-motion";
 import { formatMinutes } from "@/components/home/home-screen";
 import { describeFirestoreError } from "@/lib/async-utils";
 import {
@@ -205,6 +206,8 @@ function BookPage() {
   const realCover = cover ?? meta?.cover ?? copy?.cover ?? null;
 
   async function open(listen = false) {
+    if (readerId && !listen)
+      playBookOpen(document.querySelector<HTMLElement>(".book3d-body > :first-child"));
     let rid = readerId;
     if (!rid) {
       if (!copy) {
@@ -245,6 +248,7 @@ function BookPage() {
         },
         "quero-ler",
       );
+      flyToLibrary(document.querySelector(".book3d"));
       toast.success("Salvo na sua biblioteca.");
     } catch (err) {
       toast.error(describeFirestoreError(err, "Não foi possível salvar agora."));
@@ -532,6 +536,7 @@ function BookPage() {
                         return void navigate({ to: "/reader/$bookId", params: { bookId: ready } });
                       try {
                         await downloadBook(b);
+                        flyToLibrary(document.querySelector(".book3d"));
                         toast.success("Baixado — disponível offline.");
                       } catch (err) {
                         toast.error(

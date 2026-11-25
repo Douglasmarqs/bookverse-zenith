@@ -28,6 +28,8 @@ import { CommandPalette } from "../components/command-palette";
 import { Dock } from "../components/shell/dock";
 import { FitGuard } from "../components/shell/fit-guard";
 import { PageSway } from "../components/motion/use-sway";
+import { LumiGaze } from "../components/motion/lumi-gaze";
+import { BookOpenOnTap } from "../components/motion/book-open";
 import { Sidebar } from "../components/shell/sidebar";
 import { SESSION_HINT_KEY, useAuthState } from "../hooks/use-auth-user";
 import { THEME_BOOT_SCRIPT, applyTheme, getStoredTheme } from "../lib/theme";
@@ -329,6 +331,8 @@ function RootComponent() {
         {appChrome && !fullScreen && <Dock showMini={pathname !== "/"} />}
         <FitGuard />
         <PageSway />
+        <LumiGaze />
+        <BookOpenOnTap />
         <CommandPalette />
         {/* The reader opens Lumi with a book/selection context. It must stay
             mounted there too; only the site chrome itself is suppressed. */}

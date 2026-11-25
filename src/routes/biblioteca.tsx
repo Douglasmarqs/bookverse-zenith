@@ -54,6 +54,7 @@ import {
   subscribeReadingProgress,
   type ReadingProgress,
 } from "@/lib/reader-store";
+import { coverIn, playBookOpen } from "@/lib/book-motion";
 
 export const Route = createFileRoute("/biblioteca")({
   head: () => ({
@@ -692,8 +693,10 @@ function GridItem({
       <button
         type="button"
         {...handlers}
-        onClick={() => {
-          if (!fired.current) onOpen();
+        onClick={(e) => {
+          if (fired.current) return;
+          if (book.readerId) playBookOpen(coverIn(e.currentTarget));
+          onOpen();
         }}
         className="press block w-full select-none text-left [-webkit-touch-callout:none]"
         aria-label={`${book.title}, ${book.author}`}

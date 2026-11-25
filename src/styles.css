@@ -1425,7 +1425,7 @@ html[data-swaying] .book3d-body {
     /* Horizontal shelves: books swing in from the edge and out the other. */
     .rail-flow > * {
       animation:
-        rail-in linear both,
+        rail-in linear backwards,
         rail-out linear forwards;
       animation-timeline: view(inline), view(inline);
       animation-range:
@@ -1435,7 +1435,7 @@ html[data-swaying] .book3d-body {
     }
     /* Grids: books rise and settle as they come into view. */
     .reveal-flow > * {
-      animation: book-rise linear both;
+      animation: book-rise linear backwards;
       animation-timeline: view();
       animation-range: entry 0% entry 85%;
     }
@@ -1493,6 +1493,44 @@ html[data-swaying] .book3d-body {
 }
 @media (prefers-reduced-motion: reduce) {
   .shelf-marquee {
+    animation: none;
+  }
+}
+
+/* Lumi alive: pupils follow you (vars set by LumiGaze), she hops on tap. */
+[data-lumi] .lumi-pupil,
+[data-lumi] .lumi-iris {
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+[data-lumi][data-look] .lumi-pupil {
+  transform: translate(var(--lx, 0px), var(--ly, 0px));
+}
+[data-lumi][data-look] .lumi-iris {
+  transform: translate(calc(var(--lx, 0px) * 0.45), calc(var(--ly, 0px) * 0.45));
+}
+.lumi-hop {
+  animation: lumi-hop 0.6s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+@keyframes lumi-hop {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  30% {
+    transform: translateY(-10%) scale(1.04, 0.97);
+  }
+  60% {
+    transform: translateY(0) scale(0.96, 1.04);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-lumi] .lumi-pupil,
+  [data-lumi] .lumi-iris {
+    transform: none !important;
+  }
+  .lumi-hop {
     animation: none;
   }
 }

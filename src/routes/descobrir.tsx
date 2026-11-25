@@ -37,6 +37,7 @@ import {
 } from "@/lib/catalog";
 import { COLLECTIONS, collectionById, type Collection } from "@/lib/collections";
 import { picksFor } from "@/lib/editorial";
+import { coverIn, flyToLibrary, playBookOpen } from "@/lib/book-motion";
 import { LumiAskBar } from "@/components/lumi-ask-bar";
 import { slugFor } from "@/lib/library";
 import { gutenbergReaderId } from "@/lib/public-domain";
@@ -759,13 +760,15 @@ function ResultRow({ book: b, q, last }: { book: CatalogBook; q: string; last: b
   const local = state?.state === "done" ? state.readerId : downloadedReaderId(b.key);
   const ready = local ?? b.readerId ?? null;
 
-  async function act() {
+  async function act(row: Element | null) {
     if (ready) {
+      playBookOpen(coverIn(row));
       void navigate({ to: "/reader/$bookId", params: { bookId: ready } });
       return;
     }
     try {
       const id = await downloadBook(b);
+      flyToLibrary(row);
       toast.success(`"${b.title}" baixado — disponível offline.`, {
         action: {
           label: "Ler",
@@ -826,7 +829,7 @@ function ResultRow({ book: b, q, last }: { book: CatalogBook; q: string; last: b
       ) : (
         <button
           type="button"
-          onClick={() => void act()}
+          onClick={(e) => void act(e.currentTarget.closest("li"))}
           className="press inline-flex h-[38px] shrink-0 items-center gap-1.5 rounded-full bg-foreground px-4 text-sm font-semibold text-background"
         >
           {ready ? (
