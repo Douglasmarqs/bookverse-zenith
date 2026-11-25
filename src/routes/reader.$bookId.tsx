@@ -39,6 +39,7 @@ import {
   StickyNote,
   X as XIcon,
   Trash2,
+  X,
   Share2,
   Languages,
   Search as SearchIcon,
@@ -601,7 +602,10 @@ const THEME_STYLES = {
 } as const;
 
 const PAGE_GESTURE_HINT_KEY = "bookverse:reader-page-gesture-tip";
-const PAGE_PADDING = "4.25rem 0 4rem";
+// Top clears the notch + the quiet running title; bottom clears the home
+// indicator, the footer line and the pull handle.
+const PAGE_PADDING =
+  "max(4.25rem, calc(var(--safe-top, 0px) + 2.9rem)) 0 calc(max(1.1rem, var(--safe-bottom, 0px)) + 3.4rem)";
 const ACCENT = "#FF4D1A";
 
 function romanize(n: number): string {
@@ -1831,7 +1835,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
         }
       : {
           overflowY: "auto",
-          padding: `5rem ${settings.margin}px 5rem`,
+          padding: `max(5rem, calc(var(--safe-top, 0px) + 3.5rem)) ${settings.margin}px calc(max(1.1rem, var(--safe-bottom, 0px)) + 4rem)`,
         };
 
   return (
@@ -2366,7 +2370,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
               ? above
                 ? { top: r.top - (tall ? 176 : 124), left }
                 : { top: r.bottom + 16, left }
-              : { bottom: "max(5rem, calc(env(safe-area-inset-bottom) + 5rem))", left };
+              : { bottom: "max(5rem, calc(var(--safe-bottom, 0px) + 5rem))", left };
             const close = () => {
               window.getSelection()?.removeAllRanges();
               setSelectedPassage(null);
@@ -2906,69 +2910,145 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
               onClick={() => setTocOpen(false)}
             />
             <motion.aside
+              role="dialog"
+              aria-label="Sumário, destaques, marcadores e busca"
               initial={{ x: "-100%" }}
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
               transition={{ type: "spring", stiffness: 380, damping: 38 }}
-              className="fixed left-0 top-0 z-50 flex h-full w-full max-w-sm flex-col border-r shadow-2xl"
+              drag="x"
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={{ left: 0.6, right: 0 }}
+              dragDirectionLock
+              onDragEnd={(_, info) => {
+                if (info.offset.x < -90 || info.velocity.x < -500) setTocOpen(false);
+              }}
+              className="fixed left-0 top-0 z-50 flex h-full w-full max-w-[400px] flex-col shadow-2xl sm:w-[88vw]"
               style={{
                 backgroundColor: theme.bg,
                 color: theme.fg,
-                borderColor: theme.rule,
+                boxShadow: `1px 0 0 ${theme.rule}, 0 20px 60px -10px rgba(0,0,0,.35)`,
                 fontFamily: "var(--font-sans)",
               }}
             >
-              <div className="border-b px-5 py-4" style={{ borderColor: theme.rule }}>
-                <h3 className="font-display text-3xl leading-tight">{book.title}</h3>
-                <p className="text-xs" style={{ color: theme.muted }}>
-                  {book.author} · {Math.round(overallProgress * 100)}% lido ·{" "}
-                  {formatDuration(minutesLeftInBook)} restantes
+              <div
+                className="shrink-0 px-5 pb-3.5 pt-[calc(env(safe-area-inset-top)+0.6rem)]"
+                style={{ boxShadow: `inset 0 -1px 0 ${theme.rule}` }}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p
+                    className="text-[11.5px] font-bold uppercase tracking-[0.12em]"
+                    style={{ color: theme.muted }}
+                  >
+                    Neste livro
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setTocOpen(false)}
+                    aria-label="Fechar"
+                    className="-mr-2 grid h-10 w-10 shrink-0 place-items-center rounded-full transition active:scale-95"
+                    style={{ background: theme.rule }}
+                  >
+                    <X className="h-[18px] w-[18px]" strokeWidth={2.2} />
+                  </button>
+                </div>
+                <h3 className="mt-1 line-clamp-2 font-display text-[22px] leading-[1.15] tracking-[-0.01em]">
+                  {book.title}
+                </h3>
+                <p className="mt-1 truncate text-[12.5px]" style={{ color: theme.muted }}>
+                  {book.author}
                 </p>
+                <div className="mt-2.5 flex items-center gap-2.5 text-[11.5px] font-semibold tabular-nums">
+                  <span
+                    className="h-1 flex-1 overflow-hidden rounded-full"
+                    style={{ background: theme.rule }}
+                  >
+                    <span
+                      className="block h-full rounded-full"
+                      style={{ width: `${overallProgress * 100}%`, background: theme.accent }}
+                    />
+                  </span>
+                  <span style={{ color: theme.muted }}>
+                    {Math.round(overallProgress * 100)}% · {formatDuration(minutesLeftInBook)}{" "}
+                    restantes
+                  </span>
+                </div>
                 <div
-                  className="mt-3 grid grid-cols-4 gap-1 rounded-full p-1"
-                  style={{ backgroundColor: theme.rule, fontFamily: "var(--font-sans)" }}
+                  role="tablist"
+                  className="no-scrollbar mt-3.5 flex gap-1 overflow-x-auto rounded-full p-1"
+                  style={{ backgroundColor: theme.rule }}
                 >
                   {(
                     [
                       { key: "toc", label: "Sumário" },
-                      { key: "highlights", label: "Destaques" },
+                      { key: "highlights", label: "Grifos" },
                       { key: "bookmarks", label: "Marcadores" },
                       { key: "search", label: "Buscar" },
                     ] as const
                   ).map((t) => (
                     <button
                       key={t.key}
+                      role="tab"
+                      aria-selected={tocTab === t.key}
                       onClick={() => setTocTab(t.key)}
-                      className="rounded-full px-2 py-1.5 text-xs font-medium transition"
+                      className="h-9 flex-1 shrink-0 whitespace-nowrap rounded-full px-2 text-[12px] font-semibold transition-colors min-[360px]:px-2.5 min-[360px]:text-[12.5px]"
                       style={{
                         backgroundColor: tocTab === t.key ? theme.accent : "transparent",
-                        color: tocTab === t.key ? theme.bg : theme.fg,
+                        color: tocTab === t.key ? "#fff" : theme.fg,
                       }}
                     >
-                      {t.label}
+                      {t.key === "bookmarks" ? (
+                        <>
+                          <span className="min-[360px]:hidden">Marcas</span>
+                          <span className="hidden min-[360px]:inline">{t.label}</span>
+                        </>
+                      ) : (
+                        t.label
+                      )}
                     </button>
                   ))}
                 </div>
               </div>
 
               {tocTab === "toc" && (
-                <ul className="flex-1 overflow-y-auto p-3">
+                <ul
+                  ref={(el) => {
+                    // Open on the chapter being read, not at the top of a long list.
+                    const cur = el?.querySelector<HTMLElement>("[data-current='true']");
+                    if (el && cur && el.scrollTop === 0) {
+                      const y = cur.getBoundingClientRect().top - el.getBoundingClientRect().top;
+                      if (y > el.clientHeight * 0.6) el.scrollTop = y - el.clientHeight / 3;
+                    }
+                  }}
+                  className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2.5 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-2"
+                >
                   {book.chapters.map((c: (typeof book.chapters)[number], i: number) => {
                     const active = i === chapterIndex;
                     return (
-                      <li key={c.id}>
+                      <li key={c.id} data-current={active ? "true" : undefined}>
                         <button
                           onClick={() => goto(i)}
-                          className="w-full rounded-xl px-4 py-3 text-left transition"
+                          aria-current={active ? "true" : undefined}
+                          className="flex w-full items-baseline gap-3 rounded-[14px] px-3 py-2.5 text-left transition-colors"
                           style={{
-                            backgroundColor: active ? theme.accent + "22" : "transparent",
+                            backgroundColor: active ? theme.accent + "1f" : "transparent",
                             color: active ? theme.accent : theme.fg,
                           }}
                         >
-                          <span className="text-[10px] tabular-nums" style={{ color: theme.muted }}>
+                          <span
+                            className="w-6 shrink-0 text-[11px] font-semibold tabular-nums"
+                            style={{ color: active ? theme.accent : theme.muted }}
+                          >
                             {String(i + 1).padStart(2, "0")}
                           </span>
-                          <span className="ml-3 font-display">{c.title}</span>
+                          <span className="min-w-0 flex-1 text-[15px] font-semibold leading-snug [overflow-wrap:anywhere]">
+                            {c.title}
+                          </span>
+                          {active && (
+                            <span className="shrink-0 text-[10.5px] font-bold uppercase tracking-wide">
+                              Lendo
+                            </span>
+                          )}
                         </button>
                       </li>
                     );
@@ -2983,7 +3063,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                     <p className="mt-3">Selecione um trecho durante a leitura para destacá-lo.</p>
                   </div>
                 ) : (
-                  <ul className="flex-1 space-y-2 overflow-y-auto p-3">
+                  <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-3 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
                     {[...annotations.highlights]
                       .sort(
                         (a, b) =>
@@ -3036,7 +3116,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                     </p>
                   </div>
                 ) : (
-                  <ul className="flex-1 space-y-2 overflow-y-auto p-3">
+                  <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-3 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
                     {[...annotations.bookmarks]
                       .sort((a, b) => a.chapterIndex - b.chapterIndex)
                       .map((b) => (
@@ -3092,7 +3172,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                           : `${searchResults.length}${searchResults.length >= 80 ? "+" : ""} trechos encontrados`}
                     </p>
                   </div>
-                  <ul className="flex-1 space-y-1.5 overflow-y-auto px-3 pb-4">
+                  <ul className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain px-3 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
                     {searchResults.map((r) => (
                       <li key={`${r.chapterIndex}-${r.paragraphIndex}`}>
                         <button

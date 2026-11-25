@@ -79,6 +79,11 @@ function MobileWelcome() {
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-0 h-[62%] bg-[radial-gradient(ellipse_at_50%_20%,#ffe1d3_0%,transparent_70%)] dark:opacity-30"
       />
+      {/* Clock/battery stay legible over the tilted covers. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 z-[2] h-[calc(env(safe-area-inset-top)+1.25rem)] bg-gradient-to-b from-background via-background/80 to-transparent"
+      />
       <div aria-hidden className="relative -mx-6 h-[46dvh] min-h-[300px]">
         {FAN.map((b) => {
           const f = fauxBookFor(b.t);
