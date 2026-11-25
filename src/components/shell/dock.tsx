@@ -1,3 +1,4 @@
+import { motion } from "motion/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 
 import { haptic } from "@/components/motion/interactive";
@@ -30,15 +31,32 @@ export function Dock({ showMini = true }: { showMini?: boolean }) {
                 search={item.to === "/descobrir" ? DISCOVER_SEARCH : undefined}
                 onClick={() => haptic(5)}
                 aria-current={active ? "page" : undefined}
-                className={`press relative flex w-[76px] flex-col items-center gap-1 py-2 text-[10.5px] font-semibold transition-colors ${
+                className={`press relative flex min-w-0 max-w-[84px] flex-1 flex-col items-center gap-1 py-2 text-[10.5px] font-semibold transition-colors ${
                   active ? "text-foreground" : "text-faint"
                 }`}
               >
-                <Icon
-                  className={`relative h-[21px] w-[21px] ${active ? "text-gold" : ""}`}
-                  strokeWidth={active ? 2.2 : 1.8}
-                />
-                <span className="relative">{item.label}</span>
+                <span className="relative grid h-[26px] w-[42px] place-items-center">
+                  {active && (
+                    <motion.span
+                      layoutId="dock-glow"
+                      transition={{ type: "spring", stiffness: 520, damping: 38 }}
+                      className="absolute inset-0 rounded-full bg-accent-soft"
+                    />
+                  )}
+                  <motion.span
+                    key={active ? "on" : "off"}
+                    initial={active ? { scale: 0.7, y: 2 } : false}
+                    animate={{ scale: 1, y: 0 }}
+                    transition={{ type: "spring", stiffness: 600, damping: 18 }}
+                    className="relative"
+                  >
+                    <Icon
+                      className={`h-[21px] w-[21px] ${active ? "text-gold" : ""}`}
+                      strokeWidth={active ? 2.2 : 1.8}
+                    />
+                  </motion.span>
+                </span>
+                <span className="relative truncate">{item.label}</span>
               </Link>
             );
           })}
