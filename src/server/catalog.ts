@@ -275,7 +275,28 @@ export async function proxyEpub(source: CatalogSource, id: string): Promise<Resp
     gutenberg: 12_000,
   }[source];
   if (source !== "gutenberg") return proxyOne(first, new AbortController(), headerTimeout);
-  return raceMirrors(gutenbergMirrors(id));
+  const res = await raceMirrors(gutenbergMirrors(id));
+  // Heavily illustrated editions (20 MB+) are slow on phones: the
+  // text-only edition opens in a second and reads the same.
+  const len = Number(res.headers.get("content-length") ?? 0);
+  if (res.ok && len > 12 * 1024 * 1024) {
+    const light = await raceMirrors(gutenbergLightMirrors(id));
+    if (light.ok) {
+      void res.body?.cancel().catch(() => {});
+      return light;
+    }
+  }
+  return res;
+}
+
+/** Text-only editions (no illustrations) — a fraction of the size. */
+function gutenbergLightMirrors(id: string): string[] {
+  return [
+    `https://www.gutenberg.org/ebooks/${id}.epub.noimages`,
+    `https://www.gutenberg.org/cache/epub/${id}/pg${id}.epub`,
+    `https://gutenberg.pglaf.org/cache/epub/${id}/pg${id}.epub`,
+    `https://aleph.pglaf.org/cache/epub/${id}/pg${id}.epub`,
+  ];
 }
 
 /**

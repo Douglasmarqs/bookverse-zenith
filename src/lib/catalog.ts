@@ -200,7 +200,32 @@ function downloadUrl(book: CatalogBook): string {
 }
 
 async function fetchWithProgress(url: string, onProgress: (p: number) => void): Promise<Blob> {
-  const r = await fetch(url);
+  // A connection that stops sending for 20 s is treated as dropped.
+  const ctrl = new AbortController();
+  let stall = setTimeout(() => ctrl.abort(), 60_000);
+  const kick = () => {
+    clearTimeout(stall);
+    stall = setTimeout(() => ctrl.abort(), 20_000);
+  };
+  try {
+    return await readWithProgress(url, ctrl.signal, onProgress, kick);
+  } catch (err) {
+    if (ctrl.signal.aborted)
+      throw new Error("A fonte demorou demais para responder. Tente de novo.");
+    throw err;
+  } finally {
+    clearTimeout(stall);
+  }
+}
+
+async function readWithProgress(
+  url: string,
+  signal: AbortSignal,
+  onProgress: (p: number) => void,
+  kick: () => void,
+): Promise<Blob> {
+  const r = await fetch(url, { signal });
+  kick();
   if (!r.ok) {
     const msg = await r
       .json()
@@ -218,6 +243,7 @@ async function fetchWithProgress(url: string, onProgress: (p: number) => void): 
     if (done) break;
     chunks.push(value);
     got += value.length;
+    kick();
     onProgress(total ? Math.min(0.99, got / total) : Math.min(0.9, got / 2_000_000));
   }
   return new Blob(chunks as BlobPart[], { type: "application/epub+zip" });
@@ -235,8 +261,7 @@ export async function downloadBook(book: CatalogBook): Promise<string> {
   }
   setState(book.key, { state: "downloading", progress: 0 });
   try {
-    const onProgress = (progress: number) =>
-      setState(book.key, { state: "downloading", progress });
+    const onProgress = (progress: number) => setState(book.key, { state: "downloading", progress });
     let blob: Blob;
     try {
       blob = await fetchWithProgress(downloadUrl(book), onProgress);
