@@ -269,7 +269,7 @@ function AjustesPage({ user }: { user: User }) {
           : "Desligados";
 
   return (
-    <div className="mx-auto max-w-xl px-4 pb-16 lg:pt-10">
+    <div className="mx-auto max-w-xl px-4 pb-16 lg:max-w-2xl lg:pt-10">
       <TopBar title="Ajustes" fallback="/perfil" />
 
       {/* Who you are */}

@@ -193,7 +193,7 @@ function DesafiosPage() {
         };
 
   return (
-    <div className="mx-auto max-w-3xl pb-10 pt-[calc(env(safe-area-inset-top)+0.75rem)] lg:pt-10">
+    <div className="mx-auto max-w-3xl pb-10 lg:max-w-5xl pt-[calc(env(safe-area-inset-top)+0.75rem)] lg:pt-10">
       <header className="flex items-center justify-between px-3">
         <button
           type="button"

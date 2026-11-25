@@ -143,7 +143,7 @@ function MemberVoce({ user }: { user: User }) {
         };
 
   return (
-    <div className="mx-auto max-w-3xl pb-10 pt-[calc(env(safe-area-inset-top)+0.875rem)] lg:pt-10">
+    <div className="mx-auto max-w-3xl pb-10 pt-[calc(env(safe-area-inset-top)+0.875rem)] lg:pt-10 xl:max-w-6xl">
       <header className="flex items-center justify-between px-[22px] pt-2">
         <h1 className="font-display text-[44px] leading-none tracking-[-0.035em] lg:text-[56px]">
           Você
@@ -174,152 +174,157 @@ function MemberVoce({ user }: { user: User }) {
         </div>
       </motion.div>
 
-      {/* Streak */}
-      <motion.section
-        {...rise(0.05)}
-        className="relative mx-4 mt-5 overflow-hidden rounded-[30px] bg-[linear-gradient(150deg,#ff6a3d,var(--gold)_55%,#e8400f)] px-5 pb-5 pt-5 text-white shadow-[0_14px_32px_-14px_rgba(255,77,26,.55)]"
-      >
-        <Flame
-          aria-hidden
-          className="pointer-events-none absolute -right-8 -top-6 h-[150px] w-[150px] text-white/20"
-          strokeWidth={1.6}
-        />
-        <p className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.14em]">
-          <Flame className="h-4 w-4" strokeWidth={2.2} /> Sequência
-        </p>
-        <p className="mt-1.5 font-display text-[52px] leading-none tracking-[-0.04em] sm:text-[58px]">
-          {streak} {streak === 1 ? "dia" : "dias"}
-        </p>
-        <p className="mt-2.5 text-[15px] text-white/90">
-          {streak === 0
-            ? "Leia alguns minutos hoje para começar."
-            : readToday
-              ? `Você já leu hoje. Seu recorde é ${record}.`
-              : `Seu recorde é ${record}. Leia hoje para manter.`}
-        </p>
-        <WeekDots week={ritual.week} />
-      </motion.section>
+      <div className="xl:mt-3 xl:grid xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] xl:items-start">
+        <div className="min-w-0">
+          {/* Streak */}
+          <motion.section
+            {...rise(0.05)}
+            className="relative mx-4 mt-5 overflow-hidden rounded-[30px] bg-[linear-gradient(150deg,#ff6a3d,var(--gold)_55%,#e8400f)] px-5 pb-5 pt-5 text-white shadow-[0_14px_32px_-14px_rgba(255,77,26,.55)]"
+          >
+            <Flame
+              aria-hidden
+              className="pointer-events-none absolute -right-8 -top-6 h-[150px] w-[150px] text-white/20"
+              strokeWidth={1.6}
+            />
+            <p className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.14em]">
+              <Flame className="h-4 w-4" strokeWidth={2.2} /> Sequência
+            </p>
+            <p className="mt-1.5 font-display text-[52px] leading-none tracking-[-0.04em] sm:text-[58px]">
+              {streak} {streak === 1 ? "dia" : "dias"}
+            </p>
+            <p className="mt-2.5 text-[15px] text-white/90">
+              {streak === 0
+                ? "Leia alguns minutos hoje para começar."
+                : readToday
+                  ? `Você já leu hoje. Seu recorde é ${record}.`
+                  : `Seu recorde é ${record}. Leia hoje para manter.`}
+            </p>
+            <WeekDots week={ritual.week} />
+          </motion.section>
 
-      {/* Rhythm heatmap — on a neutral card so the levels are easy to read */}
-      <motion.section {...rise(0.08)} className="surface-card mx-4 mt-3 px-4 pb-4 pt-4 sm:px-5">
-        <Heatmap days={ritual.days} goal={ritual.goal} />
-      </motion.section>
-
-      {/* Stats */}
-      <motion.div {...rise(0.1)} className="mx-4 mt-3 grid grid-cols-3 gap-2.5">
-        <Stat value={`${Math.floor(yearMinutes / 60)}h`} label={`lidas em ${year}`} />
-        <Stat value={nf.format(profile?.pagesRead ?? 0)} label="páginas" />
-        <Stat
-          value={nf.format(profile?.booksCompleted ?? 0)}
-          label={(profile?.booksCompleted ?? 0) === 1 ? "livro lido" : "livros lidos"}
-        />
-      </motion.div>
-
-      {/* Week */}
-      <motion.section {...rise(0.15)} className="surface-card mx-4 mt-3 px-5 pb-4 pt-4">
-        <div className="flex items-baseline justify-between gap-3">
-          <h2 className="text-[17px] font-bold tracking-[-0.01em]">Esta semana</h2>
-          <p className="num text-[13.5px] text-muted-foreground">
-            {fmtMinutes(weekTotal)}
-            {delta !== null && ` · ${delta >= 0 ? "+" : ""}${delta}%`}
-          </p>
+          {/* Rhythm heatmap — on a neutral card so the levels are easy to read */}
+          <motion.section {...rise(0.08)} className="surface-card mx-4 mt-3 px-4 pb-4 pt-4 sm:px-5">
+            <Heatmap days={ritual.days} goal={ritual.goal} />
+          </motion.section>
         </div>
-        <WeekBars week={ritual.week} />
-        <button
-          type="button"
-          onClick={() =>
-            openLumiPanel({
-              topic: "general",
-              initialPrompt: `Analise meu ritmo de leitura e me dê 3 dicas práticas e curtas. Dados: ${Math.round(weekTotal)} min lidos nesta semana, sequência atual de ${streak} dia(s), recorde de ${record}, meta diária de ${ritual.goal} min, ${profile?.booksCompleted ?? 0} livro(s) concluído(s).`,
-            })
-          }
-          className="press mt-4 flex w-full items-center gap-3 rounded-[18px] bg-accent-soft px-3.5 py-2.5 text-left"
-        >
-          <Lumi pose="hello" size={36} shadow={false} />
-          <span className="min-w-0 flex-1">
-            <span className="block text-[14px] font-semibold">Lumi, como está meu ritmo?</span>
-            <span className="block truncate text-[12px] text-muted-foreground">
-              Uma análise rápida da sua semana, com dicas
-            </span>
-          </span>
-          <Sparkles className="h-4 w-4 shrink-0 text-gold" />
-        </button>
-      </motion.section>
+        <div className="min-w-0 xl:[&>*:first-child]:mt-5">
+          {/* Stats */}
+          <motion.div {...rise(0.1)} className="mx-4 mt-3 grid grid-cols-3 gap-2.5">
+            <Stat value={`${Math.floor(yearMinutes / 60)}h`} label={`lidas em ${year}`} />
+            <Stat value={nf.format(profile?.pagesRead ?? 0)} label="páginas" />
+            <Stat
+              value={nf.format(profile?.booksCompleted ?? 0)}
+              label={(profile?.booksCompleted ?? 0) === 1 ? "livro lido" : "livros lidos"}
+            />
+          </motion.div>
 
-      {/* Goal */}
-      <motion.div {...rise(0.2)}>
-        <Link
-          to="/metas"
-          className="surface-card press mx-4 mt-3 flex items-center gap-4 px-5 py-4"
-        >
-          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[16px] bg-accent-soft text-gold">
-            <Target className="h-[22px] w-[22px]" strokeWidth={2} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-[15.5px] font-semibold">Meta de {year}</p>
-            {goalProgress ? (
-              <>
-                <p className="mt-0.5 text-[13px] text-muted-foreground">
-                  {goalProgress.completed} de {goalProgress.target} livros
-                  {goalProgress.remaining > 0
-                    ? ` · ${goalProgress.perMonthNeeded} por mês para chegar lá`
-                    : " · meta batida!"}
-                </p>
-                <div className="mt-2 h-[5px] overflow-hidden rounded-full bg-accent-soft">
-                  <div
-                    className="h-full rounded-full bg-gold"
-                    style={{ width: `${Math.max(3, goalProgress.percent)}%` }}
-                  />
-                </div>
-              </>
-            ) : (
-              <p className="mt-0.5 text-[13px] text-muted-foreground">
-                Defina quantos livros quer ler este ano
+          {/* Week */}
+          <motion.section {...rise(0.15)} className="surface-card mx-4 mt-3 px-5 pb-4 pt-4">
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="text-[17px] font-bold tracking-[-0.01em]">Esta semana</h2>
+              <p className="num text-[13.5px] text-muted-foreground">
+                {fmtMinutes(weekTotal)}
+                {delta !== null && ` · ${delta >= 0 ? "+" : ""}${delta}%`}
               </p>
-            )}
-          </div>
-          <ChevronRight className="h-[18px] w-[18px] shrink-0 text-faint" />
-        </Link>
-      </motion.div>
+            </div>
+            <WeekBars week={ritual.week} />
+            <button
+              type="button"
+              onClick={() =>
+                openLumiPanel({
+                  topic: "general",
+                  initialPrompt: `Analise meu ritmo de leitura e me dê 3 dicas práticas e curtas. Dados: ${Math.round(weekTotal)} min lidos nesta semana, sequência atual de ${streak} dia(s), recorde de ${record}, meta diária de ${ritual.goal} min, ${profile?.booksCompleted ?? 0} livro(s) concluído(s).`,
+                })
+              }
+              className="press mt-4 flex w-full items-center gap-3 rounded-[18px] bg-accent-soft px-3.5 py-2.5 text-left"
+            >
+              <Lumi pose="hello" size={36} shadow={false} />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[14px] font-semibold">Lumi, como está meu ritmo?</span>
+                <span className="block truncate text-[12px] text-muted-foreground">
+                  Uma análise rápida da sua semana, com dicas
+                </span>
+              </span>
+              <Sparkles className="h-4 w-4 shrink-0 text-gold" />
+            </button>
+          </motion.section>
 
-      <motion.ul {...rise(0.25)} className="surface-card mx-4 mt-3 px-4">
-        <Row
-          to="/desafios"
-          icon={Trophy}
-          tint="var(--butter)"
-          label="Desafios e conquistas"
-          hint={`Nível ${getLevelInfo(profile?.xp ?? 0).level} · ${nf.format(profile?.xp ?? 0)} XP`}
-        />
-        <Row
-          to="/diario"
-          icon={NotebookPen}
-          tint="var(--lilac)"
-          label="Diário de leitura"
-          hint="suas notas e trechos"
-        />
-        <Row
-          to="/ranking"
-          icon={Users}
-          tint="var(--sky)"
-          label="Ranking"
-          hint="leitores da comunidade"
-        />
-        <Row
-          to="/downloads"
-          icon={Download}
-          tint="var(--mint)"
-          label="Downloads e arquivos"
-          hint="livros neste aparelho"
-        />
-        <Row
-          to="/ajustes"
-          icon={Settings}
-          tint="var(--surface-2)"
-          label="Ajustes"
-          hint="perfil, aparência e conta"
-          last
-        />
-      </motion.ul>
+          {/* Goal */}
+          <motion.div {...rise(0.2)}>
+            <Link
+              to="/metas"
+              className="surface-card press mx-4 mt-3 flex items-center gap-4 px-5 py-4"
+            >
+              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[16px] bg-accent-soft text-gold">
+                <Target className="h-[22px] w-[22px]" strokeWidth={2} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[15.5px] font-semibold">Meta de {year}</p>
+                {goalProgress ? (
+                  <>
+                    <p className="mt-0.5 text-[13px] text-muted-foreground">
+                      {goalProgress.completed} de {goalProgress.target} livros
+                      {goalProgress.remaining > 0
+                        ? ` · ${goalProgress.perMonthNeeded} por mês para chegar lá`
+                        : " · meta batida!"}
+                    </p>
+                    <div className="mt-2 h-[5px] overflow-hidden rounded-full bg-accent-soft">
+                      <div
+                        className="h-full rounded-full bg-gold"
+                        style={{ width: `${Math.max(3, goalProgress.percent)}%` }}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <p className="mt-0.5 text-[13px] text-muted-foreground">
+                    Defina quantos livros quer ler este ano
+                  </p>
+                )}
+              </div>
+              <ChevronRight className="h-[18px] w-[18px] shrink-0 text-faint" />
+            </Link>
+          </motion.div>
+
+          <motion.ul {...rise(0.25)} className="surface-card mx-4 mt-3 px-4">
+            <Row
+              to="/desafios"
+              icon={Trophy}
+              tint="var(--butter)"
+              label="Desafios e conquistas"
+              hint={`Nível ${getLevelInfo(profile?.xp ?? 0).level} · ${nf.format(profile?.xp ?? 0)} XP`}
+            />
+            <Row
+              to="/diario"
+              icon={NotebookPen}
+              tint="var(--lilac)"
+              label="Diário de leitura"
+              hint="suas notas e trechos"
+            />
+            <Row
+              to="/ranking"
+              icon={Users}
+              tint="var(--sky)"
+              label="Ranking"
+              hint="leitores da comunidade"
+            />
+            <Row
+              to="/downloads"
+              icon={Download}
+              tint="var(--mint)"
+              label="Downloads e arquivos"
+              hint="livros neste aparelho"
+            />
+            <Row
+              to="/ajustes"
+              icon={Settings}
+              tint="var(--surface-2)"
+              label="Ajustes"
+              hint="perfil, aparência e conta"
+              last
+            />
+          </motion.ul>
+        </div>
+      </div>
     </div>
   );
 }
@@ -566,7 +571,7 @@ function Row({
 
 function GuestVoce() {
   return (
-    <div className="mx-auto max-w-3xl pb-10 pt-[calc(env(safe-area-inset-top)+0.875rem)] lg:pt-10">
+    <div className="mx-auto max-w-3xl pb-10 lg:max-w-4xl pt-[calc(env(safe-area-inset-top)+0.875rem)] lg:pt-10">
       <header className="px-[22px] pt-2">
         <h1 className="font-display text-[44px] leading-none tracking-[-0.035em] lg:text-[56px]">
           Você
