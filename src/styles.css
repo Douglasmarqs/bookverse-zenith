@@ -69,7 +69,8 @@
   --shadow-glow: 0 14px 30px -14px color-mix(in oklab, var(--gold) 70%, transparent);
   --shadow-plate: 0 30px 60px -30px rgb(0 0 0 / 0.35);
   --shadow-book: 0 1px 1px rgb(0 0 0 / 0.08), 0 10px 22px -10px rgb(0 0 0 / 0.35);
-  --shadow-book-lift: 0 2px 2px rgb(0 0 0 / 0.06), 0 30px 50px -18px rgb(0 0 0 / 0.45),
+  --shadow-book-lift:
+    0 2px 2px rgb(0 0 0 / 0.06), 0 30px 50px -18px rgb(0 0 0 / 0.45),
     0 14px 24px -14px rgb(0 0 0 / 0.35);
   --gradient-gold: linear-gradient(180deg, var(--gold-soft), var(--gold));
   --gradient-ember: radial-gradient(
@@ -175,6 +176,40 @@
   html {
     scroll-behavior: smooth;
     overflow-x: clip;
+  }
+
+  /* ---- Auto-fit: nothing may be wider than the screen ---------------- */
+  /* Long words/URLs wrap instead of pushing the layout sideways. */
+  body {
+    overflow-wrap: break-word;
+  }
+  /* Media never exceed their container. */
+  :where(img, video, canvas, iframe, embed, object) {
+    max-width: 100%;
+  }
+  :where(img, video) {
+    height: auto;
+  }
+  /* Tables and code scroll inside themselves on narrow screens. */
+  :where(main) :where(table, pre) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  /* Dialogs/sheets: never taller than the visible screen; scroll inside. */
+  :where([role="dialog"], [role="alertdialog"]) {
+    max-height: 100dvh;
+    max-width: 100vw;
+  }
+  /* Grid/flex children may shrink below their content width. */
+  :where(main) :where(.grid > *, .flex > .flex-1) {
+    min-width: 0;
+  }
+  /* Set by FitGuard on any element found sticking out of the screen. */
+  [data-fit="1"] {
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow-wrap: anywhere;
   }
 
   body {
@@ -1105,7 +1140,9 @@
   padding: 0.85rem 1.4rem;
   white-space: nowrap;
   box-shadow: 0 14px 30px -14px var(--gold);
-  transition: transform 200ms var(--ease-out-expo), filter 200ms ease;
+  transition:
+    transform 200ms var(--ease-out-expo),
+    filter 200ms ease;
 }
 .btn-accent:hover {
   filter: brightness(1.05);
@@ -1127,7 +1164,9 @@
   background: var(--surface);
   color: var(--foreground);
   box-shadow: inset 0 0 0 1px var(--border);
-  transition: background-color 160ms ease, color 160ms ease;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
 }
 .chip[data-on="true"] {
   background: var(--parchment);
@@ -1146,12 +1185,20 @@
   background: color-mix(in oklab, var(--surface) 86%, transparent);
   backdrop-filter: blur(20px) saturate(1.6);
   -webkit-backdrop-filter: blur(20px) saturate(1.6);
-  box-shadow: inset 0 0 0 1px var(--border), 0 20px 40px -20px rgb(0 0 0 / 0.35);
+  box-shadow:
+    inset 0 0 0 1px var(--border),
+    0 20px 40px -20px rgb(0 0 0 / 0.35);
 }
 
 @keyframes lumi-blink {
-  0%, 92%, 100% { transform: scaleY(1); }
-  95% { transform: scaleY(0.1); }
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.1);
+  }
 }
 .lumi-blink {
   transform-box: fill-box;
@@ -1159,15 +1206,25 @@
   animation: lumi-blink 5.5s ease-in-out infinite;
 }
 @keyframes lumi-bob {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-4px); }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
 }
 .lumi-bob {
   animation: lumi-bob 3.6s ease-in-out infinite;
 }
 @keyframes lumi-wave {
-  0%, 100% { transform: rotate(0deg); }
-  50% { transform: rotate(-14deg); }
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(-14deg);
+  }
 }
 .lumi-wave {
   transform-box: view-box;
@@ -1175,7 +1232,11 @@
   animation: lumi-wave 1.4s ease-in-out infinite;
 }
 @media (prefers-reduced-motion: reduce) {
-  .lumi-blink, .lumi-bob, .lumi-wave { animation: none; }
+  .lumi-blink,
+  .lumi-bob,
+  .lumi-wave {
+    animation: none;
+  }
 }
 
 /* Reader sliders: ink fill on a soft track, white thumb (mockup 11). */
@@ -1223,15 +1284,23 @@
   background: transparent;
   cursor: pointer;
 }
-.scrub-range::-webkit-slider-runnable-track { height: 22px; background: transparent; }
-.scrub-range::-moz-range-track { height: 22px; background: transparent; }
+.scrub-range::-webkit-slider-runnable-track {
+  height: 22px;
+  background: transparent;
+}
+.scrub-range::-moz-range-track {
+  height: 22px;
+  background: transparent;
+}
 .scrub-range::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 22px;
   height: 22px;
   border-radius: 50%;
   background: #fff;
-  box-shadow: 0 2px 8px rgb(0 0 0 / 0.3), inset 0 0 0 5px var(--scrub-accent, #ff4d1a);
+  box-shadow:
+    0 2px 8px rgb(0 0 0 / 0.3),
+    inset 0 0 0 5px var(--scrub-accent, #ff4d1a);
 }
 .scrub-range::-moz-range-thumb {
   width: 22px;
@@ -1239,7 +1308,9 @@
   border: 0;
   border-radius: 50%;
   background: #fff;
-  box-shadow: 0 2px 8px rgb(0 0 0 / 0.3), inset 0 0 0 5px var(--scrub-accent, #ff4d1a);
+  box-shadow:
+    0 2px 8px rgb(0 0 0 / 0.3),
+    inset 0 0 0 5px var(--scrub-accent, #ff4d1a);
 }
 
 /* The page steps back while the phone controls are up (mockup 09); on

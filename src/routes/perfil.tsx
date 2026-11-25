@@ -7,6 +7,7 @@ import {
   Flame,
   NotebookPen,
   Settings,
+  Sparkles,
   Target,
   Trophy,
   Users,
@@ -20,6 +21,7 @@ import { getLevelInfo } from "@/lib/achievements";
 import { computeGoalProgress, currentYear, subscribeReadingGoal } from "@/lib/goals";
 import { subscribeLibrary, type LibraryEntry } from "@/lib/library";
 import { getLocalOnboarding, type ReadingMoment } from "@/lib/onboarding";
+import { openLumiPanel } from "@/lib/lumi-panel-store";
 import { dayKey, useRitual, type RitualDays } from "@/lib/ritual";
 import { subscribeUserProfile, type UserProfile } from "@/lib/user-profile";
 
@@ -223,6 +225,25 @@ function MemberVoce({ user }: { user: User }) {
           </p>
         </div>
         <WeekBars week={ritual.week} />
+        <button
+          type="button"
+          onClick={() =>
+            openLumiPanel({
+              topic: "general",
+              initialPrompt: `Analise meu ritmo de leitura e me dê 3 dicas práticas e curtas. Dados: ${Math.round(weekTotal)} min lidos nesta semana, sequência atual de ${streak} dia(s), recorde de ${record}, meta diária de ${ritual.goal} min, ${profile?.booksCompleted ?? 0} livro(s) concluído(s).`,
+            })
+          }
+          className="press mt-4 flex w-full items-center gap-3 rounded-[18px] bg-accent-soft px-3.5 py-2.5 text-left"
+        >
+          <Lumi pose="hello" size={36} shadow={false} />
+          <span className="min-w-0 flex-1">
+            <span className="block text-[14px] font-semibold">Lumi, como está meu ritmo?</span>
+            <span className="block truncate text-[12px] text-muted-foreground">
+              Uma análise rápida da sua semana, com dicas
+            </span>
+          </span>
+          <Sparkles className="h-4 w-4 shrink-0 text-gold" />
+        </button>
       </motion.section>
 
       {/* Goal */}

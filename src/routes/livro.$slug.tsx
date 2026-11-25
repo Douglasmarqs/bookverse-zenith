@@ -18,6 +18,7 @@ import type { User } from "firebase/auth";
 
 import { BookArt } from "@/components/book-art";
 import { BookReviews } from "@/components/book-reviews";
+import { LumiAskBar } from "@/components/lumi-ask-bar";
 import { formatMinutes } from "@/components/home/home-screen";
 import { describeFirestoreError } from "@/lib/async-utils";
 import {
@@ -428,6 +429,20 @@ function BookPage() {
                     {t}
                   </span>
                 ))}
+            </div>
+            <div className="mt-6 rounded-[24px] bg-accent-soft/60 p-3.5">
+              <p className="mb-2.5 px-1 text-[13px] font-bold">Pergunte à Lumi sobre este livro</p>
+              <LumiAskBar
+                placeholder="Sua dúvida sobre o livro…"
+                context={{ topic: "question", bookTitle: title, bookAuthor: author || undefined }}
+                prefix={`Sobre o livro “${title}”${author ? `, de ${author}` : ""}: `}
+                suggestions={[
+                  "Do que trata, sem spoilers?",
+                  "Vale a pena para quem está começando?",
+                  "Qual o contexto histórico?",
+                  "Quem são os personagens principais?",
+                ]}
+              />
             </div>
           </div>
         )}

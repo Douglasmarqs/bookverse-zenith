@@ -3,6 +3,7 @@ import {
   Link,
   notFound,
   useNavigate,
+  useRouter,
   useRouterState,
 } from "@tanstack/react-router";
 import { OFFLINE_UID, rememberLastBook } from "@/lib/nav";
@@ -108,6 +109,7 @@ import { ReaderPageSkeleton } from "@/components/reader-page-skeleton";
 import { PdfPageViewer } from "@/components/reader/pdf-page-viewer";
 import { usePdfMode } from "@/lib/pdf-mode";
 import { LumiFace } from "@/components/brand/lumi";
+import { ReaderPullSheet, type PullSheetAsk } from "@/components/reader/reader-pull-sheet";
 
 export const Route = createFileRoute("/reader/$bookId")({
   head: () => ({
@@ -646,6 +648,7 @@ type SelectedPassage = {
 };
 
 function ReaderPage({ uid, book }: { uid: string; book: Book }) {
+  const router = useRouter();
   const [settings, setSettings] = useState<ReaderSettings>(DEFAULT_SETTINGS);
   const [chapterIndex, setChapterIndex] = useState(0);
   const [scrollRatio, setScrollRatio] = useState(0);
@@ -1623,6 +1626,61 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     setSelectedPassage(null);
   }
 
+  function exitReader() {
+    if (router.history.canGoBack()) router.history.back();
+    else void router.navigate({ to: "/" });
+  }
+
+  function askLumiFromSheet(ask: PullSheetAsk) {
+    const paras = chapter.paragraphs;
+    const at = Math.min(paras.length - 1, Math.max(0, Math.floor(scrollRatio * paras.length)));
+    const here = paras
+      .slice(Math.max(0, at - 1), at + 4)
+      .join(" ")
+      .slice(0, 2200);
+    const soFar = paras
+      .slice(0, at + 1)
+      .join(" ")
+      .slice(-4000);
+    const base = {
+      bookTitle: book.title,
+      bookAuthor: book.author,
+      chapterTitle: chapter.title,
+      positionLabel: `Capítulo ${chapterIndex + 1} de ${book.chapters.length}`,
+    };
+    if (typeof ask === "object") {
+      openLumiPanel({ ...base, topic: "question", chapterExcerpt: here, initialPrompt: ask.free });
+      return;
+    }
+    const map = {
+      resumo: {
+        topic: "summary" as const,
+        chapterExcerpt: soFar,
+        initialPrompt:
+          "Resuma o que aconteceu neste capítulo até o ponto em que estou, em poucos tópicos, sem adiantar nada do que vem depois.",
+      },
+      pagina: {
+        topic: "explanation" as const,
+        chapterExcerpt: here,
+        initialPrompt:
+          "Explique de forma simples o trecho que estou lendo agora (contexto, sentido e algo que valha notar).",
+      },
+      personagens: {
+        topic: "character" as const,
+        chapterExcerpt: soFar,
+        initialPrompt:
+          "Quem são os personagens que apareceram até aqui e qual a relação entre eles? Sem spoilers do que ainda não li.",
+      },
+      palavras: {
+        topic: "explanation" as const,
+        chapterExcerpt: here,
+        initialPrompt:
+          "Liste as palavras ou expressões menos comuns deste trecho com um significado curto para cada.",
+      },
+    }[ask];
+    openLumiPanel({ ...base, ...map });
+  }
+
   async function handleHighlightColor(color: HighlightColor, openNote = false) {
     try {
       if (activeHighlight) {
@@ -1800,6 +1858,22 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
         </p>
       )}
 
+      {/* Always-there way out while reading (controls hidden) */}
+      <button
+        type="button"
+        data-reader-action="true"
+        onClick={exitReader}
+        aria-label="Sair do livro"
+        className="absolute left-2 top-[calc(env(safe-area-inset-top)+0.1rem)] z-20 grid h-10 w-10 place-items-center rounded-full transition-opacity duration-300 active:scale-95 lg:hidden"
+        style={{
+          color: theme.muted,
+          opacity: controlsVisible ? 0 : 0.9,
+          pointerEvents: controlsVisible ? "none" : "auto",
+        }}
+      >
+        <ChevronLeft className="h-[22px] w-[22px]" strokeWidth={2.2} />
+      </button>
+
       {/* Top bar (mockup 09) */}
       <header
         className={`absolute inset-x-0 top-0 z-30 transition-all duration-300 lg:pointer-events-auto lg:translate-y-0 lg:opacity-100 ${
@@ -1817,14 +1891,15 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
         }}
       >
         <div className="mx-auto flex max-w-3xl items-center gap-1 px-3 pb-3 pt-[calc(env(safe-area-inset-top)+0.45rem)] lg:max-w-none lg:px-6 lg:pb-2 lg:pt-3">
-          <Link
-            to="/"
+          <button
+            type="button"
+            onClick={exitReader}
             className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-full transition hover:opacity-70"
             aria-label="Voltar"
           >
             <ChevronLeft className="h-6 w-6 lg:hidden" strokeWidth={2} />
             <ArrowLeft className="hidden h-[21px] w-[21px] lg:block" strokeWidth={2} />
-          </Link>
+          </button>
           <span className="hidden lg:block">
             <IconBtn
               theme={theme}
@@ -2227,7 +2302,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
             <button
               type="button"
               onClick={dismissPageGestureHint}
-              className="fixed bottom-[max(2.75rem,calc(env(safe-area-inset-bottom)+2.5rem))] left-1/2 z-[38] max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-full border px-4 py-2 text-center text-xs shadow-lg backdrop-blur-md transition hover:opacity-80"
+              className="fixed bottom-[max(5.25rem,calc(env(safe-area-inset-bottom)+5rem))] left-1/2 z-[38] max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-full border px-4 py-2 text-center text-xs shadow-lg backdrop-blur-md transition hover:opacity-80"
               style={{
                 borderColor: theme.rule,
                 color: theme.fg,
@@ -2552,6 +2627,24 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
           </span>
         </button>
       )}
+
+      {/* Pull handle → Lumi + quick reading settings */}
+      <ReaderPullSheet
+        hidden={controlsVisible || panelOpen || tocOpen || listenOpen || !!selectedPassage}
+        hintBlocked={showPageGestureHint}
+        chrome={chrome}
+        pageMuted={theme.muted}
+        accent={ACCENT}
+        settings={settings}
+        onChange={(patch) => setSettings((s) => ({ ...s, ...patch, updatedAt: Date.now() }))}
+        onAsk={askLumiFromSheet}
+        onToc={() => {
+          setTocTab("toc");
+          setTocOpen(true);
+        }}
+        onListen={() => setListenOpen(true)}
+        onMore={() => setPanelOpen(true)}
+      />
 
       {/* Controls card (mockup 09) */}
       <div
