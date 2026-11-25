@@ -304,7 +304,7 @@ function ExploreHome() {
       {/* Collections bento */}
       <motion.div
         {...rise(0.08)}
-        className="mt-4 grid grid-cols-2 gap-2.5 px-4 lg:grid-cols-4 lg:gap-4 lg:px-10"
+        className="mt-4 grid grid-cols-2 gap-2.5 px-4 lg:gap-4 xl:grid-cols-4 lg:px-10"
       >
         <Link
           to="/descobrir"

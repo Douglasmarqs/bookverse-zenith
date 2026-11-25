@@ -44,7 +44,7 @@ export const Route = createFileRoute("/livro/$slug")({
   validateSearch: (
     search: Record<string, unknown>,
   ): { title: string; author?: string; source?: CatalogSource; id?: string; cover?: string } => ({
-    title: typeof search.title === "string" && search.title ? search.title : "Livro",
+    title: typeof search.title === "string" ? search.title : "",
     author: typeof search.author === "string" ? search.author : undefined,
     source: SOURCES.includes(search.source as CatalogSource)
       ? (search.source as CatalogSource)
@@ -53,7 +53,9 @@ export const Route = createFileRoute("/livro/$slug")({
     cover: typeof search.cover === "string" ? search.cover : undefined,
   }),
   head: ({ match }) => {
-    const title = (match.search as { title?: string })?.title ?? "Livro";
+    const title =
+      (match.search as { title?: string })?.title ||
+      resolveSlug((match.params as { slug?: string })?.slug ?? "").title;
     return {
       meta: [
         { title: `${title} — BookVerse` },
@@ -65,6 +67,46 @@ export const Route = createFileRoute("/livro/$slug")({
   component: BookPage,
 });
 
+/**
+ * A shared or typed link may carry only the slug (/livro/dom-casmurro).
+ * Recover the real title/author from our curated lists, or un-slug it.
+ */
+function resolveSlug(slug: string): { title: string; author: string } {
+  const s = decodeURIComponent(slug || "").toLowerCase();
+  if (!s) return { title: "Livro", author: "" };
+  const known: { title: string; author: string }[] = [
+    ...COLLECTIONS.flatMap((c) => c.books.map((b) => ({ title: b.title, author: b.author ?? "" }))),
+    ...LUMI_PICKS.map((p) => ({ title: p.title, author: p.author })),
+  ];
+  const hit =
+    known.find((b) => slugFor(b.title, b.author || undefined) === s) ??
+    known.find((b) => slugFor(b.title) === s) ??
+    known.find((b) => s.startsWith(slugFor(b.title) + "-"));
+  if (hit) return hit;
+  const words = s.split("-").filter(Boolean);
+  const small = new Set([
+    "de",
+    "da",
+    "do",
+    "das",
+    "dos",
+    "e",
+    "o",
+    "a",
+    "os",
+    "as",
+    "no",
+    "na",
+    "em",
+  ]);
+  return {
+    title: words
+      .map((w, i) => (i > 0 && small.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)))
+      .join(" "),
+    author: "",
+  };
+}
+
 /** Known reading times from our curated lists. */
 function knownMinutes(title: string): number | null {
   const n = norm(title);
@@ -74,7 +116,12 @@ function knownMinutes(title: string): number | null {
 }
 
 function BookPage() {
-  const { title, author = "", source, id, cover } = Route.useSearch();
+  const search = Route.useSearch();
+  const { slug } = Route.useParams();
+  const fromSlug = useMemo(() => (search.title ? null : resolveSlug(slug)), [search.title, slug]);
+  const title = search.title || fromSlug?.title || "Livro";
+  const author = search.author ?? fromSlug?.author ?? "";
+  const { source, id, cover } = search;
   const navigate = useNavigate();
   const router = useRouter();
   const [meta, setMeta] = useState<BookMeta | null | undefined>(undefined);
@@ -119,6 +166,11 @@ function BookPage() {
   // Every free copy of this book across the sources.
   useEffect(() => {
     let alive = true;
+    // Never leave "Procurando…" spinning if a source hangs.
+    const giveUp = setTimeout(
+      () => alive && setCopy((prev) => (prev === undefined ? null : prev)),
+      12000,
+    );
     void searchCatalog(`${title} ${author.split(" ").slice(-1)[0] ?? ""}`.trim()).then((r) => {
       if (!alive) return;
       const nt = norm(title);
@@ -131,6 +183,7 @@ function BookPage() {
     });
     return () => {
       alive = false;
+      clearTimeout(giveUp);
     };
   }, [title, author]);
 

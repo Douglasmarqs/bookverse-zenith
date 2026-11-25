@@ -688,6 +688,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   // moves horizontally by exactly one measured page width at a time.
   const [pageIndex, setPageIndex] = useState(0);
   const [pageCount, setPageCount] = useState(1);
+  const scrollPadRef = useRef<HTMLSpanElement>(null);
   const [pageWidthPx, setPageWidthPx] = useState(0);
   const [showPageGestureHint, setShowPageGestureHint] = useState(false);
   const [turn, setTurn] = useState<{
@@ -1011,6 +1012,8 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     const el = contentRef.current;
     if (!el) return;
     const raf = requestAnimationFrame(() => {
+      // Measure without the previous chapter's end spacer.
+      if (scrollPadRef.current) scrollPadRef.current.style.left = "0px";
       const rawPages = el.scrollWidth / pageWidthPx;
       const wholePages = Math.floor(rawPages);
       const remainder = rawPages - wholePages;
@@ -1023,6 +1026,14 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       // holds a meaningful chunk of content.
       const count = Math.max(1, remainder > 0.12 ? wholePages + 1 : Math.max(wholePages, 1));
       setPageCount(count);
+      // The last page/spread may be only partly filled (an odd column in
+      // the two-page view): stretch the scroll area so it can be reached
+      // exactly, instead of being clamped and repeating the previous page.
+      const pad = scrollPadRef.current;
+      if (pad) {
+        const need = el.scrollWidth < count * pageWidthPx - 1;
+        pad.style.left = need ? `${count * pageWidthPx - 1}px` : "0px";
+      }
       const pendingRatio = pendingRatioRef.current;
       const target =
         pendingRatio !== null
@@ -1445,7 +1456,29 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   // A printed-book page holds ~250 words: gives "108 / 256" style locations.
   const totalWords = chapterWords.reduce((a, b) => a + b, 0);
   const bookPages = Math.max(1, Math.round(totalWords / 250));
-  const bookPage = Math.min(bookPages, Math.max(1, Math.round(overallProgress * bookPages) || 1));
+  // Location in "printed pages": the estimate for everything before this
+  // chapter, plus the real page we're on inside it (so each turn steps by
+  // exactly one page — or two in the side-by-side spread).
+  const pagesBeforeChapter = Math.round(
+    chapterWords.slice(0, chapterIndex).reduce((a, b) => a + b, 0) / 250,
+  );
+  const chapterPagesEst = Math.max(1, Math.round((chapterWords[chapterIndex] ?? 0) / 250));
+  const spreadCols =
+    settings.mode === "paginated" && settings.twoPage !== false && pageWidthPx >= 900 ? 2 : 1;
+  const bookPage =
+    settings.mode === "paginated"
+      ? Math.min(
+          bookPages,
+          pagesBeforeChapter + Math.min(chapterPagesEst, pageIndex * spreadCols + 1),
+        )
+      : Math.min(bookPages, Math.max(1, Math.round(overallProgress * bookPages) || 1));
+  // Real pages inside the chapter, exact at this size/font.
+  const chapterPageTotal = pageCount * spreadCols;
+  const chapterPageFrom = pageIndex * spreadCols + 1;
+  const chapterPageLabel =
+    spreadCols === 2
+      ? `${chapterPageFrom}–${Math.min(chapterPageTotal, chapterPageFrom + 1)}`
+      : `${chapterPageFrom}`;
 
   const minutesLeftInChapter = Math.max(
     0,
@@ -1977,7 +2010,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
         <div
           data-reader-action="true"
           role="status"
-          className="absolute left-1/2 top-[calc(env(safe-area-inset-top)+4rem)] z-30 flex w-[min(92vw,32rem)] -translate-x-1/2 items-center gap-3 rounded-2xl px-4 py-2.5 text-xs shadow-lg"
+          className="absolute left-1/2 top-[calc(env(safe-area-inset-top)+4rem)] z-30 flex lg:bottom-16 lg:top-auto w-[min(92vw,32rem)] -translate-x-1/2 items-center gap-3 rounded-2xl px-4 py-2.5 text-xs shadow-lg"
           style={{ background: theme.fg, color: theme.bg, fontFamily: "var(--font-sans)" }}
         >
           <span className="min-w-0 flex-1 leading-snug">
@@ -2034,8 +2067,15 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                 : undefined
           }
           style={contentStyle}
-          className="h-full"
+          className="relative h-full"
         >
+          {settings.mode === "paginated" && (
+            <span
+              ref={scrollPadRef}
+              aria-hidden
+              className="pointer-events-none absolute left-0 top-0 h-px w-px"
+            />
+          )}
           <article
             ref={articleRef}
             className={`mx-auto ${controlsVisible && !panelOpen ? "reader-dim" : ""}`}
@@ -2584,9 +2624,9 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
         >
           <span className="hidden items-center gap-6 text-[12.5px] font-semibold lg:flex">
             <span className="shrink-0">
-              {twoPageOn
-                ? `Pág. ${bookPage}–${Math.min(bookPages, bookPage + 1)} de ${bookPages}`
-                : `Pág. ${bookPage} de ${bookPages}`}
+              {settings.mode === "paginated"
+                ? `Cap. ${romanize(chapterIndex + 1)} · pág. ${chapterPageLabel} de ${chapterPageTotal}`
+                : `${Math.round(overallProgress * 100)}% lido`}
             </span>
             <span
               className="h-1 flex-1 overflow-hidden rounded-full"
@@ -2612,11 +2652,13 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                   : settings.footer === "livro"
                     ? `${formatDuration(minutesLeftInBook)} restantes no livro`
                     : settings.footer === "pagina"
-                      ? `Página ${bookPage} de ${bookPages}`
+                      ? `Página ${chapterPageLabel} de ${chapterPageTotal} do capítulo`
                       : `${Math.round(overallProgress * 100)}% lido`}
               </span>
               <span className="tabular-nums">
-                {bookPage} / {bookPages}
+                {settings.mode === "paginated"
+                  ? `${chapterPageLabel} / ${chapterPageTotal}`
+                  : `${Math.round(overallProgress * 100)}%`}
               </span>
             </span>
           )}

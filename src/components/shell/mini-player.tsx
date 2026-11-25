@@ -60,6 +60,96 @@ export function MiniPlayer({ compact = false }: { compact?: boolean }) {
     "Toque para voltar à página";
   const pct = Math.round((book?.progress ?? 0) * 100);
 
+  if (compact) {
+    return (
+      <AnimatePresence initial={false}>
+        {book && (
+          <motion.div
+            key="mini-card"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 12 }}
+            transition={{ type: "spring", stiffness: 380, damping: 34 }}
+            className="relative overflow-hidden rounded-[20px] p-3 shadow-[0_18px_36px_-22px_rgb(0_0_0/0.6)]"
+            style={{ background: pal.bg, color: pal.fg }}
+          >
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.1em] opacity-70">
+              Lendo agora
+            </p>
+            <div className="flex gap-3">
+              <Link
+                to="/reader/$bookId"
+                params={{ bookId: book.id }}
+                aria-hidden
+                tabIndex={-1}
+                className="w-[44px] shrink-0 overflow-hidden rounded-[3px_5px_5px_3px] shadow-[0_6px_14px_rgb(0_0_0/0.35)]"
+              >
+                {book.cover ? (
+                  <img src={book.cover} alt="" className="aspect-[2/3] w-full object-cover" />
+                ) : (
+                  <FauxCover book={fauxBookFor(title, book.author)} showText={false} />
+                )}
+              </Link>
+              <div className="min-w-0 flex-1 pr-5">
+                <p className="line-clamp-2 text-[14px] font-[680] leading-snug tracking-[-0.01em]">
+                  {title}
+                </p>
+                <p className="mt-0.5 truncate text-[12px] opacity-70">{subtitle}</p>
+              </div>
+            </div>
+            <div className="mt-3 flex items-center gap-2">
+              <span
+                className="h-1 flex-1 overflow-hidden rounded-full"
+                style={{ background: "color-mix(in srgb, currentColor 20%, transparent)" }}
+              >
+                <span
+                  className="block h-full rounded-full"
+                  style={{ width: `${pct}%`, background: pal.accent }}
+                />
+              </span>
+              <span className="text-[11px] font-semibold tabular-nums opacity-80">{pct}%</span>
+            </div>
+            <div className="mt-3 flex gap-2">
+              <Link
+                to="/reader/$bookId"
+                params={{ bookId: book.id }}
+                className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-full text-[13px] font-semibold transition hover:opacity-90"
+                style={{ background: pal.fg, color: pal.bg }}
+              >
+                <BookOpen className="h-4 w-4" /> Continuar
+              </Link>
+              <button
+                type="button"
+                aria-label="Ouvir"
+                title="Ouvir"
+                onClick={() =>
+                  void navigate({
+                    to: "/reader/$bookId",
+                    params: { bookId: book.id },
+                    search: { ouvir: 1 } as never,
+                  })
+                }
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-full transition hover:opacity-90"
+                style={{ background: "color-mix(in srgb, currentColor 16%, transparent)" }}
+              >
+                <Headphones className="h-4 w-4" />
+              </button>
+            </div>
+            <button
+              type="button"
+              aria-label="Fechar Lendo agora"
+              title="Fechar"
+              onClick={dismiss}
+              className="absolute right-1.5 top-1.5 grid h-8 w-8 place-items-center rounded-full opacity-60 transition hover:opacity-100"
+            >
+              <X className="h-4 w-4" strokeWidth={2.2} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    );
+  }
+
   return (
     <AnimatePresence initial={false}>
       {book && (

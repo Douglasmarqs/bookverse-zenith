@@ -215,7 +215,7 @@
   [data-fit="1"] {
     max-width: 100% !important;
     min-width: 0 !important;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
   }
 
   body {

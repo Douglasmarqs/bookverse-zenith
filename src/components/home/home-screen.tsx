@@ -1,11 +1,12 @@
 import { Link } from "@tanstack/react-router";
 import { motion, useReducedMotion } from "motion/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "firebase/auth";
 import {
   ArrowRight,
-  Bell,
   BookOpen,
+  ChevronLeft,
+  ChevronRight,
   Compass,
   FileUp,
   Flame,
@@ -260,17 +261,14 @@ export function HomeScreen({ user }: { user: User | null }) {
             <AccountMenu />
           </div>
           <div className="hidden shrink-0 items-center gap-2.5 lg:flex">
-            <span className="inline-flex h-[42px] items-center gap-2 rounded-full bg-card px-4 text-sm font-bold shadow-[inset_0_0_0_1px_var(--border)]">
-              <Flame className="h-[18px] w-[18px] text-gold" /> {streak}{" "}
-              {streak === 1 ? "dia" : "dias"}
-            </span>
-            <button
-              type="button"
-              aria-label="Notificações"
-              className="press grid h-[42px] w-[42px] place-items-center rounded-full bg-card shadow-[inset_0_0_0_1px_var(--border)]"
+            <Link
+              to="/perfil"
+              title="Sua sequência de leitura"
+              className="inline-flex h-[42px] items-center gap-2 rounded-full bg-card px-4 text-sm font-bold shadow-[inset_0_0_0_1px_var(--border)] transition hover:bg-surface-2"
             >
-              <Bell className="h-[19px] w-[19px]" />
-            </button>
+              <Flame className="h-[18px] w-[18px] text-gold" /> {streak}{" "}
+              {streak === 1 ? "dia seguido" : "dias seguidos"}
+            </Link>
             <AccountMenu />
           </div>
         </div>
@@ -315,7 +313,7 @@ export function HomeScreen({ user }: { user: User | null }) {
         </motion.div>
       )}
 
-      <div className="mt-5 grid gap-3 lg:mt-8 lg:grid-cols-[minmax(0,1.6fr)_minmax(18rem,1fr)] lg:gap-5">
+      <div className="mt-5 grid gap-3 lg:mt-8 xl:grid-cols-[minmax(0,1.6fr)_minmax(18rem,1fr)] lg:gap-5">
         {/* Continue */}
         <motion.div {...rise(0.06)} className="min-w-0">
           {library === null ? (
@@ -483,32 +481,89 @@ function Rail({
   children: React.ReactNode;
 }) {
   const reduce = useReducedMotion();
+  const track = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({ left: false, right: false });
+
+  useEffect(() => {
+    const el = track.current;
+    if (!el) return;
+    const update = () =>
+      setEdges({
+        left: el.scrollLeft > 4,
+        right: el.scrollLeft < el.scrollWidth - el.clientWidth - 4,
+      });
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", update);
+      ro.disconnect();
+    };
+  }, [contentKey, children]);
+
+  const page = (dir: 1 | -1) => {
+    const el = track.current;
+    if (el)
+      el.scrollBy({ left: dir * el.clientWidth * 0.85, behavior: reduce ? "auto" : "smooth" });
+  };
+  // Soft fade on the side(s) that still have books — a hint there's more.
+  const mask =
+    edges.left && edges.right
+      ? "linear-gradient(90deg,transparent,#000 48px,#000 calc(100% - 48px),transparent)"
+      : edges.right
+        ? "linear-gradient(90deg,#000 calc(100% - 64px),transparent)"
+        : edges.left
+          ? "linear-gradient(90deg,transparent,#000 48px)"
+          : undefined;
+
   return (
     <motion.section
       initial={reduce ? false : { opacity: 0.55, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, ease: EASE, delay }}
-      className="mt-8"
+      className="mt-8 lg:mt-10"
+      aria-label={title}
     >
       <div className="mb-3.5 flex items-center justify-between gap-3 px-1">
         <h2 className="min-w-0 truncate text-[21px] lg:text-[26px]">{title}</h2>
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           {action}
           <Link
             to={to}
             search={to === "/descobrir" ? DISCOVER_SEARCH : undefined}
-            className="text-[13.5px] font-semibold text-muted-foreground hover:text-foreground"
+            className="rounded-full px-1 text-[13.5px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
           >
             Ver tudo
           </Link>
+          <div className="hidden items-center gap-1.5 md:flex">
+            {([-1, 1] as const).map((dir) => (
+              <button
+                key={dir}
+                type="button"
+                onClick={() => page(dir)}
+                disabled={dir < 0 ? !edges.left : !edges.right}
+                aria-label={dir < 0 ? `Voltar em ${title}` : `Mais em ${title}`}
+                className="grid h-9 w-9 place-items-center rounded-full bg-card shadow-[inset_0_0_0_1px_var(--border)] transition hover:bg-surface-2 disabled:cursor-default disabled:opacity-35 disabled:hover:bg-card"
+              >
+                {dir < 0 ? (
+                  <ChevronLeft className="h-[18px] w-[18px]" />
+                ) : (
+                  <ChevronRight className="h-[18px] w-[18px]" />
+                )}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
       <motion.div
         key={contentKey}
+        ref={track}
         initial={contentKey ? { opacity: 0.3, x: 18 } : false}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.45, ease: EASE }}
-        className="no-scrollbar -mx-4 flex snap-x scroll-pl-4 gap-3.5 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:scroll-pl-6 sm:px-6 lg:mx-0 lg:scroll-pl-0 lg:gap-5 lg:px-0"
+        style={mask ? { maskImage: mask, WebkitMaskImage: mask } : undefined}
+        className="no-scrollbar -mx-4 flex snap-x scroll-pl-4 gap-3.5 overflow-x-auto overscroll-x-contain px-4 pb-2 sm:-mx-6 sm:scroll-pl-6 sm:px-6 md:snap-mandatory lg:mx-0 lg:scroll-pl-0 lg:gap-5 lg:px-0"
       >
         {children}
       </motion.div>
@@ -542,62 +597,74 @@ function LumiTodayCard({ pick, delay }: { pick: LumiPick; delay: number }) {
       initial={reduce ? false : { opacity: 0.55, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, ease: EASE, delay }}
-      className="mt-6 overflow-hidden rounded-[28px] bg-accent-soft p-4 sm:p-5"
+      className="mt-6 overflow-hidden rounded-[28px] bg-accent-soft p-4 sm:p-5 lg:mt-8 lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-10 lg:p-7"
     >
-      <div className="flex items-start gap-3">
-        <Lumi pose="reading" size={54} shadow={false} />
-        <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-1.5 text-[11.5px] font-bold uppercase tracking-[0.12em] text-gold">
-            <Sparkles className="h-3.5 w-3.5" /> A Lumi indica hoje
-          </p>
+      <div className="min-w-0">
+        <div className="flex items-start gap-3">
+          <Lumi pose="reading" size={54} shadow={false} />
+          <div className="min-w-0 flex-1">
+            <p className="flex items-center gap-1.5 text-[11.5px] font-bold uppercase tracking-[0.12em] text-gold">
+              <Sparkles className="h-3.5 w-3.5" /> A Lumi indica hoje
+            </p>
+            <Link
+              to="/reader/$bookId"
+              params={{ bookId: gutenbergReaderId(pick.gutenbergId) }}
+              className="mt-1 block font-display text-[20px] leading-tight hover:underline"
+            >
+              {pick.title}
+            </Link>
+            <p className="text-[12.5px] text-muted-foreground">
+              {pick.author} · {formatMinutes(pick.minutes)} · {pick.mood}
+            </p>
+          </div>
+        </div>
+        <p className="mt-3 max-w-[62ch] text-[14px] leading-relaxed text-foreground/85 lg:text-[15px]">
+          “{pick.lumiNote}”
+        </p>
+        <div className="mt-3.5 flex flex-wrap gap-2">
           <Link
             to="/reader/$bookId"
             params={{ bookId: gutenbergReaderId(pick.gutenbergId) }}
-            className="mt-1 block font-display text-[20px] leading-tight hover:underline"
+            className="press inline-flex h-9 items-center gap-1.5 rounded-full bg-foreground px-4 text-[13px] font-semibold text-background"
           >
-            {pick.title}
+            <BookOpen className="h-4 w-4" /> Ler agora
           </Link>
-          <p className="text-[12.5px] text-muted-foreground">
-            {pick.author} · {formatMinutes(pick.minutes)} · {pick.mood}
-          </p>
+          <button
+            type="button"
+            onClick={() =>
+              openLumiPanel({
+                topic: "question",
+                bookTitle: pick.title,
+                bookAuthor: pick.author,
+                initialPrompt: `Sem spoilers: por que eu deveria ler “${pick.title}”, de ${pick.author}? O que observar enquanto leio?`,
+              })
+            }
+            className="press inline-flex h-9 items-center gap-1.5 rounded-full bg-card px-3.5 text-[13px] font-semibold shadow-[inset_0_0_0_1px_var(--border)]"
+          >
+            <Sparkles className="h-3.5 w-3.5 text-gold" /> Por que ler?
+          </button>
+        </div>
+        <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4 sm:-mx-5 sm:px-5 lg:mx-0 lg:flex-wrap lg:overflow-visible lg:px-0">
+          {LUMI_CHIPS.map((c) => (
+            <button
+              key={c.label}
+              type="button"
+              onClick={() => openLumiPanel({ topic: "general", initialPrompt: c.prompt })}
+              className="press shrink-0 rounded-full border border-gold/30 bg-card/60 px-3 py-1.5 text-[12.5px] font-semibold text-foreground/80"
+            >
+              {c.label}
+            </button>
+          ))}
         </div>
       </div>
-      <p className="mt-3 text-[14px] leading-relaxed text-foreground/85">“{pick.lumiNote}”</p>
-      <div className="mt-3.5 flex flex-wrap gap-2">
-        <Link
-          to="/reader/$bookId"
-          params={{ bookId: gutenbergReaderId(pick.gutenbergId) }}
-          className="press inline-flex h-9 items-center gap-1.5 rounded-full bg-foreground px-4 text-[13px] font-semibold text-background"
-        >
-          <BookOpen className="h-4 w-4" /> Ler agora
-        </Link>
-        <button
-          type="button"
-          onClick={() =>
-            openLumiPanel({
-              topic: "question",
-              bookTitle: pick.title,
-              bookAuthor: pick.author,
-              initialPrompt: `Sem spoilers: por que eu deveria ler “${pick.title}”, de ${pick.author}? O que observar enquanto leio?`,
-            })
-          }
-          className="press inline-flex h-9 items-center gap-1.5 rounded-full bg-card px-3.5 text-[13px] font-semibold shadow-[inset_0_0_0_1px_var(--border)]"
-        >
-          <Sparkles className="h-3.5 w-3.5 text-gold" /> Por que ler?
-        </button>
-      </div>
-      <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4 sm:-mx-5 sm:px-5">
-        {LUMI_CHIPS.map((c) => (
-          <button
-            key={c.label}
-            type="button"
-            onClick={() => openLumiPanel({ topic: "general", initialPrompt: c.prompt })}
-            className="press shrink-0 rounded-full border border-gold/30 bg-card/60 px-3 py-1.5 text-[12.5px] font-semibold text-foreground/80"
-          >
-            {c.label}
-          </button>
-        ))}
-      </div>
+      <Link
+        to="/reader/$bookId"
+        params={{ bookId: gutenbergReaderId(pick.gutenbergId) }}
+        aria-label={`Ler ${pick.title}`}
+        className="hidden w-[132px] rotate-[3deg] transition-transform duration-300 hover:rotate-0 hover:scale-[1.03] lg:block"
+      >
+        <BookArt title={pick.title} author={pick.author} lift />
+      </Link>
     </motion.section>
   );
 }
@@ -777,7 +844,7 @@ function StartCard() {
         <p className="mt-2 text-[15px] text-muted-foreground">
           Escolha um clássico grátis ou traga seus EPUBs e PDFs. A Lumi guarda a página para você.
         </p>
-        <div className="mt-5 flex flex-col gap-2.5 sm:flex-row lg:justify-start">
+        <div className="mt-5 flex flex-col gap-2.5 sm:flex-row sm:flex-wrap lg:justify-start">
           <Link to="/descobrir" search={DISCOVER_SEARCH} className="btn-primary">
             <Compass className="h-[18px] w-[18px]" /> Explorar livros grátis
           </Link>

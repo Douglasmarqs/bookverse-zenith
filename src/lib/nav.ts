@@ -1,9 +1,11 @@
 import {
-  ChartNoAxesColumn,
   CircleUserRound,
   Compass,
+  FilePlus2,
+  HardDriveDownload,
   House,
   LibraryBig,
+  Settings,
   Trophy,
   type LucideIcon,
 } from "lucide-react";
@@ -33,18 +35,29 @@ export const MEMBER_NAV: {
   },
 ];
 
-/** Desktop sidebar: same places, with "Você" split into its two halves. */
+/** Desktop sidebar: the four tabs plus Desafios, with room to breathe. */
 export const DESKTOP_NAV: {
   label: string;
-  to: "/" | "/descobrir" | "/biblioteca" | "/metas" | "/desafios";
+  to: "/" | "/descobrir" | "/biblioteca" | "/perfil" | "/desafios";
   icon: LucideIcon;
   also?: string[];
 }[] = [
   { label: "Início", to: "/", icon: House },
   { label: "Explorar", to: "/descobrir", icon: Compass, also: ["/livro", "/catalogo"] },
   { label: "Biblioteca", to: "/biblioteca", icon: LibraryBig },
-  { label: "Progresso", to: "/metas", icon: ChartNoAxesColumn, also: ["/diario", "/perfil"] },
+  { label: "Você", to: "/perfil", icon: CircleUserRound, also: ["/metas", "/diario"] },
   { label: "Desafios", to: "/desafios", icon: Trophy, also: ["/ranking"] },
+];
+
+/** Secondary destinations, quieter, under the main ones. */
+export const DESKTOP_SECONDARY: {
+  label: string;
+  to: "/adicionar" | "/downloads" | "/ajustes";
+  icon: LucideIcon;
+}[] = [
+  { label: "Adicionar livros", to: "/adicionar", icon: FilePlus2 },
+  { label: "Downloads e arquivos", to: "/downloads", icon: HardDriveDownload },
+  { label: "Ajustes", to: "/ajustes", icon: Settings },
 ];
 
 export function isNavActive(
