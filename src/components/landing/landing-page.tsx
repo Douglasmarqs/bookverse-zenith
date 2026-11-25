@@ -100,7 +100,7 @@ function MobileWelcome() {
                 animate={reduce ? undefined : { y: [0, -6, 0] }}
                 transition={{ duration: 5 + b.d * 10, repeat: Infinity, ease: "easeInOut" }}
               >
-                <BookArt title={f.title} author={f.author} lift />
+                <BookArt title={f.title} author={f.author} lift live />
               </motion.div>
             </motion.div>
           );
@@ -372,22 +372,19 @@ function CoverStrip() {
   return (
     <section
       aria-label="Alguns clássicos grátis"
-      className="overflow-hidden border-y border-border bg-background py-7"
+      className="overflow-hidden border-y border-border bg-background py-8"
     >
-      <motion.div
-        className="flex w-max gap-5"
-        animate={reduce ? undefined : { x: ["0%", "-50%"] }}
-        transition={{ duration: 60, repeat: Infinity, ease: "linear" }}
-      >
+      {/* Pauses under the cursor so a book can be picked up and turned. */}
+      <div className={`flex w-max gap-5 ${reduce ? "" : "shelf-marquee"}`}>
         {row.map((t, i) => {
           const b = fauxBookFor(t);
           return (
             <div key={i} className="w-[84px] shrink-0 lg:w-[96px]">
-              <BookArt title={b.title} author={b.author} />
+              <BookArt title={b.title} author={b.author} live />
             </div>
           );
         })}
-      </motion.div>
+      </div>
     </section>
   );
 }

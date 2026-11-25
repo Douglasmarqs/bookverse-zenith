@@ -255,7 +255,13 @@ function DesafiosPage() {
           </Link>
         )}
         <div className="pointer-events-none absolute -right-4 top-6 w-[42%] max-w-[170px] rotate-[10deg]">
-          <BookArt title={heroBook.title} author={heroBook.author} cover={heroBook.cover} lift />
+          <BookArt
+            title={heroBook.title}
+            author={heroBook.author}
+            cover={heroBook.cover}
+            lift
+            live
+          />
         </div>
       </motion.section>
 

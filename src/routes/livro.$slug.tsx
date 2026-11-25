@@ -343,7 +343,7 @@ function BookPage() {
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
           className="mx-auto mt-2 w-40 lg:w-48"
         >
-          <BookArt title={title} author={author} cover={realCover} lift eager />
+          <BookArt title={title} author={author} cover={realCover} lift eager live />
         </motion.div>
 
         <div className="mt-5 px-6 text-center">
