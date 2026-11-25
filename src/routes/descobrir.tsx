@@ -37,6 +37,7 @@ import {
 } from "@/lib/catalog";
 import { COLLECTIONS, collectionById, type Collection } from "@/lib/collections";
 import { picksFor } from "@/lib/editorial";
+import { coverIn, flyToLibrary, playBookOpen } from "@/lib/book-motion";
 import { LumiAskBar } from "@/components/lumi-ask-bar";
 import { slugFor } from "@/lib/library";
 import { gutenbergReaderId } from "@/lib/public-domain";
@@ -479,10 +480,10 @@ function CollectionView({ collection: c }: { collection: Collection }) {
           {c.books.length} livros · {c.subtitle}
         </p>
       </div>
-      <div className="mt-6 grid grid-cols-3 gap-x-3.5 gap-y-5 px-[22px] sm:grid-cols-4 lg:grid-cols-6 lg:gap-x-5 lg:px-10">
+      <div className="mt-6 reveal-flow grid grid-cols-3 gap-x-3.5 gap-y-5 px-[22px] sm:grid-cols-4 lg:grid-cols-6 lg:gap-x-5 lg:px-10">
         {c.books.map((b) => (
           <Link key={b.title} {...bookHref(b)} className="press min-w-0">
-            <BookArt title={b.title} author={b.author} />
+            <BookArt title={b.title} author={b.author} live />
             <p className="mt-2 truncate text-[13px] font-semibold">{b.title}</p>
             <p className="truncate text-xs text-faint">
               {b.minutes ? formatMinutes(b.minutes) : b.author}
@@ -759,13 +760,15 @@ function ResultRow({ book: b, q, last }: { book: CatalogBook; q: string; last: b
   const local = state?.state === "done" ? state.readerId : downloadedReaderId(b.key);
   const ready = local ?? b.readerId ?? null;
 
-  async function act() {
+  async function act(row: Element | null) {
     if (ready) {
+      playBookOpen(coverIn(row));
       void navigate({ to: "/reader/$bookId", params: { bookId: ready } });
       return;
     }
     try {
       const id = await downloadBook(b);
+      flyToLibrary(row);
       toast.success(`"${b.title}" baixado — disponível offline.`, {
         action: {
           label: "Ler",
@@ -826,7 +829,7 @@ function ResultRow({ book: b, q, last }: { book: CatalogBook; q: string; last: b
       ) : (
         <button
           type="button"
-          onClick={() => void act()}
+          onClick={(e) => void act(e.currentTarget.closest("li"))}
           className="press inline-flex h-[38px] shrink-0 items-center gap-1.5 rounded-full bg-foreground px-4 text-sm font-semibold text-background"
         >
           {ready ? (

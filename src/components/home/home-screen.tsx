@@ -25,6 +25,7 @@ import { Lumi } from "@/components/brand/lumi";
 import { AccountMenu } from "@/components/shell/account-menu";
 import { openCommandPalette } from "@/lib/command-palette-store";
 import { picksFor, type LumiPick } from "@/lib/editorial";
+import { useSway } from "@/components/motion/use-sway";
 import { openLumiPanel } from "@/lib/lumi-panel-store";
 import { bookPalette } from "@/lib/faux-books";
 import { computeGoalProgress, currentYear, subscribeReadingGoal } from "@/lib/goals";
@@ -502,6 +503,13 @@ function Rail({
     };
   }, [contentKey, children]);
 
+  useSway(
+    () => track.current,
+    () => track.current,
+    "x",
+    [contentKey],
+  );
+
   const page = (dir: 1 | -1) => {
     const el = track.current;
     if (el)
@@ -563,7 +571,7 @@ function Rail({
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.45, ease: EASE }}
         style={mask ? { maskImage: mask, WebkitMaskImage: mask } : undefined}
-        className="no-scrollbar -mx-4 flex snap-x scroll-pl-4 gap-3.5 overflow-x-auto overscroll-x-contain px-4 pb-2 sm:-mx-6 sm:scroll-pl-6 sm:px-6 md:snap-mandatory lg:mx-0 lg:scroll-pl-0 lg:gap-5 lg:px-0"
+        className="rail-flow no-scrollbar -mx-4 flex snap-x scroll-pl-4 gap-3.5 overflow-x-auto overscroll-x-contain px-4 pb-2 pt-3 sm:-mx-6 sm:scroll-pl-6 sm:px-6 md:snap-mandatory lg:mx-0 lg:scroll-pl-0 lg:gap-5 lg:px-0"
       >
         {children}
       </motion.div>
@@ -663,7 +671,7 @@ function LumiTodayCard({ pick, delay }: { pick: LumiPick; delay: number }) {
         aria-label={`Ler ${pick.title}`}
         className="hidden w-[132px] rotate-[3deg] transition-transform duration-300 hover:rotate-0 hover:scale-[1.03] lg:block"
       >
-        <BookArt title={pick.title} author={pick.author} lift />
+        <BookArt title={pick.title} author={pick.author} lift live />
       </Link>
     </motion.section>
   );
@@ -684,7 +692,7 @@ function BookTile({
 }) {
   const inner = (
     <>
-      <BookArt title={title} author={author} cover={cover} />
+      <BookArt title={title} author={author} cover={cover} live />
       <p className="mt-2.5 truncate text-[13.5px] font-semibold tracking-[-0.01em]">{title}</p>
       {meta && <p className="mt-0.5 truncate text-xs text-faint">{meta}</p>}
     </>
@@ -739,7 +747,7 @@ function ContinueCard({
           className="press w-24 shrink-0 lg:w-[150px]"
           aria-label={`Abrir ${entry.title}`}
         >
-          <BookArt title={entry.title} author={entry.author} cover={entry.cover} lift eager />
+          <BookArt title={entry.title} author={entry.author} cover={entry.cover} lift eager live />
         </Link>
         <div className="min-w-0 flex-1 pb-0.5 lg:flex lg:flex-col">
           <p

@@ -38,6 +38,7 @@ export function Sidebar() {
               key={item.to}
               to={item.to}
               search={item.to === "/descobrir" ? DISCOVER_SEARCH : undefined}
+              data-fly-target={item.to === "/biblioteca" ? "biblioteca" : undefined}
               aria-current={active ? "page" : undefined}
               className={`relative flex h-11 items-center gap-3 rounded-[14px] px-3 text-[15px] font-semibold transition-colors ${
                 active

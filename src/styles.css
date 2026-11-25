@@ -1341,3 +1341,196 @@
     transform: translateX(300%);
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * Live books: covers behave like objects. They tilt toward the cursor (or
+ * finger) with a moving glare and the page block on the fore-edge, lean with
+ * scroll speed (--sway / --swayx, set by useSway), and rails flow like a
+ * shelf (scroll-driven, where supported). Everything is transform/opacity.
+ * ------------------------------------------------------------------------- */
+.book3d {
+  --rx: 0deg;
+  --ry: 0deg;
+  --gx: 50%;
+  --gy: 20%;
+  position: relative;
+  perspective: 900px;
+  perspective-origin: 50% 45%;
+}
+.book3d-body {
+  position: relative;
+  transform-style: preserve-3d;
+  transform: rotateX(calc(var(--sway, 0) * -1deg)) rotateY(calc(var(--swayx, 0) * 1deg));
+  transition:
+    transform 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 0.4s ease;
+}
+.book3d[data-live] .book3d-body,
+html[data-swaying] .book3d-body {
+  will-change: transform;
+}
+.book3d[data-live] .book3d-body {
+  transform: translateZ(24px) rotateX(var(--rx)) rotateY(var(--ry));
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.book3d[data-live="press"] .book3d-body {
+  transform: translateZ(8px) rotateX(calc(var(--rx) * 0.6)) rotateY(calc(var(--ry) * 0.6));
+}
+.book3d-body > :first-child {
+  transition: box-shadow 0.4s ease;
+}
+.book3d[data-live] .book3d-body > :first-child {
+  box-shadow:
+    0 30px 44px -20px rgb(0 0 0 / 0.55),
+    0 8px 16px -8px rgb(0 0 0 / 0.35);
+}
+/* The block of pages along the fore-edge: opens as the right side recedes. */
+.book3d-pages {
+  position: absolute;
+  top: 1.2%;
+  bottom: 1.2%;
+  left: calc(100% - 1px);
+  width: var(--edge, 0px);
+  clip-path: polygon(0 0, 100% 3.5%, 100% 96.5%, 0 100%);
+  background:
+    linear-gradient(90deg, rgb(0 0 0 / 0.3), rgb(0 0 0 / 0.04) 60%, rgb(0 0 0 / 0.12)),
+    repeating-linear-gradient(0deg, #f8f3e8 0 1px, #d6ccb8 1px 2.5px);
+  pointer-events: none;
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.book3d[data-live] .book3d-pages {
+  transition: width 0.18s ease-out;
+}
+.book3d-glare {
+  position: absolute;
+  inset: 0;
+  border-radius: 4px 8px 8px 4px;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(
+    circle at var(--gx) var(--gy),
+    rgb(255 255 255 / 0.42),
+    rgb(255 255 255 / 0.08) 38%,
+    transparent 62%
+  );
+  mix-blend-mode: soft-light;
+  transition: opacity 0.35s ease;
+}
+.book3d[data-live] .book3d-glare {
+  opacity: 1;
+}
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    /* Horizontal shelves: books swing in from the edge and out the other. */
+    .rail-flow > * {
+      animation:
+        rail-in linear backwards,
+        rail-out linear forwards;
+      animation-timeline: view(inline), view(inline);
+      animation-range:
+        entry 0% entry 100%,
+        exit 0% exit 100%;
+      transform-origin: 50% 60%;
+    }
+    /* Grids: books rise and settle as they come into view. */
+    .reveal-flow > * {
+      animation: book-rise linear backwards;
+      animation-timeline: view();
+      animation-range: entry 0% entry 85%;
+    }
+  }
+}
+@keyframes rail-in {
+  from {
+    opacity: 0.5;
+    transform: perspective(800px) rotateY(-32deg) scale(0.88);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes rail-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0.5;
+    transform: perspective(800px) rotateY(32deg) scale(0.88);
+  }
+}
+@keyframes book-rise {
+  from {
+    opacity: 0.55;
+    transform: perspective(900px) translateY(34px) rotateX(16deg) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .book3d-body,
+  .book3d[data-live] .book3d-body {
+    transform: none !important;
+    transition: none;
+  }
+}
+
+/* Landing shelf: endless, and it holds still while you browse it. */
+.shelf-marquee {
+  animation: shelf-marquee 60s linear infinite;
+}
+.shelf-marquee:hover {
+  animation-play-state: paused;
+}
+@keyframes shelf-marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shelf-marquee {
+    animation: none;
+  }
+}
+
+/* Lumi alive: pupils follow you (vars set by LumiGaze), she hops on tap. */
+[data-lumi] .lumi-pupil,
+[data-lumi] .lumi-iris {
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+[data-lumi][data-look] .lumi-pupil {
+  transform: translate(var(--lx, 0px), var(--ly, 0px));
+}
+[data-lumi][data-look] .lumi-iris {
+  transform: translate(calc(var(--lx, 0px) * 0.45), calc(var(--ly, 0px) * 0.45));
+}
+.lumi-hop {
+  animation: lumi-hop 0.6s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+@keyframes lumi-hop {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  30% {
+    transform: translateY(-10%) scale(1.04, 0.97);
+  }
+  60% {
+    transform: translateY(0) scale(0.96, 1.04);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-lumi] .lumi-pupil,
+  [data-lumi] .lumi-iris {
+    transform: none !important;
+  }
+  .lumi-hop {
+    animation: none;
+  }
+}

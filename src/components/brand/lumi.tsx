@@ -73,8 +73,9 @@ function build({
     wave: ["", "rotate(140 104 220)"],
   }[wings]!;
 
+  // Iris and pupil sit in groups the gaze tracker can shift (lumi-gaze.ts).
   const pupil = (cx: number, cy: number, dx = 0, dy = 0) =>
-    `<circle cx="${cx + dx * 0.5}" cy="${cy + dy * 0.5}" r="31" fill="${iris}"/><circle cx="${cx + dx}" cy="${cy + dy}" r="20" fill="${ink}"/><circle cx="${cx + dx + 7}" cy="${cy + dy - 7}" r="6.5" fill="#fff"/><circle cx="${cx + dx - 6}" cy="${cy + dy + 7}" r="2.6" fill="#fff" opacity=".8"/>`;
+    `<g class="lumi-iris"><circle cx="${cx + dx * 0.5}" cy="${cy + dy * 0.5}" r="31" fill="${iris}"/></g><g class="lumi-pupil"><circle cx="${cx + dx}" cy="${cy + dy}" r="20" fill="${ink}"/><circle cx="${cx + dx + 7}" cy="${cy + dy - 7}" r="6.5" fill="#fff"/><circle cx="${cx + dx - 6}" cy="${cy + dy + 7}" r="2.6" fill="#fff" opacity=".8"/></g>`;
   const eyeSet = {
     open: pupil(150, 170) + pupil(250, 170),
     down: pupil(150, 170, 3, 10) + pupil(250, 170, -3, 10),
@@ -168,6 +169,9 @@ function build({
 
 export const lumiSvg = build;
 
+/** Eyes that can follow you (the others are closed, smiling or busy). */
+const LOOKING_EYES = new Set<LumiEyes>(["open", "up", "down", "side", "wink", "wide"]);
+
 export function Lumi({
   pose = "idle",
   size = 160,
@@ -183,12 +187,16 @@ export function Lumi({
   label?: string;
   bob?: boolean;
 }) {
-  const svg = build({ ...(LUMI_POSES[pose] as LumiOptions), animate: true, ...opts, size });
+  const merged = { ...(LUMI_POSES[pose] as LumiOptions), ...opts };
+  const svg = build({ ...merged, animate: true, size });
+  const looks = LOOKING_EYES.has(merged.eyes ?? "open");
   return (
     <span
       role={label ? "img" : undefined}
       aria-label={label}
       aria-hidden={label ? undefined : true}
+      data-lumi=""
+      data-look={looks ? "" : undefined}
       className={`inline-block shrink-0 ${bob ? "lumi-bob" : ""} ${className}`}
       style={{ width: size, lineHeight: 0, ...style }}
       dangerouslySetInnerHTML={{ __html: svg }}
@@ -223,10 +231,13 @@ export function LumiFace({
     eyes,
     shadow: false,
     view: "92 58 216 216",
+    animate: true,
   });
   return (
     <span
       aria-hidden="true"
+      data-lumi=""
+      data-look={LOOKING_EYES.has(eyes) ? "" : undefined}
       className={`inline-block shrink-0 overflow-hidden align-middle ${className}`}
       style={{
         width: size,

@@ -54,6 +54,7 @@ import {
   subscribeReadingProgress,
   type ReadingProgress,
 } from "@/lib/reader-store";
+import { coverIn, playBookOpen } from "@/lib/book-motion";
 
 export const Route = createFileRoute("/biblioteca")({
   head: () => ({
@@ -549,7 +550,7 @@ function BibliotecaPage() {
           ) : visible.length === 0 ? (
             <EmptyShelf tab={tab} list={list} query={query} total={books.length} />
           ) : view === "grade" ? (
-            <ul className="mt-4 grid grid-cols-3 gap-x-4 gap-y-7 px-[22px] sm:grid-cols-4 lg:grid-cols-6 lg:px-4">
+            <ul className="reveal-flow mt-4 grid grid-cols-3 gap-x-4 gap-y-7 px-[22px] sm:grid-cols-4 lg:grid-cols-6 lg:px-4">
               <AnimatePresence initial={false}>
                 {visible.map((b, i) => (
                   <GridItem
@@ -692,13 +693,15 @@ function GridItem({
       <button
         type="button"
         {...handlers}
-        onClick={() => {
-          if (!fired.current) onOpen();
+        onClick={(e) => {
+          if (fired.current) return;
+          if (book.readerId) playBookOpen(coverIn(e.currentTarget));
+          onOpen();
         }}
         className="press block w-full select-none text-left [-webkit-touch-callout:none]"
         aria-label={`${book.title}, ${book.author}`}
       >
-        <BookArt title={book.title} author={book.author} cover={book.cover} />
+        <BookArt title={book.title} author={book.author} cover={book.cover} live />
       </button>
       <button
         type="button"

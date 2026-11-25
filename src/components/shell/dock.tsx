@@ -33,6 +33,7 @@ export function Dock({ showMini = true }: { showMini?: boolean }) {
                 key={item.to}
                 to={item.to}
                 search={item.to === "/descobrir" ? DISCOVER_SEARCH : undefined}
+                data-fly-target={item.to === "/biblioteca" ? "biblioteca" : undefined}
                 onPointerDown={() => setTapped(item.to)}
                 onClick={() => {
                   haptic(5);
