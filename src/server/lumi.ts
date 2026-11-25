@@ -61,9 +61,23 @@ const json = (body: unknown, status = 200) => Response.json(body, { status });
  * Which AI to call. On Vercel, AI Gateway accepts the deployment's own OIDC
  * identity (no key to manage); a GROQ_API_KEY still works as before.
  */
-function provider(
-  request: Request,
-): { url: string; key: string; model: string; vision: string } | null {
+/** Preferred first; the free AI Gateway tier doesn't serve every model, so
+ * the first one that answers is remembered for the next requests. */
+const GATEWAY_MODELS = [
+  "anthropic/claude-haiku-5.5",
+  "anthropic/claude-haiku-4.5",
+  "openai/gpt-oss-120b",
+  "google/gemini-2.5-flash",
+  "google/gemini-2.5-flash-lite",
+  "openai/gpt-4.1-mini",
+  "meta/llama-3.3-70b",
+  "mistral/mistral-small",
+];
+let workingModel: string | null = null;
+
+type Provider = { url: string; key: string; model: string; vision: string; gateway?: boolean };
+
+function provider(request: Request): Provider | null {
   const gatewayKey =
     process.env.AI_GATEWAY_API_KEY ||
     request.headers.get("x-vercel-oidc-token") ||
@@ -72,8 +86,9 @@ function provider(
     return {
       url: "https://ai-gateway.vercel.sh/v1/chat/completions",
       key: gatewayKey,
-      model: "anthropic/claude-haiku-5.5",
-      vision: "anthropic/claude-haiku-5.5",
+      model: workingModel ?? GATEWAY_MODELS[0]!,
+      vision: workingModel ?? GATEWAY_MODELS[0]!,
+      gateway: true,
     };
   }
   if (process.env.GROQ_API_KEY) {
@@ -124,41 +139,51 @@ export async function handleLumi(request: Request): Promise<Response> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 28_000);
   try {
-    const r = await fetch(ai.url, {
-      method: "POST",
-      signal: ctrl.signal,
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${ai.key}` },
-      body: JSON.stringify({
-        model: hasImage ? ai.vision : ai.model,
-        max_tokens: 600,
-        messages: [
-          { role: "system", content: systemPrompt(ctx) },
-          ...(hasImage
-            ? [
+    const call = (model: string) =>
+      fetch(ai.url, {
+        method: "POST",
+        signal: ctrl.signal,
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${ai.key}` },
+        body: JSON.stringify({
+          model,
+          max_tokens: 600,
+          messages: chat,
+        }),
+      });
+    const chat = [
+      { role: "system", content: systemPrompt(ctx) },
+      ...(hasImage
+        ? [
+            {
+              role: "user",
+              content: [
                 {
-                  role: "user",
-                  content: [
-                    {
-                      type: "text",
-                      text: "Esta é a página atual do PDF. Leia o conteúdo visível para responder. Não antecipe páginas seguintes.",
-                    },
-                    { type: "image_url", image_url: { url: image } },
-                  ],
+                  type: "text",
+                  text: "Esta é a página atual do PDF. Leia o conteúdo visível para responder. Não antecipe páginas seguintes.",
                 },
-              ]
-            : []),
-          ...messages.map((m) => ({ role: m.role, content: m.text })),
-        ],
-      }),
-    });
-    if (!r.ok) {
-      console.warn(
-        "[lumi] provider error",
-        r.status,
-        (await r.text().catch(() => "")).slice(0, 300),
-      );
-      return json({ error: "A Lumi não conseguiu responder agora." }, 502);
+                { type: "image_url", image_url: { url: image } },
+              ],
+            },
+          ]
+        : []),
+      ...messages.map((m) => ({ role: m.role, content: m.text })),
+    ];
+    const candidates = ai.gateway
+      ? [...new Set([workingModel ?? "", ...GATEWAY_MODELS].filter(Boolean))]
+      : [hasImage ? ai.vision : ai.model];
+    let r: Response | null = null;
+    for (const model of candidates) {
+      r = await call(model);
+      if (r.ok) {
+        if (ai.gateway) workingModel = model;
+        break;
+      }
+      const detail = (await r.text().catch(() => "")).slice(0, 300);
+      console.warn("[lumi] provider error", model, r.status, detail);
+      // Only move on when this model isn't available to the account.
+      if (!ai.gateway || ![400, 402, 403, 404].includes(r.status)) break;
     }
+    if (!r || !r.ok) return json({ error: "A Lumi não conseguiu responder agora." }, 502);
     const data = (await r.json()) as { choices?: { message?: { content?: string } }[] };
     const reply = (data.choices?.[0]?.message?.content ?? "").trim();
     return json({

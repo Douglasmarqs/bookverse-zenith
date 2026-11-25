@@ -105,6 +105,7 @@ import { describeFirestoreError } from "@/lib/async-utils";
 import { ReaderPageSkeleton } from "@/components/reader-page-skeleton";
 import { PdfPageViewer } from "@/components/reader/pdf-page-viewer";
 import { usePdfMode } from "@/lib/pdf-mode";
+import { LumiFace } from "@/components/brand/lumi";
 
 export const Route = createFileRoute("/reader/$bookId")({
   head: () => ({
@@ -201,6 +202,10 @@ function useReaderSession(allowGuest: boolean): ReaderSession {
   }, [allowGuest, navigate]);
 
   return session;
+}
+
+function LumiIcon({ className = "" }: { className?: string }) {
+  return <LumiFace size={22} className={`${className} !h-[22px] !w-[22px]`} />;
 }
 
 const ReaderGuestContext = createContext(false);
@@ -1820,7 +1825,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
               }
               label="Perguntar à Lumi"
             >
-              <Sparkles className="h-5 w-5" />
+              <LumiFace size={24} />
             </IconBtn>
             <IconBtn theme={theme} onClick={() => setPanelOpen(true)} label="Aparência (A)">
               <ALargeSmall className="h-5 w-5" />
@@ -2273,7 +2278,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                     },
                   },
                   {
-                    icon: Sparkles,
+                    icon: LumiIcon as unknown as typeof List,
                     label: "Lumi",
                     on: () => askLumiAboutPassage("Explique em linguagem simples", "explanation"),
                   },
@@ -2310,7 +2315,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                       askLumiAboutPassage("Traduza para português do Brasil", "translation"),
                   },
                   {
-                    icon: Sparkles,
+                    icon: LumiIcon as unknown as typeof List,
                     label: "Lumi",
                     on: () => askLumiAboutPassage("Explique em linguagem simples", "explanation"),
                   },
@@ -2579,7 +2584,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                 },
               },
               {
-                icon: Sparkles,
+                icon: LumiIcon as unknown as typeof List,
                 label: "Lumi",
                 lumi: true,
                 on: () =>

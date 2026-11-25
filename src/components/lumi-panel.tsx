@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useDragControls } from "motion/react";
-import { ArrowUp, Loader2, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowUp, Loader2, Trash2, X } from "lucide-react";
 import { LumiFace } from "@/components/brand/lumi";
 import { LumiMascot } from "@/components/lumi-mascot";
 import {
@@ -204,13 +204,9 @@ export function LumiPanel() {
               <span className="h-[5px] w-10 rounded-full bg-border" />
             </div>
             <div className="flex items-center gap-3 px-5 pb-3 pt-2 lg:pt-6">
-              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-lilac text-[#5b4be0]">
-                <Sparkles className="h-[22px] w-[22px]" strokeWidth={2} />
-              </span>
+              <LumiFace size={46} className="shrink-0" />
               <div className="min-w-0 flex-1">
-                <p className="text-[18px] font-bold leading-tight tracking-[-0.01em]">
-                  {context?.selectedText ? "Lumi explica" : "Lumi"}
-                </p>
+                <p className="text-[18px] font-bold leading-tight tracking-[-0.01em]">Lumi</p>
                 <p className="truncate text-[13px] text-muted-foreground">{subtitle}</p>
               </div>
               {messages.length > 1 && (
@@ -249,20 +245,23 @@ export function LumiPanel() {
                       animate={{ opacity: 1, y: 0 }}
                       className="flex justify-end"
                     >
-                      <p className="max-w-[85%] rounded-[20px] rounded-br-[6px] bg-surface-2 px-4 py-2.5 text-[15px] leading-relaxed">
+                      <p className="max-w-[82%] rounded-[20px] rounded-br-[6px] bg-foreground px-4 py-2.5 text-[15px] leading-relaxed text-background">
                         {m.text}
                       </p>
                     </motion.div>
                   ) : (
-                    <motion.p
+                    <motion.div
                       key={i}
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.35 }}
-                      className="whitespace-pre-line text-[16px] leading-[1.6] text-foreground/90"
+                      className="flex items-end gap-2.5"
                     >
-                      {m.text}
-                    </motion.p>
+                      <LumiFace size={32} className="mb-0.5 shrink-0" />
+                      <p className="max-w-[86%] whitespace-pre-line rounded-[20px] rounded-bl-[6px] bg-surface-2 px-4 py-3 text-[15.5px] leading-[1.55] text-foreground/90">
+                        {m.text}
+                      </p>
+                    </motion.div>
                   ),
                 )
               )}
