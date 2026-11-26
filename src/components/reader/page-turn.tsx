@@ -86,17 +86,25 @@ export const TurnStage = forwardRef<TurnStageHandle, Props>(function TurnStage(
   const topShade = useRef<HTMLDivElement>(null);
   const flapWrap = useRef<HTMLDivElement>(null);
   const flap = useRef<HTMLDivElement>(null);
+  const flapShade = useRef<HTMLDivElement>(null);
   const forward = to > from;
   // Which page sits underneath and which one moves.
   const underIndex = style === "folha" ? (forward ? to : from) : forward ? from : to;
   const topIndex = style === "folha" ? (forward ? from : to) : forward ? to : from;
 
   const lastP = useRef(0);
+  // Measured once per turn: reading layout inside the per-frame update would
+  // force a synchronous re-layout of the whole stage on every frame (the
+  // main cause of stutter on phones).
+  const size = useRef<{ w: number; h: number } | null>(null);
   const apply = (pRaw: number) => {
     const p = Math.max(0, Math.min(1, pRaw));
     lastP.current = p;
-    const W = root.current?.clientWidth ?? pageWidth;
-    const H = root.current?.clientHeight ?? 800;
+    if (!size.current && root.current) {
+      size.current = { w: root.current.clientWidth, h: root.current.clientHeight };
+    }
+    const W = size.current?.w ?? pageWidth;
+    const H = size.current?.h ?? 800;
     const u = under.current,
       t = top.current;
     if (!u || !t) return;
@@ -145,17 +153,21 @@ export const TurnStage = forwardRef<TurnStageHandle, Props>(function TurnStage(
     const left = `polygon(-400px 0px, ${xt}px 0px, ${xb}px ${H}px, -400px ${H}px)`;
     const xmin = Math.min(xt, xb);
     t.style.clipPath = left;
+    // Shading strips are static gradients that just slide with the fold
+    // (transform + opacity only — no gradient rebuilt per frame).
     if (topShade.current) {
-      topShade.current.style.background = `linear-gradient(90deg, rgba(0,0,0,0) ${xmin - 90}px, rgba(0,0,0,${0.1 * sn}) ${xmin}px)`;
+      topShade.current.style.transform = `translateX(${xmin - 90}px)`;
+      topShade.current.style.opacity = String(sn);
     }
     if (underShade.current) {
       underShade.current.style.clipPath = right;
-      underShade.current.style.background = `linear-gradient(90deg, rgba(0,0,0,${0.3 * sn + 0.05}) ${xmin}px, rgba(0,0,0,0) ${xmin + 110}px)`;
+      underShade.current.style.transform = `translateX(${xmin}px)`;
+      underShade.current.style.opacity = String(0.15 + 0.85 * sn);
     }
     if (flap.current && flapWrap.current) {
       flap.current.style.transform = `matrix(${a},${b},${c},${d},${e},${g})`;
       flap.current.style.clipPath = right;
-      flap.current.style.background = `linear-gradient(90deg, color-mix(in oklab, ${bg} 82%, #000) ${xmin}px, color-mix(in oklab, ${bg} 96%, #fff) ${xmin + 50}px, color-mix(in oklab, ${bg} 92%, #000) ${xmin + 160}px, color-mix(in oklab, ${bg} 86%, #000) ${W}px)`;
+      if (flapShade.current) flapShade.current.style.transform = `translateX(${xmin}px)`;
       flapWrap.current.style.visibility = f <= 0.001 ? "hidden" : "visible";
     }
   };
@@ -166,6 +178,9 @@ export const TurnStage = forwardRef<TurnStageHandle, Props>(function TurnStage(
   useLayoutEffect(() => apply(lastP.current));
 
   const pageProps = { html: snapshot, pageWidth, columnWidth, bg, fg, padding };
+  // Paper-back colours, computed once per turn instead of every frame.
+  const flapBase = `color-mix(in oklab, ${bg} 86%, #000)`;
+  const flapGradient = `linear-gradient(90deg, color-mix(in oklab, ${bg} 82%, #000) 0px, color-mix(in oklab, ${bg} 96%, #fff) 50px, color-mix(in oklab, ${bg} 92%, #000) 160px, color-mix(in oklab, ${bg} 86%, #000) 100%)`;
   return (
     <div
       ref={root}
@@ -176,14 +191,38 @@ export const TurnStage = forwardRef<TurnStageHandle, Props>(function TurnStage(
       <div ref={under} className="absolute inset-0 will-change-transform">
         <Page {...pageProps} index={underIndex} />
       </div>
-      {style === "folha" && <div ref={underShade} className="absolute inset-0" />}
+      {style === "folha" && (
+        <div ref={underShade} className="absolute inset-0 overflow-hidden">
+          <div
+            className="absolute inset-y-0 left-0 w-[110px] will-change-transform"
+            style={{ background: "linear-gradient(90deg, rgba(0,0,0,.35), rgba(0,0,0,0))" }}
+          />
+        </div>
+      )}
       <div ref={top} className="absolute inset-0 will-change-transform">
         <Page {...pageProps} index={topIndex} />
-        {style === "folha" && <div ref={topShade} className="absolute inset-0" />}
+        {style === "folha" && (
+          <div
+            ref={topShade}
+            className="absolute inset-y-0 left-0 w-[90px] will-change-transform"
+            style={{ background: "linear-gradient(90deg, rgba(0,0,0,0), rgba(0,0,0,.1))" }}
+          />
+        )}
       </div>
       {style === "folha" && (
         <div ref={flapWrap} className="absolute inset-0">
-          <div ref={flap} className="absolute inset-0" style={{ transformOrigin: "0 0" }} />
+          <div
+            ref={flap}
+            className="absolute inset-0 overflow-hidden will-change-transform"
+            style={{ transformOrigin: "0 0", background: flapBase }}
+          >
+            {/* Highlight + crease, built once and slid along the fold. */}
+            <div
+              ref={flapShade}
+              className="absolute inset-y-0 left-0 w-[200%]"
+              style={{ background: flapGradient }}
+            />
+          </div>
         </div>
       )}
     </div>

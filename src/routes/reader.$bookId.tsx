@@ -604,6 +604,74 @@ const THEME_STYLES = {
 const PAGE_GESTURE_HINT_KEY = "bookverse:reader-page-gesture-tip";
 // Top clears the notch + the quiet running title; bottom clears the home
 // indicator, the footer line and the pull handle.
+/**
+ * The page-turn stage needs a copy of the pages being turned. Copying the
+ * whole chapter (often 50+ pages) on every turn froze phones, so on long
+ * chapters we copy just the blocks that appear on the two pages involved,
+ * with the first one nudged to exactly where it sat on screen.
+ */
+function sliceForTurn(
+  article: HTMLElement,
+  scroller: HTMLElement,
+  stride: number,
+  colWidth: number,
+  a: number,
+  b: number,
+): { html: string; base: number } | null {
+  const kids = Array.from(article.children) as HTMLElement[];
+  if (kids.length < 30 || stride <= 0 || colWidth <= 0) return null;
+  const sRect = scroller.getBoundingClientRect();
+  const padTop = parseFloat(getComputedStyle(scroller).paddingTop) || 0;
+  const colOf = (x: number) => Math.floor((x - sRect.left + scroller.scrollLeft + 1) / colWidth);
+  const perPage = Math.max(1, Math.round(stride / colWidth));
+  const pageOf = (x: number) => Math.floor(colOf(x) / perPage);
+  const rects = (el: HTMLElement) => el.getClientRects();
+  const first = Math.min(a, b);
+  const last = Math.max(a, b);
+
+  // First block still visible on `first`, last block starting by `last`.
+  let lo = 0;
+  let hi = kids.length - 1;
+  let start = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const r = rects(kids[mid]!);
+    if (r.length && pageOf(r[r.length - 1]!.left) >= first) {
+      start = mid;
+      hi = mid - 1;
+    } else lo = mid + 1;
+  }
+  if (start < 0) return null;
+  lo = start;
+  hi = kids.length - 1;
+  let end = start;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const r = rects(kids[mid]!);
+    if (r.length && pageOf(r[0]!.left) <= last) {
+      end = mid;
+      lo = mid + 1;
+    } else hi = mid - 1;
+  }
+  const r0 = rects(kids[start]!)[0];
+  if (!r0) return null;
+  const startCol = colOf(r0.left);
+  const base = Math.floor(startCol / perPage);
+  const shell = article.cloneNode(false) as HTMLElement;
+  // Empty leading columns when the block starts on the right half of a spread.
+  for (let c = base * perPage; c < startCol; c++) {
+    const gap = document.createElement("div");
+    gap.setAttribute("style", "height:1px;break-after:column;-webkit-column-break-after:always");
+    shell.appendChild(gap);
+  }
+  for (let i = start; i <= end; i++) {
+    const copy = kids[i]!.cloneNode(true) as HTMLElement;
+    if (i === start) copy.style.marginTop = `${Math.max(0, r0.top - (sRect.top + padTop))}px`;
+    shell.appendChild(copy);
+  }
+  return { html: shell.outerHTML, base };
+}
+
 const PAGE_PADDING =
   "max(4.25rem, calc(var(--safe-top, 0px) + 2.9rem)) 0 calc(max(1.1rem, var(--safe-bottom, 0px)) + 3.4rem)";
 const ACCENT = "#FF4D1A";
@@ -696,6 +764,8 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     to: number;
     style: Exclude<TurnStyle, "instantaneo">;
     snapshot: string;
+    /** Page the trimmed snapshot starts on (0 when it's the whole chapter). */
+    base: number;
   } | null>(null);
   const stageRef = useRef<TurnStageHandle>(null);
   const turnModeRef = useRef<"auto" | "drag">("auto");
@@ -1108,7 +1178,24 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       }
       isPageTurningRef.current = true;
       turnModeRef.current = mode;
-      setTurn({ from: pageIndex, to: target, style: turnStyle, snapshot: article.outerHTML });
+      const scroller = contentRef.current;
+      const cut = scroller
+        ? sliceForTurn(
+            article,
+            scroller,
+            pageWidthPx,
+            parseFloat(getComputedStyle(scroller).columnWidth) || pageWidthPx,
+            pageIndex,
+            target,
+          )
+        : null;
+      setTurn({
+        from: pageIndex,
+        to: target,
+        style: turnStyle,
+        snapshot: cut?.html ?? article.outerHTML,
+        base: cut?.base ?? 0,
+      });
       return true;
     },
     [pageIndex, pageWidthPx, turnStyle],
@@ -2292,8 +2379,8 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
             snapshot={turn.snapshot}
             pageWidth={pageWidthPx}
             columnWidth={columnWidthPx}
-            from={turn.from}
-            to={turn.to}
+            from={turn.from - turn.base}
+            to={turn.to - turn.base}
             style={turn.style}
             bg={theme.bg}
             fg={theme.fg}
