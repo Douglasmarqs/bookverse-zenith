@@ -151,14 +151,17 @@ async function searchGutenbergOpds(q: string): Promise<CatalogBook[]> {
   return out;
 }
 
-/** Both Gutenberg searches at once; the first one with results wins. */
+/**
+ * Gutenberg three ways at once — our own index of the mirror's catalogue
+ * (reliable, fast once warm), Gutendex and Gutenberg's OPDS search (both
+ * often refuse cloud servers). The first one with results wins.
+ */
 async function searchGutenberg(q: string): Promise<CatalogBook[]> {
-  const dex = searchGutenbergDex(q);
-  const opds = searchGutenbergOpds(q);
-  const firstNonEmpty = await Promise.any(
-    [dex, opds].map((p) => p.then((r) => (r.length ? r : Promise.reject(new Error("empty"))))),
+  const { searchGutenbergIndex } = await import("./gutenberg-index");
+  const tries = [searchGutenbergIndex(q), searchGutenbergDex(q), searchGutenbergOpds(q)];
+  return Promise.any(
+    tries.map((p) => p.then((r) => (r.length ? r : Promise.reject(new Error("empty"))))),
   ).catch(() => [] as CatalogBook[]);
-  return firstNonEmpty;
 }
 
 async function searchWikisource(q: string): Promise<CatalogBook[]> {
