@@ -1534,3 +1534,14 @@ html[data-swaying] .book3d-body {
     animation: none;
   }
 }
+
+/* iOS zooms the whole page into any field whose text is under 16px, which
+ * leaves the layout cut off at the sides ("blocos quebrados"). On touch
+ * screens every field gets at least 16px, so focusing never zooms. */
+@media (pointer: coarse) {
+  input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  textarea,
+  select {
+    font-size: max(16px, 1em) !important;
+  }
+}
