@@ -15,6 +15,12 @@ export function Dock({ showMini = true }: { showMini?: boolean }) {
   // The tapped tab lights up instantly, before the new page has rendered.
   const [tapped, setTapped] = useState<string | null>(null);
   useEffect(() => setTapped(null), [pathname]);
+  // Never leave a tab lit if the navigation didn't happen.
+  useEffect(() => {
+    if (!tapped) return;
+    const t = setTimeout(() => setTapped(null), 1500);
+    return () => clearTimeout(t);
+  }, [tapped]);
   return (
     <div className="vt-dock pointer-events-none fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 lg:hidden">
       {/* Fades the page out under the bar so text never collides with it. */}
@@ -34,7 +40,6 @@ export function Dock({ showMini = true }: { showMini?: boolean }) {
                 to={item.to}
                 search={item.to === "/descobrir" ? DISCOVER_SEARCH : undefined}
                 data-fly-target={item.to === "/biblioteca" ? "biblioteca" : undefined}
-                onPointerDown={() => setTapped(item.to)}
                 onClick={() => {
                   haptic(5);
                   setTapped(item.to);
@@ -49,15 +54,15 @@ export function Dock({ showMini = true }: { showMini?: boolean }) {
                     <motion.span
                       layoutId="dock-glow"
                       transition={{ type: "spring", stiffness: 520, damping: 38 }}
-                      className="absolute inset-0 rounded-full bg-accent-soft"
+                      className="pointer-events-none absolute inset-0 rounded-full bg-accent-soft"
                     />
                   )}
+                  {/* Same element on and off: replacing the node under the
+                      finger made iOS drop the tap (tab needed a 2nd tap). */}
                   <motion.span
-                    key={active ? "on" : "off"}
-                    initial={active ? { scale: 0.7, y: 2 } : false}
-                    animate={{ scale: 1, y: 0 }}
-                    transition={{ type: "spring", stiffness: 600, damping: 18 }}
-                    className="relative"
+                    animate={active ? { scale: [0.8, 1.08, 1], y: [2, -1, 0] } : { scale: 1, y: 0 }}
+                    transition={{ duration: 0.35, ease: "easeOut" }}
+                    className="pointer-events-none relative"
                   >
                     <Icon
                       className={`h-[21px] w-[21px] ${active ? "text-gold" : ""}`}
@@ -65,7 +70,7 @@ export function Dock({ showMini = true }: { showMini?: boolean }) {
                     />
                   </motion.span>
                 </span>
-                <span className="relative truncate">{item.label}</span>
+                <span className="pointer-events-none relative truncate">{item.label}</span>
               </Link>
             );
           })}

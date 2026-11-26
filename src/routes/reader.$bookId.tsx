@@ -1252,6 +1252,44 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     return () => cancelAnimationFrame(id);
   }, [settings.mode, pageWidthPx, pageIndex, pageCount, chapterIndex, layoutTick]);
 
+  // iOS Safari turns a drag from the screen edge into "go back a page in
+  // history", sliding the previous screen in over the book. Cancelling the
+  // touch at the edges stops that; taps there are re-sent as clicks so the
+  // edge controls (back button, page zones) keep working.
+  useEffect(() => {
+    if (settings.mode !== "paginated") return;
+    const EDGE = 22;
+    let start: { x: number; y: number; t: number } | null = null;
+    const onStart = (e: TouchEvent) => {
+      const t = e.touches[0];
+      if (!t || e.touches.length > 1) return;
+      if (t.clientX > EDGE && t.clientX < window.innerWidth - EDGE) {
+        start = null;
+        return;
+      }
+      // Panels, sheets and fields keep their native behaviour.
+      const el = e.target as Element | null;
+      if (el?.closest?.("[role=dialog], input, textarea, select, [contenteditable]")) return;
+      if (e.cancelable) e.preventDefault();
+      start = { x: t.clientX, y: t.clientY, t: performance.now() };
+    };
+    const onEnd = (e: TouchEvent) => {
+      const s = start;
+      start = null;
+      const t = e.changedTouches[0];
+      if (!s || !t) return;
+      if (Math.hypot(t.clientX - s.x, t.clientY - s.y) < 10 && performance.now() - s.t < 600) {
+        (document.elementFromPoint(t.clientX, t.clientY) as HTMLElement | null)?.click();
+      }
+    };
+    document.addEventListener("touchstart", onStart, { passive: false, capture: true });
+    document.addEventListener("touchend", onEnd, { capture: true });
+    return () => {
+      document.removeEventListener("touchstart", onStart, { capture: true });
+      document.removeEventListener("touchend", onEnd, { capture: true });
+    };
+  }, [settings.mode]);
+
   const turnStyle = resolveTurnStyle(settings);
 
   // Lands the real column on `targetPage` (instantly — any animation has
@@ -1407,6 +1445,13 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       return;
     }
     const touch = event.touches[0];
+    // A drag born on the left screen edge is the browser's "back" swipe:
+    // never start a page turn at the same time. (The right edge is where
+    // thumbs start a forward swipe, so it stays live.)
+    if (touch && touch.clientX < 16) {
+      dragRef.current = null;
+      return;
+    }
     dragRef.current = touch
       ? { x: touch.clientX, y: touch.clientY, t: performance.now(), active: false, dir: 1, p: 0 }
       : null;

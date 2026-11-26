@@ -87,6 +87,8 @@ export const TurnStage = forwardRef<TurnStageHandle, Props>(function TurnStage(
   const flapWrap = useRef<HTMLDivElement>(null);
   const flap = useRef<HTMLDivElement>(null);
   const flapShade = useRef<HTMLDivElement>(null);
+  const dim = useRef<HTMLDivElement>(null);
+  const edge = useRef<HTMLDivElement>(null);
   const forward = to > from;
   // Which page sits underneath and which one moves.
   const underIndex = style === "folha" ? (forward ? to : from) : forward ? from : to;
@@ -118,17 +120,13 @@ export const TurnStage = forwardRef<TurnStageHandle, Props>(function TurnStage(
     }
 
     if (style === "deslizar") {
-      const sn = Math.sin(p * Math.PI);
-      if (forward) {
-        u.style.transform = `translateX(${-28 * p}%)`;
-        u.style.filter = `brightness(${1 - 0.08 * p})`;
-        t.style.transform = `translateX(${100 - 100 * p}%)`;
-      } else {
-        u.style.transform = `translateX(${-28 * (1 - p)}%)`;
-        u.style.filter = `brightness(${1 - 0.08 * (1 - p)})`;
-        t.style.transform = `translateX(${100 * p}%)`;
-      }
-      t.style.boxShadow = `-18px 0 30px -12px rgba(0,0,0,${0.35 * sn + 0.05})`;
+      // Transform + opacity only: the dimming and the edge shadow are static
+      // layers whose opacity changes, so nothing repaints per frame.
+      const k = forward ? p : 1 - p;
+      u.style.transform = `translateX(${-28 * k}%)`;
+      t.style.transform = forward ? `translateX(${100 - 100 * p}%)` : `translateX(${100 * p}%)`;
+      if (dim.current) dim.current.style.opacity = String(0.1 * k);
+      if (edge.current) edge.current.style.opacity = String(0.35 + 0.65 * Math.sin(p * Math.PI));
       return;
     }
 
@@ -178,9 +176,11 @@ export const TurnStage = forwardRef<TurnStageHandle, Props>(function TurnStage(
   useLayoutEffect(() => apply(lastP.current));
 
   const pageProps = { html: snapshot, pageWidth, columnWidth, bg, fg, padding };
-  // Paper-back colours, computed once per turn instead of every frame.
-  const flapBase = `color-mix(in oklab, ${bg} 86%, #000)`;
-  const flapGradient = `linear-gradient(90deg, color-mix(in oklab, ${bg} 82%, #000) 0px, color-mix(in oklab, ${bg} 96%, #fff) 50px, color-mix(in oklab, ${bg} 92%, #000) 160px, color-mix(in oklab, ${bg} 86%, #000) 100%)`;
+  // Back of the sheet: the same paper a touch darker, with a soft crease
+  // and a highlight along the fold — computed once per turn.
+  const flapBase = `color-mix(in oklab, ${bg} 95%, #000)`;
+  const flapGradient =
+    "linear-gradient(90deg, rgba(0,0,0,.10) 0px, rgba(255,255,255,.30) 10px, rgba(255,255,255,.10) 48px, rgba(255,255,255,0) 120px)";
   return (
     <div
       ref={root}
@@ -190,22 +190,35 @@ export const TurnStage = forwardRef<TurnStageHandle, Props>(function TurnStage(
     >
       <div ref={under} className="absolute inset-0 will-change-transform">
         <Page {...pageProps} index={underIndex} />
+        {style === "deslizar" && (
+          <div ref={dim} className="absolute inset-0 bg-black" style={{ opacity: 0 }} />
+        )}
       </div>
       {style === "folha" && (
         <div ref={underShade} className="absolute inset-0 overflow-hidden">
           <div
-            className="absolute inset-y-0 left-0 w-[110px] will-change-transform"
-            style={{ background: "linear-gradient(90deg, rgba(0,0,0,.35), rgba(0,0,0,0))" }}
+            className="absolute inset-y-0 left-0 w-[70px] will-change-transform"
+            style={{
+              background:
+                "linear-gradient(90deg, rgba(0,0,0,.2), rgba(0,0,0,.06) 40%, rgba(0,0,0,0))",
+            }}
           />
         </div>
       )}
       <div ref={top} className="absolute inset-0 will-change-transform">
+        {style === "deslizar" && (
+          <div
+            ref={edge}
+            className="absolute inset-y-0 -left-7 w-7"
+            style={{ background: "linear-gradient(90deg, rgba(0,0,0,0), rgba(0,0,0,.16))" }}
+          />
+        )}
         <Page {...pageProps} index={topIndex} />
         {style === "folha" && (
           <div
             ref={topShade}
-            className="absolute inset-y-0 left-0 w-[90px] will-change-transform"
-            style={{ background: "linear-gradient(90deg, rgba(0,0,0,0), rgba(0,0,0,.1))" }}
+            className="absolute inset-y-0 left-0 w-[60px] will-change-transform"
+            style={{ background: "linear-gradient(90deg, rgba(0,0,0,0), rgba(0,0,0,.07))" }}
           />
         )}
       </div>

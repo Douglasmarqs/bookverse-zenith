@@ -113,10 +113,8 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
 export function resolveTurnStyle(s: ReaderSettings): TurnStyle {
   if (s.turnStyle) return s.turnStyle;
   if (s.pageTurn === false) return "instantaneo";
-  if (typeof window !== "undefined" && window.matchMedia?.("(pointer: fine)").matches) {
-    return "deslizar";
-  }
-  return "folha";
+  // Slide is the cleanest default everywhere; "Folha" stays one tap away.
+  return "deslizar";
 }
 
 const SETTINGS_KEY = "bookverse:reader:settings";
