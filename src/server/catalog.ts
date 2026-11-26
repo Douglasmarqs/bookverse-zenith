@@ -151,14 +151,24 @@ async function searchGutenbergOpds(q: string): Promise<CatalogBook[]> {
   return out;
 }
 
-/** Both Gutenberg searches at once; the first one with results wins. */
+/**
+ * Gutenberg search: our own shipped index of the full catalogue; Gutendex
+ * and Gutenberg's OPDS (both often refuse cloud servers) as a fallback.
+ */
 async function searchGutenberg(q: string): Promise<CatalogBook[]> {
-  const dex = searchGutenbergDex(q);
-  const opds = searchGutenbergOpds(q);
-  const firstNonEmpty = await Promise.any(
-    [dex, opds].map((p) => p.then((r) => (r.length ? r : Promise.reject(new Error("empty"))))),
+  // The shipped index is authoritative when it loads (even with no match);
+  // the online searches are only a fallback if it can't be built.
+  try {
+    const { searchGutenbergIndex } = await import("./gutenberg-index");
+    return await searchGutenbergIndex(q);
+  } catch (err) {
+    console.error("[catalog] gutenberg index unavailable, trying online search", err);
+  }
+  return Promise.any(
+    [searchGutenbergDex(q), searchGutenbergOpds(q)].map((p) =>
+      p.then((r) => (r.length ? r : Promise.reject(new Error("empty")))),
+    ),
   ).catch(() => [] as CatalogBook[]);
-  return firstNonEmpty;
 }
 
 async function searchWikisource(q: string): Promise<CatalogBook[]> {
