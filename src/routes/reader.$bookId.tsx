@@ -605,6 +605,86 @@ const PAGE_GESTURE_HINT_KEY = "bookverse:reader-page-gesture-tip";
 // Top clears the notch + the quiet running title; bottom clears the home
 // indicator, the footer line and the pull handle.
 /**
+ * Finds the first word that an automatic hyphen splits across the end of
+ * one of `cols` (column c → c+1). Returns its paragraph and start offset.
+ * Works off-screen: it measures character boxes with Ranges, no hit tests.
+ */
+function findSplitWord(
+  scroller: HTMLElement,
+  article: HTMLElement,
+  colWidth: number,
+  cols: number[],
+): { paragraph: number; offset: number } | null {
+  const paras = Array.from(article.querySelectorAll<HTMLElement>("p[data-paragraph-index]"));
+  if (!paras.length) return null;
+  const left = scroller.getBoundingClientRect().left - scroller.scrollLeft;
+  const colOf = (x: number) => Math.floor((x - left + 1) / colWidth);
+  const range = document.createRange();
+
+  for (const c of cols) {
+    // Last paragraph whose first line sits in a column ≤ c.
+    let lo = 0;
+    let hi = paras.length - 1;
+    let at = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      const r = paras[mid]!.getClientRects()[0];
+      if (r && colOf(r.left) <= c) {
+        at = mid;
+        lo = mid + 1;
+      } else hi = mid - 1;
+    }
+    if (at < 0) continue;
+    const p = paras[at]!;
+    const rects = p.getClientRects();
+    const lastRect = rects[rects.length - 1];
+    if (!lastRect || colOf(lastRect.left) <= c) continue; // doesn't cross this break
+
+    // Flatten the paragraph's text nodes, then binary-search the first
+    // character that lands in column c+1.
+    const nodes: Text[] = [];
+    const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) nodes.push(n as Text);
+    const starts: number[] = [];
+    let total = 0;
+    for (const n of nodes) {
+      starts.push(total);
+      total += n.data.length;
+    }
+    const text = nodes.map((n) => n.data).join("");
+    const colAtChar = (g: number) => {
+      let i = starts.length - 1;
+      while (i > 0 && starts[i]! > g) i--;
+      const node = nodes[i]!;
+      const o = g - starts[i]!;
+      range.setStart(node, o);
+      range.setEnd(node, Math.min(node.data.length, o + 1));
+      const r = range.getClientRects()[0];
+      return r ? colOf(r.left) : -1;
+    };
+    let a = 0;
+    let b = total - 1;
+    let first = -1;
+    while (a <= b) {
+      const mid = (a + b) >> 1;
+      const col = colAtChar(mid);
+      if (col > c) {
+        first = mid;
+        b = mid - 1;
+      } else a = mid + 1;
+    }
+    if (first <= 0) continue;
+    const before = text[first - 1]!;
+    const after = text[first]!;
+    if (/[\s\u00ad-]/.test(before) || /\s/.test(after)) continue; // a clean break
+    let start = first - 1;
+    while (start > 0 && !/\s/.test(text[start - 1]!)) start--;
+    return { paragraph: Number(p.dataset.paragraphIndex), offset: start };
+  }
+  return null;
+}
+
+/**
  * The page-turn stage needs a copy of the pages being turned. Copying the
  * whole chapter (often 50+ pages) on every turn froze phones, so on long
  * chapters we copy just the blocks that appear on the two pages involved,
@@ -756,6 +836,8 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   // moves horizontally by exactly one measured page width at a time.
   const [pageIndex, setPageIndex] = useState(0);
   const [pageCount, setPageCount] = useState(1);
+  const [wordGuards, setWordGuards] = useState<Record<number, number[]>>({});
+  const [layoutTick, setLayoutTick] = useState(0);
   const scrollPadRef = useRef<HTMLSpanElement>(null);
   const [pageWidthPx, setPageWidthPx] = useState(0);
   const [showPageGestureHint, setShowPageGestureHint] = useState(false);
@@ -1121,12 +1203,54 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     settings.mode,
     pageWidthPx,
     chapterIndex,
+    layoutTick,
     settings.fontSize,
     settings.lineHeight,
     settings.margin,
     settings.maxWidth,
     settings.font,
   ]);
+
+  // Words split by an automatic hyphen across two pages ("pa-" | "cote")
+  // get marked as unbreakable, so the whole word moves to the next page.
+  // Only pages ahead of the reader change; the visible page stays put.
+  useEffect(() => {
+    setWordGuards({});
+  }, [
+    chapterIndex,
+    pageWidthPx,
+    settings.fontSize,
+    settings.lineHeight,
+    settings.margin,
+    settings.maxWidth,
+    settings.font,
+    settings.alignment,
+    settings.twoPage,
+  ]);
+  useEffect(() => {
+    if (settings.mode !== "paginated" || pageWidthPx <= 0) return;
+    const scroller = contentRef.current;
+    const article = articleRef.current;
+    if (!scroller || !article) return;
+    const id = requestAnimationFrame(() => {
+      if (isPageTurningRef.current) return;
+      const colWidth = parseFloat(getComputedStyle(scroller).columnWidth) || pageWidthPx;
+      const perPage = Math.max(1, Math.round(pageWidthPx / colWidth));
+      // Boundaries to check: inside and at the end of this page and the next.
+      const cols: number[] = [];
+      for (let pg = pageIndex; pg <= pageIndex + 1; pg++)
+        for (let k = 0; k < perPage; k++) cols.push(pg * perPage + k);
+      const hit = findSplitWord(scroller, article, colWidth, cols);
+      if (!hit) return;
+      setWordGuards((g) => {
+        const list = g[hit.paragraph] ?? [];
+        if (list.includes(hit.offset)) return g;
+        return { ...g, [hit.paragraph]: [...list, hit.offset] };
+      });
+      setLayoutTick((t) => t + 1);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [settings.mode, pageWidthPx, pageIndex, pageCount, chapterIndex, layoutTick]);
 
   const turnStyle = resolveTurnStyle(settings);
 
@@ -2248,6 +2372,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                   >
                     <HighlightedParagraph
                       text={p}
+                      guard={wordGuards[i]}
                       highlights={paragraphHighlights}
                       activeHighlightId={activeHighlightId}
                       onHighlightClick={(highlight) => {
@@ -3348,16 +3473,44 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   );
 }
 
+/** Splits plain text so the guarded words render unhyphenated. */
+function guardText(text: string, from: number, guard: number[] | undefined, key: string) {
+  const inside = (guard ?? [])
+    .filter((g) => g >= from && g < from + text.length)
+    .sort((a, b) => a - b);
+  if (!inside.length) return [text];
+  const out: React.ReactNode[] = [];
+  let cur = 0;
+  for (const g of inside) {
+    const s = g - from;
+    if (s < cur) continue;
+    let e = s;
+    while (e < text.length && !/\s/.test(text[e]!)) e++;
+    if (s > cur) out.push(text.slice(cur, s));
+    out.push(
+      <span key={`${key}-${g}`} style={{ hyphens: "manual", WebkitHyphens: "manual" }}>
+        {text.slice(s, e)}
+      </span>,
+    );
+    cur = e;
+  }
+  if (cur < text.length) out.push(text.slice(cur));
+  return out;
+}
+
 function HighlightedParagraph({
   text,
   highlights,
   activeHighlightId,
   onHighlightClick,
+  guard,
 }: {
   text: string;
   highlights: Highlight[];
   activeHighlightId: string | null;
   onHighlightClick: (highlight: Highlight) => void;
+  /** Word starts that must not be hyphenated (they'd split across pages). */
+  guard?: number[];
 }) {
   const ranges = highlights
     .map((highlight) => ({
@@ -3376,7 +3529,7 @@ function HighlightedParagraph({
     // readable until the legacy mark is removed.
     if (range.start < cursor) continue;
     if (range.start > cursor) {
-      parts.push(text.slice(cursor, range.start));
+      parts.push(...guardText(text.slice(cursor, range.start), cursor, guard, `t${cursor}`));
     }
     const selected = range.highlight.id === activeHighlightId;
     parts.push(
@@ -3400,7 +3553,8 @@ function HighlightedParagraph({
     );
     cursor = range.end;
   }
-  if (cursor < text.length) parts.push(text.slice(cursor));
+  if (cursor < text.length)
+    parts.push(...guardText(text.slice(cursor), cursor, guard, `t${cursor}`));
   return <>{parts}</>;
 }
 
