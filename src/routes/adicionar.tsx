@@ -8,7 +8,6 @@ import {
   HardDrive,
   Link2,
   Loader2,
-  Mail,
   Share2,
   X,
 } from "lucide-react";
@@ -40,7 +39,7 @@ export const Route = createFileRoute("/adicionar")({
   component: AdicionarPage,
 });
 
-type Panel = "link" | "nuvem" | "compartilhar" | "email" | null;
+type Panel = "link" | "nuvem" | "compartilhar" | null;
 
 function AdicionarPage() {
   const router = useRouter();
@@ -54,6 +53,16 @@ function AdicionarPage() {
   const [panel, setPanel] = useState<Panel>(search.link ? "link" : null);
   const [link, setLink] = useState(() => search.link?.match(/https:\/\/\S+/)?.[0] ?? "");
   const [fetching, setFetching] = useState(false);
+  // Web Share Target exists on Android (installed app), not on iOS Safari.
+  const [isApple, setIsApple] = useState(false);
+  const [installed, setInstalled] = useState(false);
+  useEffect(() => {
+    const ua = navigator.userAgent;
+    setIsApple(
+      /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1),
+    );
+    setInstalled(window.matchMedia?.("(display-mode: standalone)").matches ?? false);
+  }, []);
 
   // Files shared from another app arrive through the service worker.
   useEffect(() => {
@@ -101,7 +110,6 @@ function AdicionarPage() {
     { id: "link", icon: Link2, label: "Colar link de EPUB ou PDF" },
     { id: "nuvem", icon: HardDrive, label: "Google Drive · Dropbox · OneDrive" },
     { id: "compartilhar", icon: Share2, label: "Compartilhar de outro app" },
-    { id: "email", icon: Mail, label: "Enviar por e-mail para a sua estante", soon: true },
   ];
 
   return (
@@ -259,20 +267,40 @@ function AdicionarPage() {
                           </button>
                         </>
                       )}
-                      {r.id === "compartilhar" && (
-                        <p>
-                          Instale o BookVerse na tela inicial (menu do navegador →{" "}
-                          <b className="text-foreground">Adicionar à tela inicial</b>). Depois, em
-                          qualquer app, toque em <b className="text-foreground">Compartilhar</b> num
-                          EPUB ou PDF e escolha o BookVerse — o livro chega aqui sozinho.
-                        </p>
-                      )}
-                      {r.id === "email" && (
-                        <p>
-                          Em breve você terá um endereço só seu: mande o arquivo por e-mail e ele
-                          aparece na estante. Por enquanto, use os outros caminhos acima.
-                        </p>
-                      )}
+                      {r.id === "compartilhar" &&
+                        (isApple ? (
+                          <>
+                            <p>
+                              No iPhone e no iPad, o Safari ainda não deixa um app da web receber
+                              arquivos de outros apps. O caminho é rápido: no outro app, toque em{" "}
+                              <b className="text-foreground">Compartilhar → Salvar em Arquivos</b>;
+                              depois volte aqui e toque em{" "}
+                              <b className="text-foreground">Escolher arquivos</b>.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => inputRef.current?.click()}
+                              className="press mt-2.5 inline-flex h-9 items-center rounded-full bg-foreground px-4 text-[13px] font-semibold text-background"
+                            >
+                              Escolher arquivos
+                            </button>
+                          </>
+                        ) : installed ? (
+                          <p>
+                            Pronto para usar: em qualquer app, toque em{" "}
+                            <b className="text-foreground">Compartilhar</b> num EPUB ou PDF e
+                            escolha o <b className="text-foreground">BookVerse</b> — o livro chega
+                            aqui sozinho.
+                          </p>
+                        ) : (
+                          <p>
+                            Instale o BookVerse na tela inicial (menu do navegador →{" "}
+                            <b className="text-foreground">Instalar app</b> ou{" "}
+                            <b className="text-foreground">Adicionar à tela inicial</b>). Depois, em
+                            qualquer app, toque em <b className="text-foreground">Compartilhar</b>{" "}
+                            num EPUB ou PDF e escolha o BookVerse.
+                          </p>
+                        ))}
                     </div>
                   </motion.div>
                 )}

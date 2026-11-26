@@ -94,9 +94,7 @@ interface GutendexBook {
   download_count: number;
 }
 
-async function searchGutenberg(q: string): Promise<CatalogBook[]> {
-  // Gutendex can be slow; it gets a longer deadline and the browser asks
-  // for it separately so it never holds the other sources back.
+async function searchGutenbergDex(q: string): Promise<CatalogBook[]> {
   const data = await fetchJson<{ results: GutendexBook[] }>(
     `https://gutendex.com/books?search=${encodeURIComponent(q)}`,
     11000,
@@ -115,6 +113,52 @@ async function searchGutenberg(q: string): Promise<CatalogBook[]> {
     readerId: `gutenberg-${b.id}`,
     downloads: b.download_count,
   }));
+}
+
+/**
+ * Gutenberg's own OPDS search — used alongside Gutendex, which often turns
+ * cloud servers away. Entries look like:
+ *   <entry><title>Dom Casmurro</title><content>Machado de Assis</content>
+ *   <id>https://www.gutenberg.org/ebooks/55752.opds</id>…</entry>
+ */
+async function searchGutenbergOpds(q: string): Promise<CatalogBook[]> {
+  const xml = await fetchText(
+    `https://www.gutenberg.org/ebooks/search.opds/?query=${encodeURIComponent(q)}`,
+    9000,
+  );
+  if (!xml) return [];
+  const out: CatalogBook[] = [];
+  for (const m of xml.matchAll(/<entry>([\s\S]*?)<\/entry>/g)) {
+    const block = m[1]!;
+    const id = block.match(/\/ebooks\/(\d+)(?=[./"<?]|$)/)?.[1];
+    if (!id) continue; // navigation entries ("sort by…")
+    const title = decode(block.match(/<title[^>]*>([\s\S]*?)<\/title>/)?.[1] ?? "");
+    const rawAuthor = decode(block.match(/<content[^>]*>([\s\S]*?)<\/content>/)?.[1] ?? "");
+    if (!title) continue;
+    const author = rawAuthor ? niceAuthor(rawAuthor) : "Autor desconhecido";
+    out.push({
+      key: `gutenberg:${id}`,
+      source: "gutenberg",
+      id,
+      title: cleanTitle(title.split(/[:;]/)[0]!, author),
+      author,
+      language: null,
+      cover: `https://www.gutenberg.org/cache/epub/${id}/pg${id}.cover.medium.jpg`,
+      readerId: `gutenberg-${id}`,
+    });
+    if (out.length >= 16) break;
+  }
+  return out;
+}
+
+/** Both Gutenberg searches at once; the first one with results wins. */
+async function searchGutenberg(q: string): Promise<CatalogBook[]> {
+  const dex = searchGutenbergDex(q);
+  const opds = searchGutenbergOpds(q);
+  const firstNonEmpty = await Promise.any(
+    [dex, opds].map((p) => p.then((r) => (r.length ? r : Promise.reject(new Error("empty"))))),
+  ).catch(() => [] as CatalogBook[]);
+  return firstNonEmpty;
 }
 
 async function searchWikisource(q: string): Promise<CatalogBook[]> {

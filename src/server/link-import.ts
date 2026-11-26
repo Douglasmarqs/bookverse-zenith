@@ -81,12 +81,72 @@ function fileName(r: Response, url: URL): string {
   }
 }
 
+/**
+ * Share links → direct downloads (Drive, Dropbox, OneDrive), and the
+ * catalogue sites whose links need a twist (Standard Ebooks asks for
+ * ?source=download). Done here too, so any client gets it right.
+ */
+function directDownload(raw: string): string {
+  const url = raw.trim();
+  const drive = url.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?id=)([\w-]{10,})/);
+  if (drive) return `https://drive.google.com/uc?export=download&id=${drive[1]}`;
+  try {
+    const u = new URL(url);
+    if (/(^|\.)dropbox\.com$/.test(u.hostname)) {
+      u.searchParams.set("dl", "1");
+      return u.toString();
+    }
+    if (
+      /(^|\.)(1drv\.ms|onedrive\.live\.com)$/.test(u.hostname) &&
+      !u.searchParams.has("download")
+    ) {
+      u.searchParams.set("download", "1");
+      return u.toString();
+    }
+    if (
+      u.hostname === "standardebooks.org" &&
+      /\/downloads\/[^/]+\.(epub|azw3|kepub\.epub)$/.test(u.pathname)
+    ) {
+      u.searchParams.set("source", "download");
+      return u.toString();
+    }
+  } catch {
+    // not a URL — the caller reports it
+  }
+  return url;
+}
+
+/** Gutenberg ebook/file links → its id (served through our mirror race). */
+function gutenbergId(url: URL): string | null {
+  if (!/(^|\.)gutenberg\.org$|(^|\.)pglaf\.org$/.test(url.hostname)) return null;
+  const m =
+    url.pathname.match(/\/ebooks\/(\d+)(?:[./]|$)/) ?? url.pathname.match(/\/cache\/epub\/(\d+)\//);
+  return m ? m[1]! : null;
+}
+
 export async function importLink(raw: string): Promise<Response> {
   let url: URL;
   try {
-    url = new URL(raw);
+    url = new URL(directDownload(raw));
   } catch {
     return fail("Link inválido.", 400);
+  }
+  // Gutenberg often refuses cloud servers on its main site: use the same
+  // mirror race (and light edition for heavy books) as the catalogue.
+  const pg = gutenbergId(url);
+  if (pg) {
+    const { proxyEpub } = await import("./catalog");
+    const res = await proxyEpub("gutenberg", pg);
+    if (res.ok) {
+      const headers = new Headers(res.headers);
+      headers.set("X-File-Name", encodeURIComponent(`gutenberg-${pg}.epub`));
+      headers.set("Content-Type", "application/epub+zip");
+      return new Response(res.body, { status: 200, headers });
+    }
+    return fail(
+      "O Project Gutenberg não entregou este livro agora. Tente de novo em instantes.",
+      502,
+    );
   }
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 50_000);
