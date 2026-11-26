@@ -1,8 +1,8 @@
 /**
  * Our own Project Gutenberg search. gutenberg.org and Gutendex turn cloud
- * servers away, but the official PGLAF mirrors publish the whole catalogue
- * (pg_catalog.csv.gz, ~5 MB, ~75k titles). We fetch it once per server
- * instance, keep a compact index in memory and search it locally.
+ * servers away, so the catalogue (~78k titles, from the PGLAF mirror's
+ * pg_catalog.csv) ships with the server in data/pg-index.ts and is indexed
+ * in memory on first use; the live mirror feed is only a fallback.
  */
 import { gunzipSync } from "node:zlib";
 
@@ -26,7 +26,7 @@ const FEEDS = [
   "https://aleph.pglaf.org/cache/epub/feeds/pg_catalog.csv.gz",
 ];
 const UA = "BookVerse/1.0 (+https://bookverse-zenith.vercel.app)";
-const TTL = 12 * 60 * 60 * 1000;
+const TTL = 24 * 60 * 60 * 1000;
 
 let cache: { at: number; rows: Promise<Row[]> } | null = null;
 
@@ -78,7 +78,39 @@ async function download(): Promise<Buffer> {
   }
 }
 
+function toRow(id: string, rawTitle: string, rawAuthor: string, lang: string): Row | null {
+  const title = rawTitle.replace(/\s+/g, " ").trim();
+  if (!title || !/^\d+$/.test(id)) return null;
+  const author = rawAuthor ? niceAuthor(rawAuthor) : "Autor desconhecido";
+  const t = norm(title);
+  return { id, title, author, lang, hay: `${t} ${norm(author)}`, t };
+}
+
+/** The catalogue shipped with the server (instant, no network). */
+async function fromBundle(): Promise<Row[]> {
+  const { PG_INDEX_GZ_B64 } = await import("./data/pg-index");
+  const text = gunzipSync(Buffer.from(PG_INDEX_GZ_B64, "base64")).toString("utf8");
+  const rows: Row[] = [];
+  for (const line of text.split("\n")) {
+    const [id = "", title = "", author = "", lang = ""] = line.split("\t");
+    const row = toRow(id, title, author, lang);
+    if (row) rows.push(row);
+  }
+  return rows;
+}
+
 async function build(): Promise<Row[]> {
+  try {
+    const rows = await fromBundle();
+    if (rows.length > 1000) return rows;
+  } catch (err) {
+    console.error("[gutenberg-index] bundled index failed", err);
+  }
+  return fromMirror();
+}
+
+/** Fallback: the live catalogue from the PGLAF mirror. */
+async function fromMirror(): Promise<Row[]> {
   const gz = await download();
   const text = gunzipSync(gz).toString("utf8");
   const rows: Row[] = [];
@@ -119,7 +151,8 @@ function index(): Promise<Row[]> {
   if (!cache || Date.now() - cache.at > TTL) {
     const rows = build();
     cache = { at: Date.now(), rows };
-    rows.catch(() => {
+    rows.catch((err) => {
+      console.error("[gutenberg-index] could not build the index", err);
       cache = null; // try again on the next search
     });
   }
