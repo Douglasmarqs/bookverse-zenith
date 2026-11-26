@@ -11,6 +11,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  issues: write
 
 concurrency:
   group: gutenberg-catalog
@@ -46,6 +47,16 @@ jobs:
           git add src/server/data/pg-index.ts
           git commit -m "Atualiza o catálogo do Gutenberg ($ROWS títulos)"
           git push -u origin "$BRANCH"
-          gh pr create --base main --head "$BRANCH" \
-            --title "Catálogo do Gutenberg atualizado ($ROWS títulos)" \
-            --body "Atualização semanal automática do catálogo que o servidor usa na busca do Gutenberg (gerado de pg_catalog.csv do espelho oficial PGLAF). Revise e faça o merge para que os livros novos apareçam no Explorar."
+          TITLE="Catálogo do Gutenberg atualizado ($ROWS títulos)"
+          BODY="Atualização semanal automática do catálogo que o servidor usa na busca do Gutenberg (gerado de pg_catalog.csv do espelho oficial PGLAF). Revise e faça o merge para que os livros novos apareçam no Explorar."
+          if ! gh pr create --base main --head "$BRANCH" --title "$TITLE" --body "$BODY"; then
+            # The repo may not allow Actions to open PRs (Settings → Actions →
+            # General). Leave an issue with a one-click link to open it instead.
+            COMPARE="${{ github.server_url }}/${{ github.repository }}/compare/main...$BRANCH?expand=1"
+            gh issue create --title "$TITLE" \
+              --body "$BODY
+
+          O GitHub não permitiu que a automação abrisse o PR sozinha. Para abrir: $COMPARE
+
+          (Para que ela abra sozinha nas próximas semanas: Settings → Actions → General → marque \"Allow GitHub Actions to create and approve pull requests\".)"
+          fi

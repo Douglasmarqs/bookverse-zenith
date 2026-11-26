@@ -62,6 +62,11 @@ const LANGUAGE_LABELS: Record<string, string> = {
 /** Human-readable label for a Gutenberg book's primary language — used to
  * show a language badge on public-domain cards, since search results mix
  * Portuguese and English (and occasionally other languages). */
+/** "pt" → "Português", "en" → "Inglês"… (unknown codes in capitals). */
+export function languageLabel(code: string): string {
+  return LANGUAGE_LABELS[code] ?? code.toUpperCase();
+}
+
 export function primaryLanguageLabel(languages: string[]): string {
   const code = languages?.[0];
   if (!code) return "Idioma desconhecido";

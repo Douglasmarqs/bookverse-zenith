@@ -80,6 +80,8 @@ export function rankCatalog(all: CatalogBook[], q: string, lang?: string | null)
     if (t === nq) score += 6;
     else if (t.startsWith(nq)) score += 4;
     score += inTitle * 1.2 + inAuthor;
+    // Searching a writer's name: their own books before books about them.
+    if (terms.length > 1 && inAuthor === terms.length) score += 4;
     if (b.language === "pt") score += 2.5;
     if (lang && b.language === lang) score += 3;
     if (b.cover) score += 0.3;

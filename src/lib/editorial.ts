@@ -19,11 +19,18 @@ export interface LumiPick {
   tags: string[];
   /** Gostos do onboarding (ids de GENRES) com que este livro combina. */
   genres: string[];
+  /** Idioma da edição que abre (a do Gutenberg). */
+  lang: "pt" | "en";
 }
+
+/** Edições em português entre as indicações (as demais estão em inglês). */
+const PT_EDITIONS = new Set([
+  55752, 54829, 55682, 57001, 33056, 53101, 67740, 38496, 44540, 3333, 16425, 31971,
+]);
 
 /** Indicações comentadas (ids conferidos no Gutenberg) — a seleção do
  * Início muda todo dia e segue os gostos de quem lê; veja picksFor(). */
-export const LUMI_PICKS: LumiPick[] = [
+const PICKS: Omit<LumiPick, "lang">[] = [
   {
     gutenbergId: 55752,
     title: "Dom Casmurro",
@@ -564,6 +571,11 @@ export const LUMI_PICKS: LumiPick[] = [
     genres: ["aventura"],
   },
 ];
+
+export const LUMI_PICKS: LumiPick[] = PICKS.map((p) => ({
+  ...p,
+  lang: PT_EDITIONS.has(p.gutenbergId) ? "pt" : "en",
+}));
 
 /** Dia corrido desde 1970 (no fuso do aparelho) — muda a seleção à meia-noite. */
 export function dayIndex(date = new Date()): number {

@@ -39,6 +39,7 @@ import { COLLECTIONS, collectionById, type Collection } from "@/lib/collections"
 import { picksFor } from "@/lib/editorial";
 import { coverIn, flyToLibrary, playBookOpen } from "@/lib/book-motion";
 import { LumiAskBar } from "@/components/lumi-ask-bar";
+import { LangTag } from "@/components/lang-tag";
 import { slugFor } from "@/lib/library";
 import { gutenbergReaderId } from "@/lib/public-domain";
 
@@ -364,9 +365,7 @@ function ExploreHome() {
                     {p.author} · {formatMinutes(p.minutes)}
                   </p>
                 </div>
-                <span className="rounded-full bg-mint px-2 py-0.5 text-[11px] font-bold text-[#1f6b46]">
-                  Grátis
-                </span>
+                <LangTag code={p.lang} />
               </Link>
             </li>
           ))}
@@ -795,7 +794,7 @@ function ResultRow({ book: b, q, last }: { book: CatalogBook; q: string; last: b
           </p>
           <div className="mt-1.5 flex items-center gap-2 text-xs text-faint">
             <span className="truncate">{SOURCE_LABEL[b.source]}</span>
-            {b.language && <span className="uppercase">{b.language}</span>}
+            <LangTag code={b.language} />
             <span className="rounded-full bg-mint px-2 py-0.5 text-[11px] font-bold text-[#1f6b46]">
               Grátis
             </span>

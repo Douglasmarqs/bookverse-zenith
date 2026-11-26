@@ -19,6 +19,7 @@ import type { User } from "firebase/auth";
 import { BookArt } from "@/components/book-art";
 import { BookReviews } from "@/components/book-reviews";
 import { LumiAskBar } from "@/components/lumi-ask-bar";
+import { LangTag } from "@/components/lang-tag";
 import { flyToLibrary, playBookOpen } from "@/lib/book-motion";
 import { formatMinutes } from "@/components/home/home-screen";
 import { describeFirestoreError } from "@/lib/async-utils";
@@ -477,6 +478,9 @@ function BookPage() {
               </button>
             )}
             <div className="mt-3.5 flex flex-wrap gap-2">
+              {copy?.language && (
+                <LangTag code={copy.language} className="!px-3 !py-1.5 !text-xs" />
+              )}
               {[...categories, copy ? SOURCE_LABEL[copy.source] : null, "Domínio público"]
                 .filter(Boolean)
                 .map((t) => (
