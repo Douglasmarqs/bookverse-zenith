@@ -137,6 +137,10 @@ function BookPage() {
           author,
           cover: cover ?? null,
           readerId: source === "gutenberg" ? `gutenberg-${id}` : null,
+          language:
+            source === "gutenberg"
+              ? (LUMI_PICKS.find((p) => String(p.gutenbergId) === id)?.lang ?? null)
+              : null,
         }
       : undefined,
   );
@@ -181,7 +185,12 @@ function BookPage() {
         return t === nt || t.startsWith(nt) || nt.startsWith(t);
       });
       setOthers(matches);
-      setCopy((prev) => prev ?? matches.find((m) => m.readerId) ?? matches[0] ?? null);
+      setCopy((prev) => {
+        if (!prev) return matches.find((m) => m.readerId) ?? matches[0] ?? null;
+        // Same copy found by the search: borrow what the link didn't carry.
+        const same = r.find((m) => m.key === prev.key);
+        return same && !prev.language ? { ...prev, language: same.language } : prev;
+      });
     });
     return () => {
       alive = false;

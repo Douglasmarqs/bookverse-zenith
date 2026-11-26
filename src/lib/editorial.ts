@@ -26,6 +26,10 @@ export interface LumiPick {
 /** Edições em português entre as indicações (as demais estão em inglês). */
 const PT_EDITIONS = new Set([
   55752, 54829, 55682, 57001, 33056, 53101, 67740, 38496, 44540, 3333, 16425, 31971,
+  // Ampliação: mais clássicos brasileiros e portugueses.
+  56737, 55797, 67162, 67780, 67935, 61653, 67724, 67831, 69187, 67535, 74475, 68635, 74854, 67594,
+  18082, 16384, 17515, 18220, 40409, 42942, 31347, 20574, 24401, 17591, 45966, 9654, 29120, 17610,
+  20142, 8698,
 ]);
 
 /** Indicações comentadas (ids conferidos no Gutenberg) — a seleção do
@@ -239,6 +243,337 @@ const PICKS: Omit<LumiPick, "lang">[] = [
     minutes: 560,
     tags: ["Realismo", "Portugal"],
     genres: ["romance", "historia"],
+  },
+  // — Mais clássicos em português (ids e downloads conferidos) —
+  {
+    gutenbergId: 56737,
+    title: "Esaú e Jacó",
+    author: "Machado de Assis",
+    lumiNote:
+      "Gêmeos que discordam desde o útero — um monarquista, outro republicano — e apaixonados pela mesma moça. O Brasil virando República visto da sala de jantar.",
+    mood: "Rivalidade e política",
+    minutes: 320,
+    tags: ["Clássico brasileiro", "República"],
+    genres: ["classicos-br", "romance", "historia"],
+  },
+  {
+    gutenbergId: 55797,
+    title: "Memorial de Aires",
+    author: "Machado de Assis",
+    lumiNote:
+      "O último romance de Machado, em forma de diário de um diplomata aposentado. Calmo, terno e cheio de ironia miúda — ótimo para ler devagar, uma entrada por noite.",
+    mood: "Diário sereno",
+    minutes: 230,
+    tags: ["Diário", "Último romance"],
+    genres: ["classicos-br", "romance"],
+  },
+  {
+    gutenbergId: 67162,
+    title: "Helena",
+    author: "Machado de Assis",
+    lumiNote:
+      "Um testamento revela uma filha que ninguém conhecia, e a casa inteira muda de temperatura. Machado jovem, mais romântico, mas já desconfiado das aparências.",
+    mood: "Segredo de família",
+    minutes: 250,
+    tags: ["Clássico brasileiro", "Romantismo"],
+    genres: ["classicos-br", "romance"],
+  },
+  {
+    gutenbergId: 67780,
+    title: "Iaiá Garcia",
+    author: "Machado de Assis",
+    lumiNote:
+      "Orgulho, guerra do Paraguai e um casamento por conveniência. Repare em Estela: é uma das personagens mais dignas e silenciosas de todo o Machado.",
+    mood: "Orgulho contido",
+    minutes: 250,
+    tags: ["Clássico brasileiro", "Romance"],
+    genres: ["classicos-br", "romance"],
+  },
+  {
+    gutenbergId: 67935,
+    title: "Relíquias de Casa Velha",
+    author: "Machado de Assis",
+    lumiNote:
+      "Abre com o soneto “A Carolina” e traz “Pai contra Mãe”, um dos contos mais duros sobre a escravidão. Contos curtos, para ler um por vez e ficar pensando.",
+    mood: "Contos maduros",
+    minutes: 220,
+    tags: ["Contos", "Leitura em pausas"],
+    genres: ["classicos-br", "contos"],
+  },
+  {
+    gutenbergId: 61653,
+    title: "Poesias Completas",
+    author: "Machado de Assis",
+    lumiNote:
+      "Pouca gente sabe que Machado começou como poeta. Leia aos poucos, abrindo em qualquer página — dá para ver o romancista afiando a ironia em versos.",
+    mood: "Versos de um prosador",
+    minutes: 200,
+    tags: ["Poesia", "Abra em qualquer página"],
+    genres: ["classicos-br", "poesia"],
+  },
+  {
+    gutenbergId: 67724,
+    title: "O Guarani (vol. 1)",
+    author: "José de Alencar",
+    lumiNote:
+      "Peri, Ceci e um casarão à beira do Paquequer: aventura indianista com cenas de cinema. Este é o primeiro de dois volumes — a busca encontra o segundo.",
+    mood: "Aventura romântica",
+    minutes: 260,
+    tags: ["Indianismo", "Vol. 1 de 2"],
+    genres: ["classicos-br", "aventura", "romance"],
+  },
+  {
+    gutenbergId: 67831,
+    title: "A Pata da Gazela",
+    author: "José de Alencar",
+    lumiNote:
+      "Um rapaz se apaixona por um pé — literalmente — antes de conhecer a dona. Alencar em modo leve e divertido, quase uma comédia romântica do século XIX.",
+    mood: "Comédia de costumes",
+    minutes: 160,
+    tags: ["Romance urbano", "Leve"],
+    genres: ["classicos-br", "romance"],
+  },
+  {
+    gutenbergId: 69187,
+    title: "O Cortiço",
+    author: "Aluísio Azevedo",
+    lumiNote:
+      "O cortiço é o verdadeiro protagonista: respira, briga, cresce. Naturalismo puro, barulhento e cheio de cheiro — o Rio de Janeiro que os salões fingiam não ver.",
+    mood: "Coletivo e cru",
+    minutes: 360,
+    tags: ["Naturalismo", "Rio de Janeiro"],
+    genres: ["classicos-br", "romance", "historia"],
+  },
+  {
+    gutenbergId: 67535,
+    title: "Triste Fim de Policarpo Quaresma",
+    author: "Lima Barreto",
+    lumiNote:
+      "Um major tão patriota que pede ao governo para oficializar o tupi. Engraçado no começo, doloroso no fim — Lima Barreto acerta o Brasil em cheio.",
+    mood: "Sátira amarga",
+    minutes: 300,
+    tags: ["Pré-modernismo", "Sátira"],
+    genres: ["classicos-br", "absurdo", "historia"],
+  },
+  {
+    gutenbergId: 74475,
+    title: "A Escrava Isaura",
+    author: "Bernardo Guimarães",
+    lumiNote:
+      "O folhetim que virou novela famosa no mundo todo. Melodrama de perseguição e fuga, com o debate abolicionista correndo por baixo de cada capítulo.",
+    mood: "Folhetim de fuga",
+    minutes: 240,
+    tags: ["Romantismo", "Abolição"],
+    genres: ["classicos-br", "romance", "aventura"],
+  },
+  {
+    gutenbergId: 68635,
+    title: "Inocência",
+    author: "Visconde de Taunay",
+    lumiNote:
+      "Um amor proibido no sertão de Mato Grosso, com um naturalista alemão roubando a cena atrás de borboletas. Paisagem, costume e tragédia na medida.",
+    mood: "Sertão romântico",
+    minutes: 240,
+    tags: ["Regionalismo", "Sertão"],
+    genres: ["classicos-br", "romance"],
+  },
+  {
+    gutenbergId: 74854,
+    title: "Cantos",
+    author: "Gonçalves Dias",
+    lumiNote:
+      "Aqui moram “Canção do Exílio” e “I-Juca-Pirama”. Leia em voz alta pelo menos uma vez: o ritmo foi feito para ser ouvido.",
+    mood: "Saudade e bravura",
+    minutes: 330,
+    tags: ["Poesia", "Romantismo"],
+    genres: ["classicos-br", "poesia"],
+  },
+  {
+    gutenbergId: 67594,
+    title: "A Intrusa",
+    author: "Júlia Lopes de Almeida",
+    lumiNote:
+      "Um viúvo contrata uma governanta e impõe uma regra: nunca se verem. Júlia Lopes de Almeida, uma das grandes autoras do seu tempo, merece ser redescoberta.",
+    mood: "Tensão doméstica",
+    minutes: 245,
+    tags: ["Autora brasileira", "Redescoberta"],
+    genres: ["classicos-br", "romance"],
+  },
+  {
+    gutenbergId: 18082,
+    title: "Marília de Dirceu",
+    author: "Tomás Antônio Gonzaga",
+    lumiNote:
+      "Liras de amor de um poeta que acabou preso pela Inconfidência Mineira. Comece pelas primeiras e veja o pastor idílico virar prisioneiro saudoso.",
+    mood: "Amor árcade",
+    minutes: 105,
+    tags: ["Poesia", "Arcadismo"],
+    genres: ["classicos-br", "poesia", "historia"],
+  },
+  {
+    gutenbergId: 16384,
+    title: "O Mandarim",
+    author: "Eça de Queirós",
+    lumiNote:
+      "Se bastasse tocar uma campainha para herdar a fortuna de um desconhecido na China, você tocaria? Uma fábula curta, fantástica e cheia de culpa.",
+    mood: "Fábula moral",
+    minutes: 95,
+    tags: ["Curto", "Comece hoje"],
+    genres: ["fantasia", "filosofia", "absurdo"],
+  },
+  {
+    gutenbergId: 17515,
+    title: "A Relíquia",
+    author: "Eça de Queirós",
+    lumiNote:
+      "Teodorico finge devoção para herdar a tia beata e vai a Jerusalém buscar uma relíquia. Eça no auge do deboche — e com uma viagem no tempo no meio.",
+    mood: "Sátira e devoção fingida",
+    minutes: 360,
+    tags: ["Sátira", "Portugal"],
+    genres: ["romance", "absurdo"],
+  },
+  {
+    gutenbergId: 18220,
+    title: "A Cidade e as Serras",
+    author: "Eça de Queirós",
+    lumiNote:
+      "Jacinto tem todas as engenhocas de Paris e nenhuma alegria. Até ir para as serras. Parece escrito para quem vive com o celular na mão.",
+    mood: "Cidade × campo",
+    minutes: 310,
+    tags: ["Portugal", "Atualíssimo"],
+    genres: ["romance", "filosofia"],
+  },
+  {
+    gutenbergId: 40409,
+    title: "Os Maias",
+    author: "Eça de Queirós",
+    lumiNote:
+      "O grande romance português do século XIX: uma família, uma Lisboa elegante e ociosa, e um amor com uma sombra terrível. Longo, e vale cada página.",
+    mood: "Saga familiar",
+    minutes: 930,
+    tags: ["Obra-prima", "Para mergulhar"],
+    genres: ["romance", "historia"],
+  },
+  {
+    gutenbergId: 42942,
+    title: "O Primo Basílio",
+    author: "Eça de Queirós",
+    lumiNote:
+      "Um adultério, umas cartas e uma criada que descobre o poder que tem nas mãos. Juliana é uma das vilãs mais complexas da literatura em português.",
+    mood: "Chantagem doméstica",
+    minutes: 510,
+    tags: ["Realismo", "Portugal"],
+    genres: ["romance"],
+  },
+  {
+    gutenbergId: 31347,
+    title: "Contos",
+    author: "Eça de Queirós",
+    lumiNote:
+      "Inclui “Civilização”, a semente de A Cidade e as Serras, e “Singularidades de uma Rapariga Loura”. Eça em doses curtas, perfeito para o intervalo.",
+    mood: "Ironia em doses",
+    minutes: 310,
+    tags: ["Contos", "Leitura em pausas"],
+    genres: ["contos", "romance"],
+  },
+  {
+    gutenbergId: 20574,
+    title: "O Mistério da Estrada de Sintra",
+    author: "Eça de Queirós e Ramalho Ortigão",
+    lumiNote:
+      "Saiu em cartas num jornal de Lisboa, e muitos leitores acharam que o crime era real. Um policial a quatro mãos, cheio de máscaras e reviravoltas.",
+    mood: "Mistério em cartas",
+    minutes: 300,
+    tags: ["Policial", "Romance epistolar"],
+    genres: ["misterio", "romance"],
+  },
+  {
+    gutenbergId: 24401,
+    title: "Viagens na Minha Terra",
+    author: "Almeida Garrett",
+    lumiNote:
+      "Uma viagem de Lisboa a Santarém que se perde em digressões deliciosas — e no meio aparece a história de Joaninha, a menina dos rouxinóis. Bom de ler sem pressa.",
+    mood: "Viagem e digressão",
+    minutes: 320,
+    tags: ["Romantismo", "Portugal"],
+    genres: ["romance", "filosofia"],
+  },
+  {
+    gutenbergId: 17591,
+    title: "Frei Luís de Sousa",
+    author: "Almeida Garrett",
+    lumiNote:
+      "Um drama curto em que um homem dado como morto volta para casa. A resposta “Ninguém!” é uma das falas mais famosas do teatro português.",
+    mood: "Tragédia em casa",
+    minutes: 90,
+    tags: ["Teatro", "Curto"],
+    genres: ["historia", "romance"],
+  },
+  {
+    gutenbergId: 45966,
+    title: "Eurico, o Presbítero",
+    author: "Alexandre Herculano",
+    lumiNote:
+      "Um padre-guerreiro visigodo, um amor impossível e a invasão moura de 711. Romance histórico com cheiro de crônica medieval e alma de poema.",
+    mood: "Épico medieval",
+    minutes: 260,
+    tags: ["Romance histórico", "Idade Média"],
+    genres: ["historia", "aventura", "romance"],
+  },
+  {
+    gutenbergId: 9654,
+    title: "Lendas e Narrativas (tomo I)",
+    author: "Alexandre Herculano",
+    lumiNote:
+      "Histórias da Idade Média portuguesa, como “A Abóbada” e “O Castelo de Faria”. Cada narrativa se lê sozinha — boas para uma noite de inverno.",
+    mood: "Lendas antigas",
+    minutes: 250,
+    tags: ["Contos", "Idade Média"],
+    genres: ["historia", "contos"],
+  },
+  {
+    gutenbergId: 29120,
+    title: "A Morgadinha dos Canaviais",
+    author: "Júlio Dinis",
+    lumiNote:
+      "Um lisboeta entediado vai curar o tédio numa aldeia do Minho e acaba curado de outra coisa. Romance de campo, generoso e cheio de gente boa de conhecer.",
+    mood: "Aldeia e afeto",
+    minutes: 640,
+    tags: ["Romance de aldeia", "Portugal"],
+    genres: ["romance"],
+  },
+  {
+    gutenbergId: 17610,
+    title: "Livro de Mágoas",
+    author: "Florbela Espanca",
+    lumiNote:
+      "O primeiro livro de Florbela: sonetos de uma intensidade que ainda queima. Cabe numa leitura só, mas vale reler devagar.",
+    mood: "Intensidade",
+    minutes: 30,
+    tags: ["Poesia", "Muito curto"],
+    genres: ["poesia"],
+  },
+  {
+    gutenbergId: 20142,
+    title: "Sonetos Completos",
+    author: "Antero de Quental",
+    lumiNote:
+      "Sonetos que discutem com Deus, com a morte e com o próprio poeta. Filosofia em catorze versos — leia um por dia.",
+    mood: "Inquietação",
+    minutes: 95,
+    tags: ["Poesia", "Um por dia"],
+    genres: ["poesia", "filosofia"],
+  },
+  {
+    gutenbergId: 8698,
+    title: "O Livro de Cesário Verde",
+    author: "Cesário Verde",
+    lumiNote:
+      "Lisboa vista a pé, ao entardecer, com olhos de pintor. Comece por “O Sentimento dum Ocidental” e repare em como a cidade vira poesia.",
+    mood: "Passeio pela cidade",
+    minutes: 75,
+    tags: ["Poesia", "Lisboa"],
+    genres: ["poesia"],
   },
   {
     gutenbergId: 174,
