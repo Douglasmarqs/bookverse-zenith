@@ -1,0 +1,62 @@
+# Once a week, refresh the Project Gutenberg catalogue the server searches
+# (src/server/data/pg-index.ts). When there are new titles it opens a pull
+# request — nothing reaches main or the live site until someone merges it.
+name: Catálogo do Gutenberg
+
+on:
+  schedule:
+    - cron: "17 6 * * 1" # segundas, 06:17 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: gutenberg-catalog
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Gerar o catálogo a partir do espelho oficial
+        run: node scripts/update-gutenberg-index.mjs
+
+      - name: Abrir um PR se houver livros novos
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git diff --quiet -- src/server/data/pg-index.ts; then
+            echo "Nenhum livro novo no Gutenberg desde a última atualização."
+            exit 0
+          fi
+          ROWS=$(grep -o 'PG_INDEX_ROWS = [0-9]*' src/server/data/pg-index.ts | grep -o '[0-9]*$')
+          BRANCH="chore/catalogo-gutenberg-$(date -u +%Y-%m-%d)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          git add src/server/data/pg-index.ts
+          git commit -m "Atualiza o catálogo do Gutenberg ($ROWS títulos)"
+          git push -u origin "$BRANCH"
+          TITLE="Catálogo do Gutenberg atualizado ($ROWS títulos)"
+          BODY="Atualização semanal automática do catálogo que o servidor usa na busca do Gutenberg (gerado de pg_catalog.csv do espelho oficial PGLAF). Revise e faça o merge para que os livros novos apareçam no Explorar."
+          if ! gh pr create --base main --head "$BRANCH" --title "$TITLE" --body "$BODY"; then
+            # The repo may not allow Actions to open PRs (Settings → Actions →
+            # General). Leave an issue with a one-click link to open it instead.
+            COMPARE="${{ github.server_url }}/${{ github.repository }}/compare/main...$BRANCH?expand=1"
+            gh issue create --title "$TITLE" \
+              --body "$BODY
+
+          O GitHub não permitiu que a automação abrisse o PR sozinha. Para abrir: $COMPARE
+
+          (Para que ela abra sozinha nas próximas semanas: Settings → Actions → General → marque \"Allow GitHub Actions to create and approve pull requests\".)"
+          fi

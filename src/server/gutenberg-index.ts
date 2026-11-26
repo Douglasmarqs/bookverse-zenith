@@ -179,6 +179,9 @@ export async function searchGutenbergIndex(q: string, limit = 16): Promise<Catal
     else if (r.t.startsWith(nq)) s += 60;
     else if (r.t.includes(nq)) s += 35;
     if (terms.every((w) => r.t.includes(w))) s += 20;
+    // Books *by* the person searched for come before books about them.
+    const na = r.hay.slice(r.t.length + 1);
+    if (na === nq || na.includes(nq)) s += 70;
     if (r.lang === "pt") s += 15;
     else if (r.lang === "en") s += 6;
     s -= Math.min(10, r.t.length / 30); // shorter, cleaner titles first

@@ -76,10 +76,18 @@ export function rankCatalog(all: CatalogBook[], q: string, lang?: string | null)
     const inAuthor = terms.filter((x) => au.includes(x)).length;
     // Must actually be about the query (titles or authors, not body text).
     if (terms.length && inTitle + inAuthor === 0) return [];
+    const byAuthor = terms.length > 1 && inAuthor === terms.length;
     let score = SOURCE_WEIGHT[b.source];
-    if (t === nq) score += 6;
-    else if (t.startsWith(nq)) score += 4;
-    score += inTitle * 1.2 + inAuthor;
+    if (byAuthor) {
+      // Searching a writer's name: their own books first, and a title that
+      // repeats the name ("Crônica de Machado de Assis…") is a loose piece.
+      score += 4 + inAuthor;
+      if (inTitle) score -= 1.5;
+    } else {
+      if (t === nq) score += 6;
+      else if (t.startsWith(nq)) score += 4;
+      score += inTitle * 1.2 + inAuthor;
+    }
     if (b.language === "pt") score += 2.5;
     if (lang && b.language === lang) score += 3;
     if (b.cover) score += 0.3;

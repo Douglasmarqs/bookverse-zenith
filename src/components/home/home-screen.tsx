@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 
 import { BookArt } from "@/components/book-art";
+import { LangTag } from "@/components/lang-tag";
 import { Lumi } from "@/components/brand/lumi";
 import { AccountMenu } from "@/components/shell/account-menu";
 import { openCommandPalette } from "@/lib/command-palette-store";
@@ -413,6 +414,7 @@ export function HomeScreen({ user }: { user: User | null }) {
             title={p.title}
             author={p.author}
             meta={formatMinutes(p.minutes)}
+            lang={p.lang}
             readerId={gutenbergReaderId(p.gutenbergId)}
           />
         ))}
@@ -621,8 +623,11 @@ function LumiTodayCard({ pick, delay }: { pick: LumiPick; delay: number }) {
             >
               {pick.title}
             </Link>
-            <p className="text-[12.5px] text-muted-foreground">
-              {pick.author} · {formatMinutes(pick.minutes)} · {pick.mood}
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[12.5px] text-muted-foreground">
+              <LangTag code={pick.lang} />
+              <span>
+                {pick.author} · {formatMinutes(pick.minutes)} · {pick.mood}
+              </span>
             </p>
           </div>
         </div>
@@ -683,18 +688,25 @@ function BookTile({
   cover,
   meta,
   readerId,
+  lang,
 }: {
   title: string;
   author?: string;
   cover?: string | null;
   meta?: string;
   readerId?: string;
+  lang?: string | null;
 }) {
   const inner = (
     <>
       <BookArt title={title} author={author} cover={cover} live />
       <p className="mt-2.5 truncate text-[13.5px] font-semibold tracking-[-0.01em]">{title}</p>
-      {meta && <p className="mt-0.5 truncate text-xs text-faint">{meta}</p>}
+      {(meta || lang) && (
+        <p className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-faint">
+          {lang && <LangTag code={lang} />}
+          {meta && <span className="truncate">{meta}</span>}
+        </p>
+      )}
     </>
   );
   const cls = "press w-[104px] shrink-0 snap-start lg:w-[132px]";
