@@ -27,7 +27,8 @@ import { Toaster } from "../components/ui/sonner";
 import { CommandPalette } from "../components/command-palette";
 import { Dock } from "../components/shell/dock";
 import { FitGuard } from "../components/shell/fit-guard";
-import { AppIntro, INTRO_BOOT_SCRIPT } from "../components/shell/app-intro";
+import { AppIntro } from "../components/shell/app-intro";
+import { INTRO_BOOT_SCRIPT, afterIntro } from "../lib/intro";
 import { PageSway } from "../components/motion/use-sway";
 import { LumiGaze } from "../components/motion/lumi-gaze";
 import { BookOpenOnTap } from "../components/motion/book-open";
@@ -285,16 +286,20 @@ function RootComponent() {
       }
     };
     const w = window as Window & { requestIdleCallback?: (cb: () => void) => number };
-    if (w.requestIdleCallback) w.requestIdleCallback(warm);
-    else setTimeout(warm, 600);
+    // Not while the opening plays: it would steal frames from it.
+    return afterIntro(() => {
+      if (w.requestIdleCallback) w.requestIdleCallback(warm);
+      else setTimeout(warm, 600);
+    });
   }, [router]);
 
   useEffect(() => {
-    if ("serviceWorker" in navigator) {
+    if (!("serviceWorker" in navigator)) return;
+    return afterIntro(() => {
       navigator.serviceWorker.register("/sw.js").catch((err) => {
         console.warn("[sw] registration failed", err);
       });
-    }
+    });
   }, []);
 
   const member = useShellMode();
@@ -310,7 +315,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AppIntro />
-      <div className={`flex min-h-screen flex-col ${appChrome ? "lg:pl-[264px]" : ""}`}>
+      <div className={`app-shell flex min-h-screen flex-col ${appChrome ? "lg:pl-[264px]" : ""}`}>
         {!isReaderRoute && <ConfigBanner />}
         {appChrome && <Sidebar />}
         <main
