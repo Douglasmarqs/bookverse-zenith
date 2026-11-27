@@ -53,6 +53,10 @@ export interface LibraryEntry extends BookMeta {
    * entries (Google Books / Open Library), which link out to a details
    * page instead. */
   readerId?: string | null;
+  /** Language of the book ("pt", "en"…), for personal files. */
+  language?: string | null;
+  /** When it was (last) marked as finished, epoch ms — feeds yearly goals. */
+  completedAt?: number;
 }
 
 const READ_TIMEOUT_MS = 5000;
@@ -90,7 +94,7 @@ export function slugFor(title: string, author?: string): string {
  */
 export async function addToLibrary(
   uid: string,
-  book: BookMeta,
+  book: BookMeta & { language?: string | null },
   status: LibraryStatus = "quero-ler",
 ): Promise<void> {
   const fb = getFirebase();
@@ -112,6 +116,7 @@ export async function addToLibrary(
           author: book.author,
           cover: safeCover(book.cover) ?? safeCover(data.cover as string | null | undefined),
           readerId: book.readerId ?? data.readerId ?? null,
+          ...(book.language ? { language: book.language } : {}),
         },
         { merge: true },
       ),
@@ -129,6 +134,7 @@ export async function addToLibrary(
         author: book.author,
         cover: safeCover(book.cover),
         readerId: book.readerId ?? null,
+        ...(book.language ? { language: book.language } : {}),
         status,
         addedAt: serverTimestamp(),
       },
@@ -153,6 +159,7 @@ export async function markAsReading(
   uid: string,
   book: { title: string; author: string; cover: string | null },
   readerId: string,
+  extra: { language?: string | null } = {},
 ): Promise<void> {
   const fb = getFirebase();
   if (!fb) return;
@@ -169,6 +176,7 @@ export async function markAsReading(
         cover: safeCover(book.cover) ?? safeCover(data.cover as string | null | undefined),
         readerId,
       };
+      if (extra.language) patch.language = extra.language;
       if (data.status !== "concluido") patch.status = "lendo";
       await withDeadline(setDoc(ref, patch, { merge: true }), WRITE_TIMEOUT_MS, "timeout");
       void recordReadingActivity(uid, {});
@@ -185,6 +193,7 @@ export async function markAsReading(
           readerId,
           status: "lendo",
           addedAt: serverTimestamp(),
+          ...(extra.language ? { language: extra.language } : {}),
         },
         { merge: true },
       ),
@@ -236,7 +245,14 @@ export async function setLibraryStatus(
   await withDeadline(
     setDoc(
       ref,
-      { status, ...(shouldAwardCompletion ? { completionAwarded: true } : {}) },
+      {
+        status,
+        ...(shouldAwardCompletion ? { completionAwarded: true } : {}),
+        // First finish date is kept; a re-read finished later updates it.
+        ...(status === "concluido" && existingData?.status !== "concluido"
+          ? { completedAt: Date.now() }
+          : {}),
+      },
       { merge: true },
     ),
     WRITE_TIMEOUT_MS,

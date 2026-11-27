@@ -13,6 +13,7 @@
 import JSZip from "jszip";
 import type { Book, Chapter, ChapterBlock } from "./sample-book";
 import { newEpubId } from "./epub-store";
+import { languageOfBook } from "./book-language";
 
 const MAX_FILE_SIZE = 60 * 1024 * 1024; // 60MB — generous for a text-only book
 
@@ -544,6 +545,8 @@ export async function parseEpubFile(file: File): Promise<Book> {
   const author =
     textOf(opfDoc.querySelector("metadata > creator, metadata > dc\\:creator")) ||
     "Autor desconhecido";
+  const declaredLanguage =
+    textOf(opfDoc.querySelector("metadata > language, metadata > dc\\:language")) || null;
 
   // 3. Manifest: id -> { href, mediaType }
   const manifestItems = Array.from(opfDoc.querySelectorAll("manifest > item"));
@@ -649,11 +652,6 @@ export async function parseEpubFile(file: File): Promise<Book> {
     throw new EpubParseError("Não encontramos texto legível dentro deste EPUB.");
   }
 
-  return {
-    id: newEpubId(),
-    title,
-    author,
-    cover,
-    chapters,
-  };
+  const book = { id: newEpubId(), title, author, cover, chapters };
+  return { ...book, language: languageOfBook({ language: declaredLanguage, chapters }) };
 }

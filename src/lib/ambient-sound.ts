@@ -66,17 +66,30 @@ function releaseMediaPlayback() {
   unlockEl?.pause();
 }
 
-/** Calls/alarms and locking the phone suspend audio — pick it up again. */
+/** The soundscape belongs to the open book: it pauses whenever the app
+ * leaves the screen (home button, app switcher, lock) — the "playback"
+ * audio session would otherwise keep it going in the background — and
+ * comes back when you return to the book. Calls/alarms that suspend audio
+ * are recovered the same way. Closing the page stops it for good. */
 function watchInterruptions() {
   if (watching || typeof document === "undefined") return;
   watching = true;
+  const onVisibility = () => {
+    if (document.visibilityState === "hidden") {
+      if (ctx && ctx.state === "running") void ctx.suspend().catch(() => {});
+      unlockEl?.pause();
+      return;
+    }
+    revive();
+  };
   const revive = () => {
     if (document.visibilityState !== "visible" || currentKind === "off" || !ctx) return;
     if (ctx.state !== "running") void ctx.resume().catch(() => {});
     if (unlockEl?.paused) void unlockEl.play().catch(() => {});
   };
-  document.addEventListener("visibilitychange", revive);
+  document.addEventListener("visibilitychange", onVisibility);
   window.addEventListener("pointerdown", revive, { passive: true });
+  window.addEventListener("pagehide", () => stopAmbient());
 }
 
 function audio(): AudioContext | null {
@@ -357,6 +370,12 @@ export function setAmbient(kind: AmbientSound, volume = 0.35) {
   currentKind = kind;
   if (kind === "off") {
     releaseMediaPlayback();
+    // Let the fade finish, then put the audio engine to sleep.
+    const sleeping = ctx;
+    setTimeout(() => {
+      if (currentKind === "off" && sleeping?.state === "running")
+        void sleeping.suspend().catch(() => {});
+    }, 1000);
     return;
   }
   const ac = audio();

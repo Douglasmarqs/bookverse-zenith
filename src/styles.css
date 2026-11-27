@@ -2264,12 +2264,19 @@ html[data-theme="escuro"] .bookcase {
   }
 }
 
-/* Library label: format of the file, like the tape on a library book. */
-.shelf-label {
+/* Library labels: format of the file and its language, like the tape on
+   a library book. */
+.shelf-tags {
   position: absolute;
   left: 7%;
   bottom: 8%;
   z-index: 2;
+  display: flex;
+  gap: 3px;
+  pointer-events: none;
+}
+.shelf-label {
+  position: relative;
   padding: 2px 5px 1.5px;
   border-radius: 3px;
   background: var(--tone);
@@ -2344,5 +2351,53 @@ html[data-theme="escuro"] .bookcase {
   .bookcase-lumi,
   .shelf-book[data-state="wobble"] .shelf-book-body {
     animation: none;
+  }
+}
+
+/* ——— App-like touch ————————————————————————————————————————————————
+   No text selection, magnifier or link/image callout when pressing the
+   interface (it felt like a web page, everything turning blue). Reading
+   text, Lumi's answers and form fields stay selectable. */
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+body {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+a,
+img,
+button {
+  -webkit-touch-callout: none;
+}
+input,
+textarea,
+select,
+[contenteditable="true"],
+[data-selectable],
+[data-selectable] * {
+  -webkit-user-select: text;
+  user-select: text;
+}
+[data-selectable] {
+  -webkit-touch-callout: default;
+}
+
+/* Metas — the pace line draws itself in. */
+.pace-line {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: pace-draw 1.3s 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes pace-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pace-line {
+    animation: none;
+    stroke-dashoffset: 0;
   }
 }

@@ -1047,11 +1047,13 @@ export interface ReadingTrack {
   query: string;
 }
 
-/** Trilhas temáticas — desafios com tema, não só números. */
+/** Trilhas temáticas — desafios com tema, não só números. Renovam todo
+ * mês: `tracksForMonth` mostra três por vez, sempre iguais para todo mundo
+ * no mesmo mês, e o progresso conta os livros concluídos naquele mês. */
 export const READING_TRACKS: ReadingTrack[] = [
   {
     id: "track-gotico",
-    title: "Outubro gótico",
+    title: "Noites góticas",
     description: "Três clássicos de terror: Drácula, Frankenstein e contos de Poe.",
     goal: 3,
     xp: 150,
@@ -1067,8 +1069,8 @@ export const READING_TRACKS: ReadingTrack[] = [
   },
   {
     id: "track-contos",
-    title: "Semana de contos",
-    description: "Cinco contos curtos em sete dias. Ideal para reacender a sequência.",
+    title: "Mês dos contos",
+    description: "Uma coletânea de contos curtos. Ideal para reacender a sequência.",
     goal: 1,
     xp: 60,
     query: "short stories",
@@ -1081,4 +1083,82 @@ export const READING_TRACKS: ReadingTrack[] = [
     xp: 200,
     query: "Moby Dick",
   },
+  {
+    id: "track-austen",
+    title: "Salões de Jane Austen",
+    description: "Bailes, cartas e ironia fina: dois romances da Regência inglesa.",
+    goal: 2,
+    xp: 140,
+    query: "Jane Austen",
+  },
+  {
+    id: "track-misterio",
+    title: "Detetive por um mês",
+    description: "Sherlock Holmes, Poe e os primeiros mistérios de quarto fechado.",
+    goal: 2,
+    xp: 140,
+    query: "detective mystery",
+  },
+  {
+    id: "track-poesia",
+    title: "Um mês de poesia",
+    description: "Álvares de Azevedo, Gonçalves Dias, Cruz e Sousa — um livro de versos.",
+    goal: 1,
+    xp: 80,
+    query: "poesia",
+  },
+  {
+    id: "track-aventura",
+    title: "Mapas e tesouros",
+    description: "Ilhas, viagens e naufrágios: Verne, Stevenson e Defoe.",
+    goal: 2,
+    xp: 140,
+    query: "adventure",
+  },
+  {
+    id: "track-eca",
+    title: "Eça & Portugal",
+    description: "Os Maias ou O Primo Basílio: o realismo português no seu auge.",
+    goal: 1,
+    xp: 120,
+    query: "Eça de Queirós",
+  },
+  {
+    id: "track-russos",
+    title: "Inverno russo",
+    description: "Tolstói, Dostoiévski ou Tchékhov — um clássico russo inteiro.",
+    goal: 1,
+    xp: 160,
+    query: "Dostoevsky",
+  },
+  {
+    id: "track-curtos",
+    title: "Três em um mês",
+    description: "Três novelas curtas: O Alienista, A Metamorfose, O Médico e o Monstro.",
+    goal: 3,
+    xp: 170,
+    query: "novella",
+  },
+  {
+    id: "track-filosofia",
+    title: "Pensar devagar",
+    description: "Um clássico de ideias: Platão, Marco Aurélio ou Montaigne.",
+    goal: 1,
+    xp: 120,
+    query: "philosophy",
+  },
 ];
+
+/** Índice do mês corrente desde 2024 — a mesma rotação para todos. */
+export function monthIndex(date = new Date()): number {
+  return (date.getFullYear() - 2024) * 12 + date.getMonth();
+}
+
+/** As três trilhas do mês (renovam no dia 1º). Outubro sempre tem a gótica. */
+export function tracksForMonth(date = new Date()): ReadingTrack[] {
+  const picked = rotate(READING_TRACKS, 3, monthIndex(date) * 3);
+  if (date.getMonth() === 9 && !picked.some((t) => t.id === "track-gotico")) {
+    picked[0] = READING_TRACKS[0]!;
+  }
+  return picked;
+}

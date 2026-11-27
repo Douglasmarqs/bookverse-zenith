@@ -70,20 +70,79 @@ export interface GoalProgress {
   /** Ritmo necessário por mês no tempo restante do ano. */
   perMonthNeeded: number;
   onTrack: boolean;
+  /** Livros esperados até hoje para estar no ritmo (fracionário). */
+  expectedByNow: number;
+  /** Positivo = à frente do ritmo, negativo = atrás (em livros, arredondado). */
+  delta: number;
+  /** Projeção para o fim do ano no ritmo atual. */
+  projected: number;
+  /** Um livro a cada N dias para bater a meta no tempo que resta. */
+  daysPerBook: number | null;
+  /** Concluídos em cada mês do ano (jan…dez). */
+  byMonth: number[];
+  /** Os livros concluídos no ano, mais recentes primeiro. */
+  books: LibraryEntry[];
+  daysLeft: number;
 }
 
-export function computeGoalProgress(entries: LibraryEntry[], target: number): GoalProgress {
-  const completed = entries.filter((e) => e.status === "concluido").length;
+function millisOf(v: unknown): number | null {
+  if (typeof v === "number") return v;
+  const t = v as { toMillis?: () => number } | null | undefined;
+  return t?.toMillis ? t.toMillis() : null;
+}
+
+/** Quando o livro foi concluído; entradas antigas (sem data) usam a data em
+ * que entraram na estante e contam para o ano atual. */
+export function completionTime(e: LibraryEntry): number | null {
+  return e.completedAt ?? millisOf(e.addedAt);
+}
+
+export function computeGoalProgress(
+  entries: LibraryEntry[],
+  target: number,
+  year = currentYear(),
+  now = new Date(),
+): GoalProgress {
+  const byMonth = Array.from({ length: 12 }, () => 0);
+  const books: { e: LibraryEntry; t: number }[] = [];
+  for (const e of entries) {
+    if (e.status !== "concluido") continue;
+    let t = completionTime(e);
+    const legacy = !e.completedAt;
+    let y = t ? new Date(t).getFullYear() : year;
+    // Legacy finishes from before this feature count for the current year.
+    if (legacy && y !== year && year === now.getFullYear()) {
+      y = year;
+      t = null;
+    }
+    if (y !== year) continue;
+    const month = t ? new Date(t).getMonth() : now.getMonth();
+    byMonth[month] = (byMonth[month] ?? 0) + 1;
+    books.push({ e, t: t ?? now.getTime() });
+  }
+  books.sort((a, b) => b.t - a.t);
+  const completed = books.length;
+  const start = new Date(year, 0, 1).getTime();
+  const end = new Date(year + 1, 0, 1).getTime();
+  const elapsed = Math.min(1, Math.max(0, (now.getTime() - start) / (end - start)));
+  const daysLeft = Math.max(0, Math.ceil((end - now.getTime()) / 86_400_000));
   const percent = target > 0 ? Math.min(100, Math.round((completed / target) * 100)) : 0;
   const remaining = Math.max(0, target - completed);
-  const monthsLeft = Math.max(1, 12 - new Date().getMonth());
-  const expected = target * ((new Date().getMonth() + 1) / 12);
+  const monthsLeft = Math.max(1, 12 - now.getMonth());
+  const expectedByNow = target * elapsed;
   return {
     completed,
     target,
     percent,
     remaining,
     perMonthNeeded: Math.ceil(remaining / monthsLeft),
-    onTrack: completed >= Math.floor(expected),
+    onTrack: completed >= Math.floor(expectedByNow),
+    expectedByNow,
+    delta: Math.round(completed - expectedByNow),
+    projected: elapsed > 0.02 ? Math.round(completed / elapsed) : completed,
+    daysPerBook: remaining > 0 ? Math.max(1, Math.floor(daysLeft / remaining)) : null,
+    byMonth,
+    books: books.map((b) => b.e),
+    daysLeft,
   };
 }

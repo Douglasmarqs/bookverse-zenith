@@ -49,6 +49,10 @@ type SleepTimer = (typeof TIMERS)[number];
 const VOICE_KEY = "bookverse:listen-voice";
 /** Server limit per request; longer sentences are split at commas. */
 const MAX_PIECE = 600;
+/** Natural voices read a few sentences per request: fewer round trips, a
+ * steadier voice across sentences and well inside the provider's rate
+ * limit (one request every ~15 s of listening). */
+const NATURAL_GROUP = 420;
 
 interface NaturalVoiceInfo {
   id: string;
@@ -78,13 +82,21 @@ function splitLong(text: string): string[] {
   return out;
 }
 
-function splitSentences(paragraphs: string[]): { text: string; para: number }[] {
+function splitSentences(paragraphs: string[], group = 0): { text: string; para: number }[] {
   const out: { text: string; para: number }[] = [];
   paragraphs.forEach((p, para) => {
     const parts = p.match(/[^.!?…]+[.!?…]+["”»)\]]*\s*|[^.!?…]+$/g) ?? [p];
+    const start = out.length;
     for (const part of parts) {
       const t = part.trim();
-      if (t) for (const piece of splitLong(t)) out.push({ text: piece, para });
+      if (!t) continue;
+      for (const piece of splitLong(t)) {
+        const last = out[out.length - 1];
+        // Join short sentences of the same paragraph into one passage.
+        if (group && out.length > start && last && last.text.length + piece.length + 1 <= group)
+          last.text = `${last.text} ${piece}`;
+        else out.push({ text: piece, para });
+      }
     }
   });
   return out;
@@ -181,7 +193,6 @@ export function ListenMode({
   onChapterEnd,
 }: Props) {
   const pal = bookPalette(title, author);
-  const sentences = useMemo(() => splitSentences(paragraphs), [paragraphs]);
   const speechOk = typeof window !== "undefined" && "speechSynthesis" in window;
   const [idx, setIdx] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -234,11 +245,21 @@ export function ListenMode({
     choice?.kind === "device" ? deviceVoices.find((v) => v.voiceURI === choice.uri) : undefined;
   const natural = choice?.kind === "natural" ? choice.id : null;
   const supported = !!natural || speechOk;
+  const sentences = useMemo(
+    () => splitSentences(paragraphs, natural ? NATURAL_GROUP : 0),
+    [paragraphs, natural],
+  );
+  /** Paragraph being read, so switching voice (and passage size) keeps the place. */
+  const paraRef = useRef<number | null>(null);
+  useEffect(() => {
+    paraRef.current = null;
+  }, [open, paragraphs]);
 
   // Start where the reader is (or at the top of the next chapter).
   useEffect(() => {
     if (!open) return;
-    const first = continueNext.current ? 0 : sentences.findIndex((s) => s.para >= startParagraph);
+    const from = paraRef.current ?? startParagraph;
+    const first = continueNext.current ? 0 : sentences.findIndex((s) => s.para >= from);
     const i = Math.max(0, first);
     setIdx(i);
     idxRef.current = i;
@@ -308,6 +329,7 @@ export function ListenMode({
       if (i >= sentences.length) return finishChapter();
       if (sleepAt.current && Date.now() > sleepAt.current) return stop();
       idxRef.current = i;
+      paraRef.current = sentences[i]!.para;
       setIdx(i);
       const next = () => {
         if (playingRef.current && tokenRef.current === token) speak(idxRef.current + 1);
@@ -349,7 +371,7 @@ export function ListenMode({
       u.onend = next;
       window.speechSynthesis.speak(u);
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
     [sentences, natural, deviceVoice, deviceVoices, rate, speechOk, clipUrl, finishChapter, stop],
   );
 
@@ -709,7 +731,8 @@ export function ListenMode({
                         <Sparkles className="h-3.5 w-3.5" /> Vozes naturais
                       </p>
                       <p className="mb-2 text-[12.5px] opacity-65">
-                        Narração neural, parecida com audiolivro. Precisa de internet.
+                        Narração de audiolivro em português do Brasil (ElevenLabs). Precisa de
+                        internet.
                       </p>
                       {naturalVoices.map((v) => (
                         <VoiceRow

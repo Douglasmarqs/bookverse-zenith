@@ -26,6 +26,8 @@ export type Book = {
   title: string;
   author: string;
   cover: string | null;
+  /** ISO code when known (EPUB metadata or guessed), e.g. "pt", "en". */
+  language?: string | null;
   chapters: Chapter[];
 };
 
