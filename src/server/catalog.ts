@@ -189,6 +189,10 @@ async function searchStandard(q: string): Promise<CatalogBook[]> {
   while ((m = re.exec(html)) && out.length < 10) {
     const block = m[0];
     const path = m[1]!;
+    // Standard Ebooks lists works that are still under copyright (Harry
+    // Potter…) as placeholders, with no file: never offer those.
+    const opening = block.slice(0, block.indexOf(">") + 1);
+    if (/\bnot-pd\b/.test(opening) || block.includes("placeholder-cover")) continue;
     const names = [...block.matchAll(/property="schema:name"[^>]*>([^<]+)</g)].map((x) =>
       decode(x[1]!),
     );
@@ -222,7 +226,10 @@ async function searchArchive(q: string): Promise<CatalogBook[]> {
     "format:EPUB",
     // Never the lending library: only public domain / open licences.
     "NOT collection:(inlibrary OR printdisabled OR lendinglibrary OR internetarchivebooks)",
-    "(year:[1000 TO 1929] OR licenseurl:*publicdomain* OR licenseurl:*creativecommons*)",
+    // Only the publication date is trustworthy: uploaders mark pirated
+    // copies of recent books as "CC0" or "public domain" themselves.
+    // Works published up to 1930 are public domain in the US in 2026.
+    `year:[1000 TO ${new Date().getUTCFullYear() - 96}]`,
   ].join(" AND ");
   const fields = ["identifier", "title", "creator", "year", "language", "downloads"]
     .map((f) => `fl[]=${f}`)

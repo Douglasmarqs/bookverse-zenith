@@ -29,6 +29,7 @@ import { Route as RankingRouteImport } from './routes/ranking'
 import { Route as SobreRouteImport } from './routes/sobre'
 import { Route as TermosRouteImport } from './routes/termos'
 import { Route as ApiLumiRouteImport } from './routes/api/lumi'
+import { Route as ApiTtsRouteImport } from './routes/api/tts'
 import { Route as LivroSlugRouteImport } from './routes/livro.$slug'
 import { Route as ReaderBookIdRouteImport } from './routes/reader.$bookId'
 import { Route as ApiCatalogDownloadRouteImport } from './routes/api/catalog.download'
@@ -135,6 +136,11 @@ const ApiLumiRoute = ApiLumiRouteImport.update({
   path: '/api/lumi',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiTtsRoute = ApiTtsRouteImport.update({
+  id: '/api/tts',
+  path: '/api/tts',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LivroSlugRoute = LivroSlugRouteImport.update({
   id: '/livro/$slug',
   path: '/livro/$slug',
@@ -182,6 +188,7 @@ export interface FileRoutesByFullPath {
   '/sobre': typeof SobreRoute
   '/termos': typeof TermosRoute
   '/api/lumi': typeof ApiLumiRoute
+  '/api/tts': typeof ApiTtsRoute
   '/livro/$slug': typeof LivroSlugRoute
   '/reader/$bookId': typeof ReaderBookIdRoute
   '/api/catalog/download': typeof ApiCatalogDownloadRoute
@@ -209,6 +216,7 @@ export interface FileRoutesByTo {
   '/sobre': typeof SobreRoute
   '/termos': typeof TermosRoute
   '/api/lumi': typeof ApiLumiRoute
+  '/api/tts': typeof ApiTtsRoute
   '/livro/$slug': typeof LivroSlugRoute
   '/reader/$bookId': typeof ReaderBookIdRoute
   '/api/catalog/download': typeof ApiCatalogDownloadRoute
@@ -237,6 +245,7 @@ export interface FileRoutesById {
   '/sobre': typeof SobreRoute
   '/termos': typeof TermosRoute
   '/api/lumi': typeof ApiLumiRoute
+  '/api/tts': typeof ApiTtsRoute
   '/livro/$slug': typeof LivroSlugRoute
   '/reader/$bookId': typeof ReaderBookIdRoute
   '/api/catalog/download': typeof ApiCatalogDownloadRoute
@@ -266,6 +275,7 @@ export interface FileRouteTypes {
     | '/sobre'
     | '/termos'
     | '/api/lumi'
+    | '/api/tts'
     | '/livro/$slug'
     | '/reader/$bookId'
     | '/api/catalog/download'
@@ -293,6 +303,7 @@ export interface FileRouteTypes {
     | '/sobre'
     | '/termos'
     | '/api/lumi'
+    | '/api/tts'
     | '/livro/$slug'
     | '/reader/$bookId'
     | '/api/catalog/download'
@@ -320,6 +331,7 @@ export interface FileRouteTypes {
     | '/sobre'
     | '/termos'
     | '/api/lumi'
+    | '/api/tts'
     | '/livro/$slug'
     | '/reader/$bookId'
     | '/api/catalog/download'
@@ -348,6 +360,7 @@ export interface RootRouteChildren {
   SobreRoute: typeof SobreRoute
   TermosRoute: typeof TermosRoute
   ApiLumiRoute: typeof ApiLumiRoute
+  ApiTtsRoute: typeof ApiTtsRoute
   LivroSlugRoute: typeof LivroSlugRoute
   ReaderBookIdRoute: typeof ReaderBookIdRoute
   ApiCatalogDownloadRoute: typeof ApiCatalogDownloadRoute
@@ -497,6 +510,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiLumiRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/tts': {
+      id: '/api/tts'
+      path: '/api/tts'
+      fullPath: '/api/tts'
+      preLoaderRoute: typeof ApiTtsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/livro/$slug': {
       id: '/livro/$slug'
       path: '/livro/$slug'
@@ -556,6 +576,7 @@ const rootRouteChildren: RootRouteChildren = {
   SobreRoute: SobreRoute,
   TermosRoute: TermosRoute,
   ApiLumiRoute: ApiLumiRoute,
+  ApiTtsRoute: ApiTtsRoute,
   LivroSlugRoute: LivroSlugRoute,
   ReaderBookIdRoute: ReaderBookIdRoute,
   ApiCatalogDownloadRoute: ApiCatalogDownloadRoute,
