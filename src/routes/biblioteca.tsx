@@ -684,7 +684,9 @@ function GridItem({
   const { fired, handlers } = useLongPress(onMore);
   return (
     <motion.li
-      layout
+      // Reflow animation only for the cards on screen: measuring every
+      // card of a big library on each change was a visible hitch.
+      layout={index < 24}
       initial={{ opacity: 0.55, y: 12 }}
       animate={{ opacity: 1, y: 0, transition: { delay: Math.min(index, 12) * 0.025 } }}
       exit={{ opacity: 0, scale: 0.94 }}

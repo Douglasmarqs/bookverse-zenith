@@ -57,13 +57,16 @@ export function LumiGaze() {
       settle();
     };
     let lastY = window.scrollY;
+    let glanceTimer = 0;
     const onScroll = () => {
       const v = window.scrollY - lastY;
       lastY = window.scrollY;
       scrollGlance = Math.max(-240, Math.min(240, v * 12));
       schedule();
       settle();
-      window.setTimeout(() => {
+      // One timer per scroll gesture, not one per scroll event.
+      clearTimeout(glanceTimer);
+      glanceTimer = window.setTimeout(() => {
         scrollGlance = 0;
         schedule();
       }, 260);
@@ -88,6 +91,7 @@ export function LumiGaze() {
       window.removeEventListener("scroll", onScroll);
       cancelAnimationFrame(raf);
       clearTimeout(idle);
+      clearTimeout(glanceTimer);
     };
   }, []);
   return null;

@@ -29,6 +29,10 @@ export function FitGuard() {
       const main = document.querySelector("main");
       if (!main) return;
       const vw = document.documentElement.clientWidth;
+      // Fast path: nothing sticks out of the page (the usual case) — skip
+      // measuring every element, which cost a visible hitch after each
+      // navigation on phones.
+      if (document.documentElement.scrollWidth <= vw + 1) return;
       const fixed: string[] = [];
       for (const el of main.querySelectorAll<HTMLElement>("*")) {
         if (el.dataset.fit === "1") continue;
@@ -47,15 +51,19 @@ export function FitGuard() {
     const schedule = () => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
-        const idle = (window as { requestIdleCallback?: (cb: () => void) => number })
-          .requestIdleCallback;
-        if (idle) idle(scan);
+        const idle = (
+          window as {
+            requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number;
+          }
+        ).requestIdleCallback;
+        if (idle) idle(scan, { timeout: 2000 });
         else scan();
       });
     };
 
     // After the page settles (data, images, fonts).
-    for (const ms of [120, 900, 2500]) timers.push(window.setTimeout(schedule, ms));
+    // Not during the page's entrance animation.
+    for (const ms of [700, 2500]) timers.push(window.setTimeout(schedule, ms));
     window.addEventListener("resize", schedule);
     window.addEventListener("orientationchange", schedule);
     void document.fonts?.ready.then(schedule);
