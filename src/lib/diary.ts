@@ -36,6 +36,8 @@ export interface DiaryEntry {
   bookCover: string | null;
   reaction: DiaryReactionId;
   note: string;
+  /** A passage that stayed with the reader (optional). */
+  quote?: string | null;
   createdAt?: { toMillis?: () => number } | null;
 }
 
@@ -49,13 +51,15 @@ export async function addDiaryEntry(
     bookCover: string | null;
     reaction: DiaryReactionId;
     note: string;
+    quote?: string | null;
   },
 ): Promise<void> {
   const fb = getFirebase();
   if (!fb) throw new Error("O login não está disponível neste ambiente agora.");
   const note = entry.note.trim().slice(0, 1000);
+  const quote = (entry.quote ?? "").trim().slice(0, 600);
   if (!entry.bookTitle.trim()) throw new Error("Escolha um livro para registrar no diário.");
-  if (!note) throw new Error("Escreva pelo menos uma linha sobre o momento de leitura.");
+  if (!note && !quote) throw new Error("Escreva pelo menos uma linha sobre o momento de leitura.");
 
   const saved = await withDeadline(
     addDoc(collection(fb.db, "users", uid, "diary"), {
@@ -64,6 +68,7 @@ export async function addDiaryEntry(
       bookCover: entry.bookCover && entry.bookCover.length < 700_000 ? entry.bookCover : null,
       reaction: entry.reaction,
       note,
+      ...(quote ? { quote } : {}),
       createdAt: serverTimestamp(),
     }),
     WRITE_TIMEOUT_MS,

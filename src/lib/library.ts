@@ -55,6 +55,8 @@ export interface LibraryEntry extends BookMeta {
   readerId?: string | null;
   /** Language of the book ("pt", "en"…), for personal files. */
   language?: string | null;
+  /** When it was (last) marked as finished, epoch ms — feeds yearly goals. */
+  completedAt?: number;
 }
 
 const READ_TIMEOUT_MS = 5000;
@@ -243,7 +245,14 @@ export async function setLibraryStatus(
   await withDeadline(
     setDoc(
       ref,
-      { status, ...(shouldAwardCompletion ? { completionAwarded: true } : {}) },
+      {
+        status,
+        ...(shouldAwardCompletion ? { completionAwarded: true } : {}),
+        // First finish date is kept; a re-read finished later updates it.
+        ...(status === "concluido" && existingData?.status !== "concluido"
+          ? { completedAt: Date.now() }
+          : {}),
+      },
       { merge: true },
     ),
     WRITE_TIMEOUT_MS,

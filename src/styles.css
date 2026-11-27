@@ -2383,3 +2383,21 @@ select,
 [data-selectable] {
   -webkit-touch-callout: default;
 }
+
+/* Metas — the pace line draws itself in. */
+.pace-line {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: pace-draw 1.3s 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes pace-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pace-line {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}
