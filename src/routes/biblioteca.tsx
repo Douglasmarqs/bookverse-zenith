@@ -13,6 +13,7 @@ import {
   FileText,
   Heart,
   LayoutGrid,
+  LibraryBig,
   List as ListIcon,
   MoreHorizontal,
   Plus,
@@ -26,6 +27,8 @@ import {
 import { toast } from "sonner";
 
 import { BookArt } from "@/components/book-art";
+import { Bookshelf } from "@/components/library/bookshelf";
+import { bookFormat } from "@/lib/book-format";
 import { Lumi } from "@/components/brand/lumi";
 import { useAccount } from "@/hooks/use-auth-user";
 import { describeFirestoreError } from "@/lib/async-utils";
@@ -72,7 +75,7 @@ export const Route = createFileRoute("/biblioteca")({
 type Tab = "lendo" | "quero-ler" | "lidos" | "listas";
 type ListId = "favoritos" | "relendo" | "abandonados" | "offline" | "arquivos";
 type SortKey = "lidos" | "adicionados" | "titulo" | "autor" | "nota";
-type View = "grade" | "lista";
+type View = "estante" | "grade" | "lista";
 
 /** One shelf item, from the account library or (for guests) this device. */
 interface ShelfBook {
@@ -186,13 +189,14 @@ function BibliotecaPage() {
   const [sortOpen, setSortOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [view, setView] = useState<View>("grade");
+  const [view, setView] = useState<View>("estante");
   const [sheet, setSheet] = useState<ShelfBook | null>(null);
   const coverRecovery = useRef(new Set<string>());
 
   useEffect(() => {
     try {
-      if (localStorage.getItem(VIEW_KEY) === "lista") setView("lista");
+      const saved = localStorage.getItem(VIEW_KEY);
+      if (saved === "lista" || saved === "grade" || saved === "estante") setView(saved);
     } catch {
       // ignore
     }
@@ -525,6 +529,7 @@ function BibliotecaPage() {
               </button>
               {(
                 [
+                  ["estante", LibraryBig, "Estante"],
                   ["grade", LayoutGrid, "Grade"],
                   ["lista", ListIcon, "Lista"],
                 ] as const
@@ -549,6 +554,19 @@ function BibliotecaPage() {
             <GridSkeleton />
           ) : visible.length === 0 ? (
             <EmptyShelf tab={tab} list={list} query={query} total={books.length} />
+          ) : view === "estante" ? (
+            <Bookshelf
+              books={visible}
+              label={
+                query.trim()
+                  ? "Resultados"
+                  : list
+                    ? (LISTS.find((l) => l.id === list)?.label ?? "Estante")
+                    : `${TABS.find((t) => t.id === tab)?.label ?? "Estante"} · ${visible.length}`
+              }
+              onOpen={(b) => open(b as ShelfBook)}
+              onMore={(b) => setSheet(b as ShelfBook)}
+            />
           ) : view === "grade" ? (
             <ul className="reveal-flow mt-4 grid grid-cols-3 gap-x-4 gap-y-7 px-[22px] sm:grid-cols-4 lg:grid-cols-6 lg:px-4">
               <AnimatePresence initial={false}>
@@ -703,7 +721,10 @@ function GridItem({
         className="press block w-full select-none text-left [-webkit-touch-callout:none]"
         aria-label={`${book.title}, ${book.author}`}
       >
-        <BookArt title={book.title} author={book.author} cover={book.cover} live />
+        <span className="relative block">
+          <BookArt title={book.title} author={book.author} cover={book.cover} live />
+          <FormatTag book={book} />
+        </span>
       </button>
       <button
         type="button"
@@ -717,6 +738,25 @@ function GridItem({
         <ProgressLine book={book} />
       </div>
     </motion.li>
+  );
+}
+
+/** EPUB · PDF · Online… so every book says what it is. */
+function FormatTag({ book, inline = false }: { book: ShelfBook; inline?: boolean }) {
+  const f = bookFormat(book);
+  const text = f.label === "ONLINE" ? "Online" : f.label === "SALVO" ? "Lista" : f.label;
+  return (
+    <span
+      title={`${f.label} · ${f.origin}`}
+      className={
+        inline
+          ? "shrink-0 rounded-[4px] px-1.5 py-px text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-white"
+          : "shelf-label"
+      }
+      style={{ "--tone": f.tone, background: inline ? f.tone : undefined } as React.CSSProperties}
+    >
+      {text}
+    </span>
   );
 }
 
@@ -743,7 +783,10 @@ function RowItem({
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-[15px] font-semibold">{book.title}</p>
-          <p className="mt-0.5 truncate text-[12.5px] text-muted-foreground">{book.author}</p>
+          <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[12.5px] text-muted-foreground">
+            <FormatTag book={book} inline />
+            <span className="truncate">{book.author}</span>
+          </p>
           <div className="mt-2 max-w-[220px]">
             <ProgressLine book={book} />
           </div>
