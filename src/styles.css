@@ -1545,3 +1545,27 @@ html[data-swaying] .book3d-body {
     font-size: max(16px, 1em) !important;
   }
 }
+
+/* ——— Abertura (app intro) ——— */
+html[data-intro="off"] #app-intro,
+html:not([data-intro]) #app-intro {
+  display: none;
+}
+.intro-mote {
+  opacity: 0;
+  animation: intro-mote 4s ease-in-out infinite;
+  box-shadow: 0 0 8px 2px rgba(255, 190, 120, 0.55);
+}
+@keyframes intro-mote {
+  0% {
+    transform: translateY(0) scale(0.6);
+    opacity: 0;
+  }
+  25% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(-140px) scale(1);
+    opacity: 0;
+  }
+}
