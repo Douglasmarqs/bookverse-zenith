@@ -221,7 +221,11 @@ function BookPage() {
     let rid = readerId;
     if (!rid) {
       if (!copy) {
-        toast.error("Ainda procurando uma cópia grátis deste livro…");
+        toast.error(
+          copy === null
+            ? "Este livro não tem uma cópia em domínio público nos acervos gratuitos."
+            : "Ainda procurando uma cópia grátis deste livro…",
+        );
         return;
       }
       try {
@@ -293,7 +297,7 @@ function BookPage() {
       pages ? String(pages) : copy ? SOURCE_LABEL[copy.source].split(" ").pop()! : "—",
       pages ? "páginas" : "fonte",
     ],
-    ["Grátis", "domínio público"],
+    copy ? ["Grátis", "domínio público"] : ["—", copy === null ? "sem cópia livre" : "procurando"],
   ];
 
   return (
@@ -386,7 +390,7 @@ function BookPage() {
           <button
             type="button"
             onClick={() => void open()}
-            disabled={busy || copy === undefined}
+            disabled={busy || copy === undefined || (copy === null && !readerId)}
             className="btn-primary h-[54px] min-w-0 flex-1 text-base disabled:opacity-70"
           >
             {busy ? (
@@ -401,6 +405,8 @@ function BookPage() {
                 <Loader2 className="h-[19px] w-[19px] shrink-0 animate-spin" />
                 <span className="truncate">Procurando…</span>
               </>
+            ) : copy === null && !readerId ? (
+              <span className="truncate">Sem cópia livre</span>
             ) : (
               <>
                 <BookOpen className="h-[19px] w-[19px]" strokeWidth={2.2} /> Ler agora
@@ -474,7 +480,11 @@ function BookPage() {
                 className={`mt-4 text-[15px] leading-[1.55] text-muted-foreground ${expanded ? "" : "line-clamp-4"}`}
               >
                 {description ||
-                  `${title}${author ? `, de ${author},` : ""} é uma obra em domínio público: grátis e legal para ler, ouvir e baixar no BookVerse.`}
+                  (copy
+                    ? `${title}${author ? `, de ${author},` : ""} é uma obra em domínio público: grátis e legal para ler, ouvir e baixar no BookVerse.`
+                    : copy === null
+                      ? `Não encontramos ${title} em domínio público nos acervos gratuitos. O BookVerse só oferece livros livres de direitos autorais.`
+                      : "Procurando cópias gratuitas e legais deste livro…")}
               </p>
             )}
             {description && description.length > 220 && (
@@ -490,7 +500,11 @@ function BookPage() {
               {copy?.language && (
                 <LangTag code={copy.language} className="!px-3 !py-1.5 !text-xs" />
               )}
-              {[...categories, copy ? SOURCE_LABEL[copy.source] : null, "Domínio público"]
+              {[
+                ...categories,
+                copy ? SOURCE_LABEL[copy.source] : null,
+                copy ? "Domínio público" : null,
+              ]
                 .filter(Boolean)
                 .map((t) => (
                   <span

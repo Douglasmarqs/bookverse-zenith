@@ -604,6 +604,36 @@ export function ReaderSettingsPanel({
                     );
                   })}
                 </div>
+                {(settings.ambient ?? "off") !== "off" && (
+                  <label className="mt-2 flex items-center gap-3 py-2 text-[13.5px] font-semibold">
+                    <span className="w-24 shrink-0">Volume</span>
+                    <input
+                      type="range"
+                      min={0.05}
+                      max={1}
+                      step={0.05}
+                      value={settings.ambientVolume ?? 0.35}
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        onChange({ ambientVolume: v });
+                        setAmbient(settings.ambient ?? "off", v);
+                      }}
+                      aria-label="Volume do som ambiente"
+                      className="reader-range flex-1"
+                      style={{
+                        ["--fill" as string]: `${(((settings.ambientVolume ?? 0.35) - 0.05) / 0.95) * 100}%`,
+                        ["--ink" as string]: c.ink,
+                        ["--track" as string]: c.surface2,
+                      }}
+                    />
+                    <span
+                      className="w-12 text-right text-xs tabular-nums"
+                      style={{ color: c.muted }}
+                    >
+                      {Math.round((settings.ambientVolume ?? 0.35) * 100)}%
+                    </span>
+                  </label>
+                )}
               </>
             ) : (
               <>
