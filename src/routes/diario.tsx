@@ -8,6 +8,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Loader2, PenLine, Quote, RefreshCw, Share2, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -354,16 +355,20 @@ function DiaryPage({ uid }: { uid: string }) {
       </div>
 
       {/* Floating write button */}
-      {list.length > 0 && !composing && (
-        <button
-          type="button"
-          aria-label="Novo registro"
-          onClick={() => setComposing(true)}
-          className="press fixed bottom-[calc(env(safe-area-inset-bottom)+6.5rem)] right-5 z-30 grid h-14 w-14 place-items-center rounded-full bg-gold text-primary-foreground shadow-xl lg:bottom-10"
-        >
-          <PenLine className="h-6 w-6" />
-        </button>
-      )}
+      {list.length > 0 &&
+        !composing &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <button
+            type="button"
+            aria-label="Novo registro"
+            onClick={() => setComposing(true)}
+            className="press fixed bottom-[calc(env(safe-area-inset-bottom)+6.5rem)] right-5 z-30 grid h-14 w-14 place-items-center rounded-full bg-gold text-primary-foreground shadow-xl lg:bottom-10"
+          >
+            <PenLine className="h-6 w-6" />
+          </button>,
+          document.body,
+        )}
 
       <Composer open={composing} onClose={() => setComposing(false)} uid={uid} library={library} />
     </div>
@@ -620,7 +625,8 @@ function Composer({
     }
   }
 
-  return (
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <AnimatePresence>
       {open && (
         <>
@@ -819,7 +825,8 @@ function Composer({
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }
 

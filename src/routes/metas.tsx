@@ -243,7 +243,19 @@ function MetasPage({ uid }: { uid: string }) {
 
   const today = ritual.todayMinutes;
   const todayPct = Math.min(1, today / Math.max(1, daily));
-  const streak = profile?.currentStreak ?? 0;
+  // The server's streak, or the one in this device's reading minutes —
+  // whichever is fresher (the ritual syncs every ~20 s).
+  const localStreak = useMemo(() => {
+    let n = 0;
+    const d = new Date();
+    if (!(ritual.days[dayKey(d)] ?? 0)) d.setDate(d.getDate() - 1);
+    while ((ritual.days[dayKey(d)] ?? 0) > 0) {
+      n += 1;
+      d.setDate(d.getDate() - 1);
+    }
+    return n;
+  }, [ritual.days]);
+  const streak = Math.max(profile?.currentStreak ?? 0, localStreak);
   const record = Math.max(profile?.longestStreak ?? 0, streak);
   const amb = ambition(draft);
 

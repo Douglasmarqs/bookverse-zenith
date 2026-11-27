@@ -25,7 +25,7 @@ import {
   type AchievementStats,
 } from "@/lib/achievements";
 import { celebrateNewAchievements } from "@/lib/celebrate-achievements";
-import { READING_TRACKS } from "@/lib/editorial";
+import { tracksForMonth } from "@/lib/editorial";
 import { slugFor, subscribeLibrary, type LibraryEntry } from "@/lib/library";
 import { subscribeRanking, type RankingRow } from "@/lib/ranking";
 import { subscribeReadingProgress, type StoredReadingProgress } from "@/lib/reader-store";
@@ -156,6 +156,11 @@ function DesafiosPage() {
     return best;
   }, [library, progress, monthStart]);
   const pick = MONTH_PICK[now.getMonth()]!;
+  const tracks = tracksForMonth(now);
+  // Trails renew on the 1st, so they count books finished this month.
+  const finishedThisMonth = library.filter(
+    (e) => e.status === "concluido" && (e.completedAt ?? 0) >= monthStart,
+  ).length;
   const heroBook = challenge
     ? { title: challenge.entry.title, author: challenge.entry.author, cover: challenge.entry.cover }
     : { ...pick, cover: null };
@@ -444,10 +449,15 @@ function DesafiosPage() {
 
       {/* Themed tracks */}
       <motion.section {...rise(0.18)}>
-        <h2 className="mx-[22px] mb-3 mt-7 text-[24px]">Trilhas temáticas</h2>
+        <div className="mx-[22px] mb-3 mt-7 flex items-baseline justify-between gap-3">
+          <h2 className="text-[24px]">Trilhas de {MONTHS[now.getMonth()]}</h2>
+          <span className="num shrink-0 text-[12.5px] font-semibold text-muted-foreground">
+            novas em {daysLeft + 1} {daysLeft === 0 ? "dia" : "dias"}
+          </span>
+        </div>
         <div className="no-scrollbar flex snap-x gap-2.5 overflow-x-auto scroll-pl-4 px-4 pb-1">
-          {READING_TRACKS.map((t) => {
-            const done = Math.min(stats.booksCompleted, t.goal);
+          {tracks.map((t) => {
+            const done = Math.min(finishedThisMonth, t.goal);
             return (
               <Link
                 key={t.id}
