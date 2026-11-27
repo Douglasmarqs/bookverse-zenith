@@ -7,6 +7,10 @@
  * device's own voice).
  */
 
+/** tts-1 stretches the gateway's free credit; set TTS_MODEL=openai/tts-1-hd
+ * (or another speech model) once the account has paid credits. */
+const MODEL = process.env.TTS_MODEL || "openai/tts-1";
+
 export interface NaturalVoice {
   id: string;
   label: string;
@@ -24,59 +28,35 @@ export const NATURAL_VOICES: NaturalVoice[] = [
     id: "nova",
     label: "Nova",
     hint: "Feminina, calorosa",
-    model: "openai/tts-1-hd",
+    model: MODEL,
     voice: "nova",
   },
   {
     id: "onyx",
     label: "Onyx",
     hint: "Masculina, grave",
-    model: "openai/tts-1-hd",
+    model: MODEL,
     voice: "onyx",
   },
   {
     id: "shimmer",
     label: "Shimmer",
     hint: "Feminina, suave",
-    model: "openai/tts-1-hd",
+    model: MODEL,
     voice: "shimmer",
   },
   {
     id: "echo",
     label: "Echo",
     hint: "Masculina, serena",
-    model: "openai/tts-1-hd",
+    model: MODEL,
     voice: "echo",
   },
-  ...["Kore", "Aoede", "Charon", "Puck"].flatMap((name) => [
-    {
-      id: `g-${name.toLowerCase()}`,
-      label: name,
-      hint: "Gemini",
-      model: "google/gemini-3.8-flash-tts",
-      voice: name,
-      hidden: true,
-    },
-    {
-      id: `gl-${name.toLowerCase()}`,
-      label: name,
-      hint: "Gemini Lite",
-      model: "google/gemini-3.8-flash-lite-tts",
-      voice: name,
-      hidden: true,
-    },
-  ]),
-  ...["alloy", "nova"].map((name) => ({
-    id: `fast-${name}`,
-    label: name,
-    hint: "tts-1",
-    model: "openai/tts-1",
-    voice: name,
-    hidden: true,
-  })),
 ];
 
 const MAX_CHARS = 700;
+/** Out of credit / no access: stop offering natural voices for a while. */
+let restingUntil = 0;
 /** Sentences per address per hour (~3–4 hours of listening). */
 const HOURLY_LIMIT = 1500;
 const hits = new Map<string, { n: number; reset: number }>();
@@ -140,7 +120,7 @@ async function synthesize(key: string, v: NaturalVoice, text: string): Promise<A
 export async function handleTts(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const key = gatewayKey(request);
-  const enabled = !!key && process.env.TTS_DISABLED !== "1";
+  const enabled = !!key && process.env.TTS_DISABLED !== "1" && Date.now() > restingUntil;
 
   if (url.searchParams.has("voices")) {
     return json(
@@ -179,7 +159,9 @@ export async function handleTts(request: Request): Promise<Response> {
       },
     });
   } catch (err) {
-    console.error("[tts]", voice.model, err instanceof Error ? err.message : err);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[tts]", voice.model, msg);
+    if (/gateway (401|402|403|429)/.test(msg)) restingUntil = Date.now() + 30 * 60_000;
     return json({ error: "unavailable" }, 502);
   }
 }
