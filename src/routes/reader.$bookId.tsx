@@ -112,6 +112,8 @@ import { PdfPageViewer } from "@/components/reader/pdf-page-viewer";
 import { usePdfMode } from "@/lib/pdf-mode";
 import { LumiFace } from "@/components/brand/lumi";
 import { ReaderPullSheet, type PullSheetAsk } from "@/components/reader/reader-pull-sheet";
+import { ensureBookInCloud } from "@/lib/cloud-heal";
+import { languageOfBook, rememberBookLanguage } from "@/lib/book-language";
 
 export const Route = createFileRoute("/reader/$bookId")({
   head: () => ({
@@ -288,6 +290,9 @@ function EpubBookLoader({ uid, localId }: { uid: string; localId: string }) {
       if (cancelled) return;
       if (local) {
         setBook(local);
+        // Make sure the account's cloud has it too (an interrupted upload
+        // would leave it unopenable on the reader's other devices).
+        if (!guest) void ensureBookInCloud(uid, localId);
         return;
       }
       // Not on this device/browser (imported elsewhere — on iPhone the
@@ -311,7 +316,7 @@ function EpubBookLoader({ uid, localId }: { uid: string; localId: string }) {
           return;
         }
         setError(
-          "Este EPUB não foi encontrado neste aparelho nem na sua nuvem. Importe-o novamente em Adicionar.",
+          "A cópia deste EPUB não chegou à sua nuvem — o envio depois da importação foi interrompido. Abra o livro no aparelho (ou navegador) onde você o importou: ele envia a cópia sozinho e o livro passa a abrir aqui. Ou importe o arquivo de novo.",
         );
       } catch {
         if (!cancelled)
@@ -341,6 +346,12 @@ function EpubBookLoader({ uid, localId }: { uid: string; localId: string }) {
           >
             Tentar de novo
           </button>
+          <Link
+            to="/adicionar"
+            className="rounded-full bg-secondary px-5 py-2.5 text-sm font-medium"
+          >
+            Importar de novo
+          </Link>
           <Link
             to="/biblioteca"
             className="rounded-full bg-secondary px-5 py-2.5 text-sm font-medium"
@@ -432,7 +443,7 @@ function PdfBookLoader({ uid, localId }: { uid: string; localId: string }) {
             void uploadPdfBookToCloud(uid, upgraded).catch((error) =>
               console.warn("[pdf] background text-layer sync failed", error),
             );
-        }
+        } else if (!guest) void ensureBookInCloud(uid, localId);
         return;
       }
       if (guest) {
@@ -913,8 +924,17 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   // Opening a book counts as "starting" it — track it in the library so it
   // shows up under "Minha biblioteca" / "Continue lendo" and can be resumed.
   useEffect(() => {
-    void markAsReading(uid, { title: book.title, author: book.author, cover: book.cover }, book.id);
-  }, [uid, book.id, book.title, book.author, book.cover]);
+    // The book's language, for the PT/EN tag on the shelf (personal files).
+    const language =
+      book.id.startsWith("epub-") || book.id.startsWith("pdf-") ? languageOfBook(book) : null;
+    if (language) rememberBookLanguage(book.id, language);
+    void markAsReading(
+      uid,
+      { title: book.title, author: book.author, cover: book.cover },
+      book.id,
+      { language },
+    );
+  }, [uid, book]);
 
   useEffect(() => subscribeAnnotations(uid, book.id, setAnnotations), [uid, book.id]);
 
@@ -2550,6 +2570,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
           )}
           <article
             ref={articleRef}
+            data-selectable=""
             className={`mx-auto ${controlsVisible && !panelOpen ? "reader-dim" : ""}`}
             style={{
               maxWidth: twoPageOn ? "none" : `${settings.maxWidth}ch`,

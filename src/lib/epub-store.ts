@@ -161,6 +161,58 @@ export async function uploadEpubBookToCloud(uid: string, book: Book, source: Fil
   );
 }
 
+/**
+ * Re-sends the ready-to-read copy of a book this device has, when the
+ * cloud doesn't (an import whose upload was interrupted, or the original
+ * file is gone). Without it, the book shows on every shelf but can only
+ * be opened on the one device that imported it.
+ */
+export async function uploadParsedEpubBook(uid: string, book: Book): Promise<void> {
+  const { getFirebase } = await import("./firebase");
+  const fb = getFirebase();
+  if (!fb) return;
+  const { ref, uploadBytes } = await import("firebase/storage");
+  const { doc, setDoc } = await import("firebase/firestore");
+  await retryTransient(() =>
+    uploadBytes(
+      ref(fb.storage, storagePath(uid, book.id, "book.json")),
+      new Blob([JSON.stringify(book)], { type: "application/json" }),
+      { contentType: "application/json", customMetadata: { bookId: book.id, kind: "parsed-book" } },
+    ),
+  );
+  await retryTransient(() =>
+    setDoc(
+      doc(fb.db, ...metadataPath(uid, book.id)),
+      {
+        storageVersion: 1,
+        title: book.title,
+        author: book.author,
+        chapterCount: book.chapters.length,
+        updatedAt: Date.now(),
+      },
+      { merge: true },
+    ),
+  );
+}
+
+/** Whether the private cloud copy of this EPUB exists. null = unknown. */
+export async function epubCloudCopyExists(uid: string, id: string): Promise<boolean | null> {
+  const { getFirebase } = await import("./firebase");
+  const fb = getFirebase();
+  if (!fb) return null;
+  const { getMetadata, ref } = await import("firebase/storage");
+  try {
+    await withDeadline(
+      getMetadata(ref(fb.storage, storagePath(uid, id, "book.json"))),
+      15_000,
+      "timeout",
+    );
+    return true;
+  } catch (err) {
+    return (err as { code?: string }).code === "storage/object-not-found" ? false : null;
+  }
+}
+
 async function downloadLegacyEpubBook(uid: string, id: string): Promise<Book | null> {
   const { getFirebase } = await import("./firebase");
   const fb = getFirebase();

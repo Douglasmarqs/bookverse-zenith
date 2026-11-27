@@ -18,6 +18,7 @@ import { Lumi } from "@/components/brand/lumi";
 import { coverIn, playBookOpen } from "@/lib/book-motion";
 import type { DeviceKind } from "@/lib/device-books";
 import { bookFormat } from "@/lib/book-format";
+import { languageLabel } from "@/lib/public-domain";
 
 export interface ShelfItem {
   id: string;
@@ -28,7 +29,16 @@ export interface ShelfItem {
   status: string;
   progress: number;
   device?: { kind: DeviceKind; origin: "catalogo" | "arquivo" };
+  /** "pt", "en"… when known. */
+  language?: string | null;
 }
+
+const LANG_TONE: Record<string, string> = {
+  pt: "#1c7a4a",
+  en: "#2b4f99",
+  es: "#a0522d",
+  fr: "#6b4fa0",
+};
 
 /** Small deterministic variety so the shelf doesn't look like a grid. */
 function hash(s: string) {
@@ -149,7 +159,7 @@ function ShelfBook({
     <li ref={li} className="shelf-book" style={vars}>
       <button
         type="button"
-        aria-label={`${book.title}, ${book.author} · ${fmt.label} · ${fmt.origin}${reading ? ` · ${Math.round(book.progress * 100)}% lido` : done ? " · lido" : ""}`}
+        aria-label={`${book.title}, ${book.author} · ${fmt.label}${book.language ? ` · ${languageLabel(book.language)}` : ""} · ${fmt.origin}${reading ? ` · ${Math.round(book.progress * 100)}% lido` : done ? " · lido" : ""}`}
         className="shelf-book-btn [-webkit-touch-callout:none]"
         onPointerDown={() => {
           set("lift");
@@ -197,12 +207,23 @@ function ShelfBook({
       >
         <span className="shelf-book-body">
           <BookArt title={book.title} author={book.author} cover={book.cover} live />
-          <span
-            className="shelf-label"
-            style={{ "--tone": fmt.tone } as CSSProperties}
-            title={`${fmt.label} · ${fmt.origin}`}
-          >
-            {fmt.label === "ONLINE" ? "Online" : fmt.label === "SALVO" ? "Lista" : fmt.label}
+          <span className="shelf-tags">
+            <span
+              className="shelf-label"
+              style={{ "--tone": fmt.tone } as CSSProperties}
+              title={`${fmt.label} · ${fmt.origin}`}
+            >
+              {fmt.label === "ONLINE" ? "Online" : fmt.label === "SALVO" ? "Lista" : fmt.label}
+            </span>
+            {book.language && (
+              <span
+                className="shelf-label"
+                style={{ "--tone": LANG_TONE[book.language] ?? "#5b6270" } as CSSProperties}
+                title={`Idioma: ${languageLabel(book.language)}`}
+              >
+                {book.language.toUpperCase()}
+              </span>
+            )}
           </span>
           {reading && (
             <span

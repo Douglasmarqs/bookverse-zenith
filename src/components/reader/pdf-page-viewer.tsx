@@ -14,6 +14,7 @@ import {
   Type,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useEdgeSwipeGuard } from "@/hooks/use-edge-swipe-guard";
 import { toast } from "sonner";
 
 import type { PdfBook } from "@/lib/pdf-store";
@@ -28,6 +29,8 @@ import {
 import { openLumiPanel } from "@/lib/lumi-panel-store";
 import { setPdfMode } from "@/lib/pdf-mode";
 import { PdfDisplaySettingsPanel } from "@/components/reader/pdf-display-settings";
+import { PdfPullSheet } from "@/components/reader/pdf-pull-sheet";
+import { languageOfBook, rememberBookLanguage } from "@/lib/book-language";
 import {
   loadPdfDisplaySettings,
   savePdfDisplaySettings,
@@ -141,14 +144,21 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
     };
   }, []);
 
+  // No iOS "back" swipe sliding the previous screen over the page.
+  useEdgeSwipeGuard();
+
   async function saveRegion(draft: RegionDraft) {
     const x = Math.min(draft.startX, draft.x);
     const y = Math.min(draft.startY, draft.y);
     const width = Math.abs(draft.x - draft.startX);
     const height = Math.abs(draft.y - draft.startY);
-    if (width < 0.025 || height < 0.012) return;
+    // Taps and quick swipes aren't marks.
+    if (width < 0.05 || height < 0.015) return;
+    // One mark per tap on the marker: a page swipe afterwards must never
+    // paint over the page by accident.
+    setMarking(false);
     try {
-      await addPdfRegionHighlight(uid, book.id, {
+      const region = await addPdfRegionHighlight(uid, book.id, {
         page,
         x,
         y,
@@ -156,7 +166,9 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
         height,
         color: "gold",
       });
-      toast.success("Trecho marcado e sincronizado.");
+      toast.success("Trecho marcado.", {
+        action: { label: "Desfazer", onClick: () => void removeRegion(region) },
+      });
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Não foi possível salvar a marcação.");
     }
@@ -230,10 +242,13 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
   useEffect(() => {
     const objectUrl = URL.createObjectURL(book.source);
     setUrl(objectUrl);
+    const language = book.readerBook ? languageOfBook(book.readerBook) : null;
+    if (language) rememberBookLanguage(book.id, language);
     void markAsReading(
       uid,
       { title: book.title, author: book.author, cover: book.cover ?? null },
       book.id,
+      { language },
     );
     void loadProgressRemote(book.id).then((progress) => {
       if (progress?.pageIndex !== undefined) setPage(Math.max(1, progress.pageIndex + 1));
@@ -619,7 +634,7 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
         {marking && !error && (
           <div className="pointer-events-none absolute inset-x-3 bottom-3 z-10 flex justify-center">
             <p className="rounded-full bg-foreground/90 px-4 py-2 text-xs font-medium text-white shadow-lg">
-              Arraste sobre o trecho que deseja marcar
+              Arraste sobre o trecho — o marcador desliga depois
             </p>
           </div>
         )}
@@ -639,6 +654,15 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
         >
           <ChevronRight className="h-7 w-7 rounded-full bg-white/90 p-1 shadow" />
         </button>
+        <PdfPullSheet
+          hidden={marking || settingsOpen}
+          hasReadingMode={!!book.readerBook}
+          pageTurnEnabled={pageTurnEnabled}
+          onTogglePageTurn={togglePageTurn}
+          onReadingMode={() => setPdfMode("leitura")}
+          onAsk={openPageWithLumi}
+          onDisplaySettings={() => setSettingsOpen(true)}
+        />
       </main>
 
       <footer className="z-20 shrink-0 border-t border-border bg-background/95 px-3 pb-[max(0.65rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur sm:px-6">

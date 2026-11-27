@@ -256,6 +256,7 @@ export function LumiPanel() {
                   ) : (
                     <motion.div
                       key={i}
+                      data-selectable=""
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.35 }}

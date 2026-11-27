@@ -370,6 +370,24 @@ export async function uploadPdfBookToCloud(uid: string, book: PdfBook): Promise<
   );
 }
 
+/** Whether the private cloud copy of this PDF exists. null = unknown. */
+export async function pdfCloudCopyExists(uid: string, id: string): Promise<boolean | null> {
+  const { getFirebase } = await import("./firebase");
+  const firebase = getFirebase();
+  if (!firebase) return null;
+  const { getMetadata, ref } = await import("firebase/storage");
+  try {
+    await withDeadline(
+      getMetadata(ref(firebase.storage, storagePath(uid, id, "source.pdf"))),
+      15_000,
+      "timeout",
+    );
+    return true;
+  } catch (err) {
+    return (err as { code?: string }).code === "storage/object-not-found" ? false : null;
+  }
+}
+
 export async function downloadPdfBookFromCloud(uid: string, id: string): Promise<PdfBook | null> {
   const cached = memoryBooks.get(id);
   if (cached) return cached;

@@ -29,6 +29,9 @@ import { toast } from "sonner";
 import { BookArt } from "@/components/book-art";
 import { Bookshelf } from "@/components/library/bookshelf";
 import { bookFormat } from "@/lib/book-format";
+import { ensureBooksInCloud } from "@/lib/cloud-heal";
+import { bookLanguage } from "@/lib/book-language";
+import { LUMI_PICKS } from "@/lib/editorial";
 import { Lumi } from "@/components/brand/lumi";
 import { useAccount } from "@/hooks/use-auth-user";
 import { describeFirestoreError } from "@/lib/async-utils";
@@ -90,6 +93,7 @@ interface ShelfBook {
   progress: number;
   lastRead: number;
   addedAt: number;
+  language?: string | null;
   /** Present when the file lives on this device. */
   device?: DeviceBook;
   entry?: LibraryEntry;
@@ -167,6 +171,12 @@ function millis(v: unknown): number {
   return t.toMillis?.() ?? (t.seconds ? t.seconds * 1000 : 0);
 }
 
+/** Gutenberg books from Lumi's picks know their edition's language. */
+const pickLanguage = (readerId?: string | null) => {
+  const m = /^gutenberg-(\d+)$/.exec(readerId ?? "");
+  return m ? (LUMI_PICKS.find((p) => p.gutenbergId === Number(m[1]))?.lang ?? null) : null;
+};
+
 const isPersonalFile = (id?: string | null) => !!id && (isEpubReaderId(id) || isPdfReaderId(id));
 
 /* --------------------------------- page --------------------------------- */
@@ -241,6 +251,18 @@ function BibliotecaPage() {
     }
   }, [entries, uid]);
 
+  // Personal files this device has: make sure the account's cloud has
+  // them too, so they open on every device (quietly, one at a time).
+  useEffect(() => {
+    if (!uid || !device.length) return;
+    const ids = device
+      .map((d) => d.id)
+      .filter((id) => id.startsWith("epub-") || id.startsWith("pdf-"));
+    if (!ids.length) return;
+    const t = setTimeout(() => void ensureBooksInCloud(uid, ids), 1500);
+    return () => clearTimeout(t);
+  }, [uid, device]);
+
   const books: ShelfBook[] | null = useMemo(() => {
     const byReader = new Map(device.map((d) => [d.id, d]));
     if (account === "loading") return null;
@@ -261,6 +283,7 @@ function BibliotecaPage() {
           lastRead: p?.updatedAt ?? 0,
           addedAt: millis(e.addedAt),
           device: e.readerId ? byReader.get(e.readerId) : undefined,
+          language: e.language ?? bookLanguage(e.readerId) ?? pickLanguage(e.readerId),
           entry: e,
         };
       });
@@ -279,6 +302,7 @@ function BibliotecaPage() {
         lastRead: p?.updatedAt ?? 0,
         addedAt: d.addedAt,
         device: d,
+        language: bookLanguage(d.id),
       };
     });
   }, [account, uid, entries, progress, device]);

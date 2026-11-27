@@ -5,6 +5,7 @@
  * Signed-in readers also get a private cloud copy and a shelf entry;
  * guests keep the book on this device (it still opens offline).
  */
+import { rememberBookLanguage } from "./book-language";
 import { useSyncExternalStore } from "react";
 
 import { getFirebase } from "./firebase";
@@ -181,6 +182,7 @@ async function importOne(id: string) {
       });
     } else {
       const book = converted.book;
+      rememberBookLanguage(book.id, book.language);
       const { saveEpubBook, uploadEpubBookToCloud } = await import("./epub-store");
       await saveEpubBook(book);
       if (member) {
@@ -188,7 +190,13 @@ async function importOne(id: string) {
           .then(() =>
             addToLibrary(
               member.uid,
-              { title: book.title, author: book.author, cover: book.cover, readerId: book.id },
+              {
+                title: book.title,
+                author: book.author,
+                cover: book.cover,
+                readerId: book.id,
+                language: book.language ?? null,
+              },
               "lendo",
             ),
           )
