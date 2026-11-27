@@ -139,6 +139,59 @@ export async function handleTts(request: Request): Promise<Response> {
   }
   if (!enabled) return json({ error: "not-configured" }, 503);
 
+  // Preview-only: which speech models does this account reach, and how do
+  // they sound in Brazilian Portuguese? (Removed before production.)
+  if (url.searchParams.has("probe") && process.env.VERCEL_ENV !== "production") {
+    const sample =
+      "Era uma vez, numa pequena cidade do interior, uma menina que adorava ler histórias.";
+    const candidates: [string, string][] = [
+      ["elevenlabs/eleven-multilingual-v2", "hpp4J3VqNfWAUOO0d1Us"],
+      ["elevenlabs/eleven-v4", "hpp4J3VqNfWAUOO0d1Us"],
+      ["elevenlabs/eleven-flash-v2.5", "hpp4J3VqNfWAUOO0d1Us"],
+      ["microsoft/mai-voice-2.1", "pt-BR-FranciscaNeural"],
+      ["microsoft/mai-voice-2", "pt-BR-FranciscaNeural"],
+      ["mistral/voxtral-mini-tts-3", "default"],
+      ["spacexai/grok-tts", "eve"],
+      ["fish-audio/s2.1-pro", "default"],
+      ["google/gemini-3.8-flash-tts", "Kore"],
+      ["openai/tts-1-hd", "nova"],
+    ];
+    const only = url.searchParams.get("probe");
+    const list = only && only !== "1" ? candidates.filter(([m]) => m.includes(only)) : candidates;
+    const voiceOverride = url.searchParams.get("voice");
+    if (url.searchParams.has("play") && list[0]) {
+      const [model, voice] = list[0];
+      try {
+        const audio = await synthesize(
+          key,
+          { id: "p", label: "", hint: "", model, voice: voiceOverride || voice },
+          sample,
+        );
+        return new Response(audio, {
+          headers: { "Content-Type": "audio/mpeg", "Cache-Control": "no-store" },
+        });
+      } catch (e) {
+        return json({ model, error: String(e) }, 502);
+      }
+    }
+    const results = await Promise.all(
+      list.map(async ([model, voice]) => {
+        const t0 = Date.now();
+        try {
+          const a = await synthesize(
+            key,
+            { id: "p", label: "", hint: "", model, voice: voiceOverride || voice },
+            sample,
+          );
+          return { model, voice, ok: true, bytes: a.byteLength, ms: Date.now() - t0 };
+        } catch (e) {
+          return { model, voice, ok: false, error: String(e).slice(0, 400), ms: Date.now() - t0 };
+        }
+      }),
+    );
+    return json({ results });
+  }
+
   const text = (url.searchParams.get("t") ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_CHARS);
   const voice =
     NATURAL_VOICES.find((v) => v.id === url.searchParams.get("v")) ?? NATURAL_VOICES[0]!;
