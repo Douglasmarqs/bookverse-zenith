@@ -1,5 +1,5 @@
 /**
- * Natural voices for "Ouvir": each sentence is spoken by a neural model on
+ * Natural voices for "Ouvir": each passage (a few sentences) is spoken by a neural model on
  * Vercel AI Gateway and returned as MP3. Identical sentences are cached by
  * the CDN for a year, so a book that many people listen to is only paid
  * for once. Per-address limits keep one listener from running up the bill;
@@ -7,58 +7,126 @@
  * device's own voice).
  */
 
-/** tts-1 stretches the gateway's free credit; set TTS_MODEL=openai/tts-1-hd
- * (or another speech model) once the account has paid credits. */
-const MODEL = process.env.TTS_MODEL || "openai/tts-1";
+/**
+ * ElevenLabs Multilingual is the most natural Portuguese on the gateway.
+ * The same ElevenLabs voice id works on every ElevenLabs model, so when
+ * one model is at its rate limit the next one keeps the *same* voice; the
+ * OpenAI voice is only the last resort. TTS_MODEL forces a single model.
+ */
+const ELEVEN_CHAIN = [
+  "elevenlabs/eleven-multilingual-v2",
+  "elevenlabs/eleven-v4",
+  "elevenlabs/eleven-flash-v2.5",
+];
 
 export interface NaturalVoice {
   id: string;
   label: string;
   hint: string;
-  model: string;
+  /** Provider voice id (ElevenLabs). */
   voice: string;
-  instructions?: string;
+  /** OpenAI voice used when every ElevenLabs model is busy. */
+  backup: "nova" | "onyx" | "shimmer" | "echo";
   /** Kept out of the picker (still callable by id). */
   hidden?: boolean;
 }
 
-/** Voices offered to listeners, best for Portuguese first. */
+/** Voices offered to listeners, best for Brazilian Portuguese first. */
 export const NATURAL_VOICES: NaturalVoice[] = [
+  {
+    id: "bella",
+    label: "Bella",
+    hint: "Feminina, calorosa",
+    voice: "hpp4J3VqNfWAUOO0d1Us",
+    backup: "nova",
+  },
+  {
+    id: "daniel",
+    label: "Daniel",
+    hint: "Masculina, grave · narrador",
+    voice: "onwK4e9ZLuTAKqWW03F9",
+    backup: "onyx",
+  },
+  {
+    id: "sarah",
+    label: "Sarah",
+    hint: "Feminina, suave",
+    voice: "EXAVITQu4vr4xnSDxMaL",
+    backup: "shimmer",
+  },
+  {
+    id: "george",
+    label: "George",
+    hint: "Masculina, contador de histórias",
+    voice: "JBFqnCBsd6RMkjVDRZzb",
+    backup: "echo",
+  },
+  {
+    id: "lily",
+    label: "Lily",
+    hint: "Feminina, clara",
+    voice: "pFZP5JQG7iQjIQuC4Bku",
+    backup: "nova",
+  },
+  {
+    id: "roger",
+    label: "Roger",
+    hint: "Masculina, tranquila",
+    voice: "CwhRBWXzGAHq8TQ4Fs17",
+    backup: "echo",
+  },
+  // Earlier ids, so a saved choice keeps working.
   {
     id: "nova",
     label: "Nova",
-    hint: "Feminina, calorosa",
-    model: MODEL,
-    voice: "nova",
+    hint: "",
+    voice: "hpp4J3VqNfWAUOO0d1Us",
+    backup: "nova",
+    hidden: true,
   },
   {
     id: "onyx",
     label: "Onyx",
-    hint: "Masculina, grave",
-    model: MODEL,
-    voice: "onyx",
+    hint: "",
+    voice: "onwK4e9ZLuTAKqWW03F9",
+    backup: "onyx",
+    hidden: true,
   },
   {
     id: "shimmer",
     label: "Shimmer",
-    hint: "Feminina, suave",
-    model: MODEL,
-    voice: "shimmer",
+    hint: "",
+    voice: "EXAVITQu4vr4xnSDxMaL",
+    backup: "shimmer",
+    hidden: true,
   },
   {
     id: "echo",
     label: "Echo",
-    hint: "Masculina, serena",
-    model: MODEL,
-    voice: "echo",
+    hint: "",
+    voice: "JBFqnCBsd6RMkjVDRZzb",
+    backup: "echo",
+    hidden: true,
   },
 ];
+
+/** Models that just answered 429, and until when to skip them. */
+const busyUntil = new Map<string, number>();
+
+function attempts(v: NaturalVoice): { model: string; voice: string }[] {
+  const forced = process.env.TTS_MODEL;
+  if (forced) return [{ model: forced, voice: forced.startsWith("openai/") ? v.backup : v.voice }];
+  return [
+    ...ELEVEN_CHAIN.map((model) => ({ model, voice: v.voice })),
+    { model: "openai/tts-1", voice: v.backup },
+  ];
+}
 
 const MAX_CHARS = 700;
 /** Out of credit / no access: stop offering natural voices for a while. */
 let restingUntil = 0;
-/** Sentences per address per hour (~3–4 hours of listening). */
-const HOURLY_LIMIT = 1500;
+/** Passages per address per hour (~2–3 hours of listening). */
+const HOURLY_LIMIT = 400;
 const hits = new Map<string, { n: number; reset: number }>();
 
 function limited(ip: string): boolean {
@@ -85,7 +153,21 @@ function gatewayKey(request: Request): string | null {
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
   Response.json(body, { status, headers: { "Cache-Control": "no-store", ...headers } });
 
-async function synthesize(key: string, v: NaturalVoice, text: string): Promise<ArrayBuffer> {
+class GatewayError extends Error {
+  constructor(
+    public status: number,
+    detail: string,
+    public retryAfter = 0,
+  ) {
+    super(`gateway ${status} ${detail}`);
+  }
+}
+
+async function synthesize(
+  key: string,
+  v: { model: string; voice: string },
+  text: string,
+): Promise<ArrayBuffer> {
   const res = await fetch("https://ai-gateway.vercel.sh/v4/ai/speech-model", {
     method: "POST",
     headers: {
@@ -100,13 +182,13 @@ async function synthesize(key: string, v: NaturalVoice, text: string): Promise<A
       voice: v.voice,
       outputFormat: "mp3",
       language: "pt",
-      ...(v.instructions ? { instructions: v.instructions } : {}),
     }),
     signal: AbortSignal.timeout(25_000),
   });
   if (!res.ok) {
     const detail = (await res.text().catch(() => "")).slice(0, 300);
-    throw new Error(`gateway ${res.status} ${detail}`);
+    const after = Number(/Retry after (\d+)s/i.exec(detail)?.[1] ?? res.headers.get("retry-after"));
+    throw new GatewayError(res.status, detail, Number.isFinite(after) ? after : 0);
   }
   const data = (await res.json()) as { audio?: string | { data?: string } };
   const b64 = typeof data.audio === "string" ? data.audio : data.audio?.data;
@@ -139,65 +221,6 @@ export async function handleTts(request: Request): Promise<Response> {
   }
   if (!enabled) return json({ error: "not-configured" }, 503);
 
-  // Preview-only: which speech models does this account reach, and how do
-  // they sound in Brazilian Portuguese? (Removed before production.)
-  if (url.searchParams.has("probe") && process.env.VERCEL_ENV !== "production") {
-    const sample =
-      "Era uma vez, numa pequena cidade do interior, uma menina que adorava ler histórias.";
-    const candidates: [string, string][] = [
-      ["elevenlabs/eleven-multilingual-v2", "hpp4J3VqNfWAUOO0d1Us"],
-      ["elevenlabs/eleven-v4", "hpp4J3VqNfWAUOO0d1Us"],
-      ["elevenlabs/eleven-flash-v2.5", "hpp4J3VqNfWAUOO0d1Us"],
-      ["microsoft/mai-voice-2.1", "pt-BR-FranciscaNeural"],
-      ["microsoft/mai-voice-2", "pt-BR-FranciscaNeural"],
-      ["mistral/voxtral-mini-tts-3", "default"],
-      ["spacexai/grok-tts", "eve"],
-      ["fish-audio/s2.1-pro", "default"],
-      ["google/gemini-3.8-flash-tts", "Kore"],
-      ["openai/tts-1-hd", "nova"],
-    ];
-    const many = url.searchParams.get("voices2");
-    if (many) {
-      const model = url.searchParams.get("model") || "elevenlabs/eleven-multilingual-v2";
-      for (const v of many.split(",")) candidates.unshift([model, v]);
-      candidates.splice(many.split(",").length);
-    }
-    const only = many ? null : url.searchParams.get("probe");
-    const list = only && only !== "1" ? candidates.filter(([m]) => m.includes(only)) : candidates;
-    const voiceOverride = url.searchParams.get("voice");
-    if (url.searchParams.has("play") && list[0]) {
-      const [model, voice] = list[0];
-      try {
-        const audio = await synthesize(
-          key,
-          { id: "p", label: "", hint: "", model, voice: voiceOverride || voice },
-          sample,
-        );
-        return new Response(audio, {
-          headers: { "Content-Type": "audio/mpeg", "Cache-Control": "no-store" },
-        });
-      } catch (e) {
-        return json({ model, error: String(e) }, 502);
-      }
-    }
-    const results = await Promise.all(
-      list.map(async ([model, voice]) => {
-        const t0 = Date.now();
-        try {
-          const a = await synthesize(
-            key,
-            { id: "p", label: "", hint: "", model, voice: voiceOverride || voice },
-            sample,
-          );
-          return { model, voice, ok: true, bytes: a.byteLength, ms: Date.now() - t0 };
-        } catch (e) {
-          return { model, voice, ok: false, error: String(e).slice(0, 400), ms: Date.now() - t0 };
-        }
-      }),
-    );
-    return json({ results });
-  }
-
   const text = (url.searchParams.get("t") ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_CHARS);
   const voice =
     NATURAL_VOICES.find((v) => v.id === url.searchParams.get("v")) ?? NATURAL_VOICES[0]!;
@@ -206,21 +229,39 @@ export async function handleTts(request: Request): Promise<Response> {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "anon";
   if (limited(ip)) return json({ error: "limit" }, 429);
 
-  try {
-    const audio = await synthesize(key, voice, text);
-    return new Response(audio, {
-      headers: {
-        "Content-Type": "audio/mpeg",
-        "Content-Length": String(audio.byteLength),
-        // Same sentence + voice → same audio: let the CDN keep it.
-        "Cache-Control": "public, max-age=604800, s-maxage=31536000, immutable",
-        "X-TTS-Model": voice.model,
-      },
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[tts]", voice.model, msg);
-    if (/gateway (401|402|403|429)/.test(msg)) restingUntil = Date.now() + 30 * 60_000;
-    return json({ error: "unavailable" }, 502);
+  let lastError = "";
+  let outOfCredit = false;
+  for (const attempt of attempts(voice)) {
+    if ((busyUntil.get(attempt.model) ?? 0) > Date.now()) continue;
+    try {
+      const audio = await synthesize(key, attempt, text);
+      return new Response(audio, {
+        headers: {
+          "Content-Type": "audio/mpeg",
+          "Content-Length": String(audio.byteLength),
+          // Same passage + voice → same audio: let the CDN keep it.
+          "Cache-Control": "public, max-age=604800, s-maxage=31536000, immutable",
+          "X-TTS-Model": attempt.model,
+        },
+      });
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err);
+      const status = err instanceof GatewayError ? err.status : 0;
+      console.error("[tts]", attempt.model, lastError);
+      if (status === 429) {
+        const wait = err instanceof GatewayError && err.retryAfter ? err.retryAfter : 20;
+        busyUntil.set(attempt.model, Date.now() + wait * 1000);
+      } else if (status === 401 || status === 402) {
+        outOfCredit = true;
+        break;
+      } else if (status === 403) {
+        // No access to this model on this plan: skip it for a while.
+        busyUntil.set(attempt.model, Date.now() + 30 * 60_000);
+      }
+    }
   }
+  // Out of credit: stop offering natural voices for a while (the app
+  // falls back to the device's own voice).
+  if (outOfCredit) restingUntil = Date.now() + 30 * 60_000;
+  return json({ error: "unavailable", detail: lastError.slice(0, 120) }, 502);
 }
