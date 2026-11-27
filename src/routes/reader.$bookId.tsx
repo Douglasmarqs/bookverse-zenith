@@ -60,6 +60,7 @@ import { downloadBook, downloadedReaderId, useDownloads } from "@/lib/catalog";
 import { LumiMascot } from "@/components/lumi-mascot";
 import {
   downloadEpubBookFromCloud,
+  type CloudProgress,
   getEpubBook,
   isEpubReaderId,
   saveEpubBook,
@@ -265,12 +266,19 @@ function EpubBookLoader({ uid, localId }: { uid: string; localId: string }) {
   const [book, setBook] = useState<Book | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stage, setStage] = useState<"local" | "cloud">("local");
+  const [progress, setProgress] = useState<CloudProgress | null>(null);
+  const [slow, setSlow] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     setBook(null);
     setError(null);
     setStage("local");
+    setProgress(null);
+    setSlow(false);
+    // Offer a way out if the cloud is taking long (bad signal, big book).
+    const slowTimer = setTimeout(() => !cancelled && setSlow(true), 12_000);
 
     async function load() {
       const local = await getEpubBook(localId).catch((err) => {
@@ -282,8 +290,9 @@ function EpubBookLoader({ uid, localId }: { uid: string; localId: string }) {
         setBook(local);
         return;
       }
-      // Not on this device/browser — it may have been imported elsewhere
-      // and synced to Firebase Storage; fetch and cache it locally too.
+      // Not on this device/browser (imported elsewhere — on iPhone the
+      // home-screen app and Safari keep separate storage): fetch the
+      // private cloud copy and keep it here for next time.
       if (guest) {
         setError(
           "Este livro não está salvo neste aparelho. Entre na sua conta para buscá-lo na nuvem, ou baixe-o de novo em Explorar.",
@@ -291,44 +300,104 @@ function EpubBookLoader({ uid, localId }: { uid: string; localId: string }) {
         return;
       }
       setStage("cloud");
-      const cloudBook = await downloadEpubBookFromCloud(uid, localId);
-      if (cancelled) return;
-      if (cloudBook) {
-        setBook(cloudBook);
-        void saveEpubBook(cloudBook).catch(() => {});
-        return;
+      try {
+        const cloudBook = await downloadEpubBookFromCloud(uid, localId, (p) => {
+          if (!cancelled) setProgress(p);
+        });
+        if (cancelled) return;
+        if (cloudBook) {
+          setBook(cloudBook);
+          void saveEpubBook(cloudBook).catch(() => {});
+          return;
+        }
+        setError(
+          "Este EPUB não foi encontrado neste aparelho nem na sua nuvem. Importe-o novamente em Adicionar.",
+        );
+      } catch {
+        if (!cancelled)
+          setError(
+            "A conexão parou no meio do download. Verifique a internet e tente de novo — o que já foi lido continua salvo.",
+          );
       }
-      setError(
-        "Este EPUB não foi encontrado neste navegador nem na nuvem. Importe-o novamente em Minha biblioteca.",
-      );
     }
 
-    void load();
+    void load().finally(() => clearTimeout(slowTimer));
     return () => {
       cancelled = true;
+      clearTimeout(slowTimer);
     };
-  }, [localId, uid, guest]);
+  }, [localId, uid, guest, attempt]);
 
   if (error) {
     return (
       <div className="mx-auto max-w-md px-6 py-32 text-center">
         <h2 className="font-display text-3xl">Não foi possível abrir este livro</h2>
         <p className="mt-3 text-muted-foreground">{error}</p>
-        <Link
-          to="/biblioteca"
-          className="mt-6 inline-block rounded-full bg-gold px-5 py-2.5 text-sm font-medium text-primary-foreground"
-        >
-          Voltar à biblioteca
-        </Link>
+        <div className="mt-6 flex flex-wrap justify-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => setAttempt((n) => n + 1)}
+            className="rounded-full bg-gold px-5 py-2.5 text-sm font-medium text-primary-foreground"
+          >
+            Tentar de novo
+          </button>
+          <Link
+            to="/biblioteca"
+            className="rounded-full bg-secondary px-5 py-2.5 text-sm font-medium"
+          >
+            Voltar à biblioteca
+          </Link>
+        </div>
       </div>
     );
   }
 
   if (!book) {
+    const mb = (n: number) => (n / 1024 / 1024).toFixed(1).replace(".", ",");
+    const label =
+      stage === "local"
+        ? "Abrindo seu livro…"
+        : progress && progress.loaded > 0
+          ? `${progress.file === "source" ? "Recuperando o arquivo original" : "Baixando da sua nuvem"} · ${mb(progress.loaded)}${progress.total ? ` de ${mb(progress.total)}` : ""} MB`
+          : "Buscando sua cópia na nuvem…";
+    const ratio = progress?.total ? Math.min(1, progress.loaded / progress.total) : null;
     return (
-      <ReaderPageSkeleton
-        label={stage === "cloud" ? "Preparando sua cópia privada…" : "Abrindo seu livro…"}
-      />
+      <div className="relative">
+        <ReaderPageSkeleton label={label} />
+        <div className="mx-auto -mt-8 max-w-xs px-6">
+          {stage === "cloud" && (
+            <div className="h-1.5 overflow-hidden rounded-full bg-secondary/60">
+              <div
+                className={`h-full rounded-full bg-gold transition-[width] duration-300 ${ratio === null ? "w-1/3 animate-pulse" : ""}`}
+                style={ratio === null ? undefined : { width: `${Math.max(4, ratio * 100)}%` }}
+              />
+            </div>
+          )}
+          {slow && (
+            <div className="mt-6 text-center">
+              <p className="text-sm text-muted-foreground">
+                Está demorando mais que o normal. Na primeira vez em um aparelho o livro vem da
+                nuvem; depois abre na hora.
+              </p>
+              <div className="mt-4 flex justify-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setAttempt((n) => n + 1)}
+                  className="rounded-full bg-secondary px-4 py-2 text-sm font-medium"
+                >
+                  Tentar de novo
+                </button>
+                <Link
+                  to="/biblioteca"
+                  className="rounded-full bg-secondary px-4 py-2 text-sm font-medium"
+                >
+                  Voltar
+                </Link>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     );
   }
 

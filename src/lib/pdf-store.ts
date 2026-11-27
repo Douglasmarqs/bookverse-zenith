@@ -3,6 +3,7 @@
  * which are parsed into reflowable chapters) and are mirrored to the same
  * account-only Firebase Storage area used by the EPUB importer.
  */
+import { fetchStorageFile } from "./storage-fetch";
 import { retryTransient, withDeadline } from "./async-utils";
 import type { Book } from "./sample-book";
 
@@ -389,11 +390,9 @@ export async function downloadPdfBookFromCloud(uid: string, id: string): Promise
     const metadata = JSON.parse(new TextDecoder().decode(json)) as PdfMetadata;
     if (metadata.id !== id) return null;
     const [source, readerBook] = await Promise.all([
-      withDeadline(
-        getBytes(ref(firebase.storage, storagePath(uid, id, "source.pdf")), 64 * 1024 * 1024),
-        90_000,
-        "timeout",
-      ),
+      // Streams the (possibly large) original; gives up only if the
+      // download stops moving, never just because it is slow.
+      fetchStorageFile(storagePath(uid, id, "source.pdf"), () => {}),
       metadata.hasTextLayer
         ? withDeadline(
             getBytes(ref(firebase.storage, storagePath(uid, id, "reader.json")), 24 * 1024 * 1024),
