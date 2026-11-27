@@ -7,6 +7,7 @@
  */
 import type { Book } from "./sample-book";
 import { retryTransient, withDeadline } from "./async-utils";
+import { fetchStorageFile, StalledError } from "./storage-fetch";
 
 const DB_NAME = "bookverse-epub";
 const STORE = "books";
@@ -181,55 +182,65 @@ async function downloadLegacyEpubBook(uid: string, id: string): Promise<Book | n
   return JSON.parse(json) as Book;
 }
 
-export async function downloadEpubBookFromCloud(uid: string, id: string): Promise<Book | null> {
+export interface CloudProgress {
+  /** Which copy is coming down: the ready-to-read book or its original file. */
+  file: "book" | "source";
+  loaded: number;
+  /** Total bytes when the server says it (0 = unknown). */
+  total: number;
+}
+
+export async function downloadEpubBookFromCloud(
+  uid: string,
+  id: string,
+  onProgress?: (p: CloudProgress) => void,
+): Promise<Book | null> {
   const cached = memoryBooks.get(id);
   if (cached) return cached;
   const { getFirebase } = await import("./firebase");
   const fb = getFirebase();
   if (!fb) return null;
+  let lastError: unknown = null;
+  // 1. The ready-to-read copy (same chapters, highlights stay in place).
   try {
-    const { getBytes, ref } = await import("firebase/storage");
-    // Firebase's default download ceiling is only 10 MB. Illustrated EPUBs
-    // legitimately exceed that once parsed, while import intentionally caps
-    // source files at 60 MB.
-    const bytes = await withDeadline(
-      getBytes(ref(fb.storage, storagePath(uid, id, "book.json")), 80 * 1024 * 1024),
-      90_000,
-      "timeout",
+    const bytes = await fetchStorageFile(storagePath(uid, id, "book.json"), (loaded, total) =>
+      onProgress?.({ file: "book", loaded, total }),
     );
     const book = JSON.parse(new TextDecoder().decode(bytes)) as Book;
     memoryBooks.set(id, book);
     return book;
-  } catch (storageError) {
-    // A few older/mobile imports reached Storage with the original EPUB but
-    // lost the derived JSON during an interrupted upload. Rebuild the cache
-    // from the durable source instead of asking the reader to import again.
-    try {
-      const { getBytes, ref } = await import("firebase/storage");
-      const source = await withDeadline(
-        getBytes(ref(fb.storage, storagePath(uid, id, "source.epub")), 64 * 1024 * 1024),
-        90_000,
-        "timeout",
-      );
-      const { parseEpubFile } = await import("./epub-parser");
-      const rebuilt = await parseEpubFile(
-        new File([source], "livro-recuperado.epub", { type: "application/epub+zip" }),
-      );
-      const book = { ...rebuilt, id };
-      memoryBooks.set(id, book);
-      return book;
-    } catch (sourceError) {
-      console.warn("[epub] source recovery failed", sourceError);
-    }
-    try {
-      const legacy = await downloadLegacyEpubBook(uid, id);
-      if (legacy) return legacy;
-    } catch (legacyError) {
-      console.warn("[epub] legacy cloud download failed", legacyError);
-    }
-    console.warn("[epub] storage download failed", storageError);
-    return null;
+  } catch (err) {
+    lastError = err;
+    console.warn("[epub] parsed copy unavailable", err);
   }
+  // 2. A few older/mobile imports reached Storage with the original EPUB but
+  // lost the derived JSON during an interrupted upload: rebuild from it.
+  try {
+    const source = await fetchStorageFile(storagePath(uid, id, "source.epub"), (loaded, total) =>
+      onProgress?.({ file: "source", loaded, total }),
+    );
+    const { parseEpubFile } = await import("./epub-parser");
+    const rebuilt = await parseEpubFile(
+      new File([source], "livro-recuperado.epub", { type: "application/epub+zip" }),
+    );
+    const book = { ...rebuilt, id };
+    memoryBooks.set(id, book);
+    return book;
+  } catch (err) {
+    lastError = err;
+    console.warn("[epub] source recovery failed", err);
+  }
+  // 3. Very old imports kept the book in Firestore chunks.
+  try {
+    const legacy = await withDeadline(downloadLegacyEpubBook(uid, id), 20_000, "stalled");
+    if (legacy) return legacy;
+  } catch (err) {
+    console.warn("[epub] legacy cloud download failed", err);
+  }
+  if (lastError instanceof StalledError || (lastError as Error)?.message === "stalled") {
+    throw new Error("network-stalled");
+  }
+  return null;
 }
 
 /** Removes the durable cloud copy. Local cache removal remains explicit. */
