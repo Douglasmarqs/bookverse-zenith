@@ -156,7 +156,13 @@ export async function handleTts(request: Request): Promise<Response> {
       ["google/gemini-3.8-flash-tts", "Kore"],
       ["openai/tts-1-hd", "nova"],
     ];
-    const only = url.searchParams.get("probe");
+    const many = url.searchParams.get("voices2");
+    if (many) {
+      const model = url.searchParams.get("model") || "elevenlabs/eleven-multilingual-v2";
+      for (const v of many.split(",")) candidates.unshift([model, v]);
+      candidates.splice(many.split(",").length);
+    }
+    const only = many ? null : url.searchParams.get("probe");
     const list = only && only !== "1" ? candidates.filter(([m]) => m.includes(only)) : candidates;
     const voiceOverride = url.searchParams.get("voice");
     if (url.searchParams.has("play") && list[0]) {
