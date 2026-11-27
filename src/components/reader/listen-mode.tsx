@@ -371,7 +371,7 @@ export function ListenMode({
       u.onend = next;
       window.speechSynthesis.speak(u);
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
     [sentences, natural, deviceVoice, deviceVoices, rate, speechOk, clipUrl, finishChapter, stop],
   );
 
@@ -731,7 +731,8 @@ export function ListenMode({
                         <Sparkles className="h-3.5 w-3.5" /> Vozes naturais
                       </p>
                       <p className="mb-2 text-[12.5px] opacity-65">
-                        Narração de audiolivro em português do Brasil (ElevenLabs). Precisa de internet.
+                        Narração de audiolivro em português do Brasil (ElevenLabs). Precisa de
+                        internet.
                       </p>
                       {naturalVoices.map((v) => (
                         <VoiceRow
