@@ -23,6 +23,7 @@ import {
 import { toast } from "sonner";
 
 import { BookArt } from "@/components/book-art";
+import { Deferred } from "@/components/motion/deferred";
 import { SOURCE_BADGE, SourceBadge } from "@/components/catalog/source-badge";
 import { Lumi, LumiFace } from "@/components/brand/lumi";
 import { formatMinutes } from "@/components/home/home-screen";
@@ -335,94 +336,99 @@ function ExploreHome() {
         ))}
       </motion.div>
 
-      {/* Trending */}
-      <motion.section {...rise(0.12)} className="mt-[22px] lg:mt-10">
-        <div className="mb-3.5 flex items-baseline justify-between px-[22px] lg:px-10">
-          <h2 className="text-[21px] lg:text-[26px]">Em alta esta semana</h2>
-          <span className="text-[13.5px] font-semibold text-muted-foreground">
-            Clássicos grátis
-          </span>
-        </div>
-        <ol className="flex flex-col gap-3 px-[22px] lg:grid lg:grid-cols-2 lg:gap-x-10 lg:px-10">
-          {trend.map((p, i) => (
-            <li key={p.gutenbergId}>
+      {/* Below the fold: built right after the first frame (see Deferred). */}
+      <Deferred minHeight={900}>
+        {/* Trending */}
+        <motion.section {...rise(0.12)} className="mt-[22px] lg:mt-10">
+          <div className="mb-3.5 flex items-baseline justify-between px-[22px] lg:px-10">
+            <h2 className="text-[21px] lg:text-[26px]">Em alta esta semana</h2>
+            <span className="text-[13.5px] font-semibold text-muted-foreground">
+              Clássicos grátis
+            </span>
+          </div>
+          <ol className="flex flex-col gap-3 px-[22px] lg:grid lg:grid-cols-2 lg:gap-x-10 lg:px-10">
+            {trend.map((p, i) => (
+              <li key={p.gutenbergId}>
+                <Link
+                  {...bookHref({
+                    title: p.title,
+                    author: p.author,
+                    source: "gutenberg",
+                    id: String(p.gutenbergId),
+                  })}
+                  className="press flex items-center gap-3.5"
+                >
+                  <span className="w-[22px] font-display text-[30px] text-faint">{i + 1}</span>
+                  <div className="w-[46px] shrink-0">
+                    <BookArt title={p.title} author={p.author} showText={false} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[15px] font-semibold">{p.title}</p>
+                    <p className="mt-0.5 truncate text-[13px] text-muted-foreground">
+                      {p.author} · {formatMinutes(p.minutes)}
+                    </p>
+                  </div>
+                  <LangTag code={p.lang} />
+                </Link>
+              </li>
+            ))}
+          </ol>
+        </motion.section>
+
+        {/* More collections */}
+        <motion.section {...rise(0.16)} className="mt-8 lg:mt-12">
+          <h2 className="mb-3.5 px-[22px] text-[21px] lg:px-10 lg:text-[26px]">Mais coleções</h2>
+          <div className="grid grid-cols-2 gap-2.5 px-4 lg:grid-cols-3 lg:gap-4 lg:px-10">
+            {more.map((c) => (
+              <CollectionTile key={c.id} c={c} />
+            ))}
+          </div>
+        </motion.section>
+
+        {/* Free sources */}
+        <motion.section {...rise(0.2)} className="mt-8 lg:mt-12">
+          <div className="mb-3 flex items-baseline justify-between px-[22px] lg:px-10">
+            <h2 className="text-[21px] lg:text-[26px]">Catálogos grátis</h2>
+            <span className="text-[12.5px] font-semibold text-muted-foreground">
+              Download direto
+            </span>
+          </div>
+          <div className="grid gap-2 px-4 lg:grid-cols-2 lg:gap-3 lg:px-10">
+            {SOURCES.map((s) => (
               <Link
-                {...bookHref({
-                  title: p.title,
-                  author: p.author,
-                  source: "gutenberg",
-                  id: String(p.gutenbergId),
-                })}
-                className="press flex items-center gap-3.5"
+                key={s}
+                to="/descobrir"
+                search={{ fonte: s }}
+                className="surface-card press flex items-center gap-3 rounded-[18px] p-3"
               >
-                <span className="w-[22px] font-display text-[30px] text-faint">{i + 1}</span>
-                <div className="w-[46px] shrink-0">
-                  <BookArt title={p.title} author={p.author} showText={false} />
-                </div>
+                <SourceBadge source={s} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[15px] font-semibold">{p.title}</p>
-                  <p className="mt-0.5 truncate text-[13px] text-muted-foreground">
-                    {p.author} · {formatMinutes(p.minutes)}
-                  </p>
+                  <p className="text-[14.5px] font-semibold">{SOURCE_LABEL[s]}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{SOURCE_BADGE[s].hint}</p>
                 </div>
-                <LangTag code={p.lang} />
+                <ChevronRight className="h-[17px] w-[17px] text-faint" />
               </Link>
-            </li>
-          ))}
-        </ol>
-      </motion.section>
-
-      {/* More collections */}
-      <motion.section {...rise(0.16)} className="mt-8 lg:mt-12">
-        <h2 className="mb-3.5 px-[22px] text-[21px] lg:px-10 lg:text-[26px]">Mais coleções</h2>
-        <div className="grid grid-cols-2 gap-2.5 px-4 lg:grid-cols-3 lg:gap-4 lg:px-10">
-          {more.map((c) => (
-            <CollectionTile key={c.id} c={c} />
-          ))}
-        </div>
-      </motion.section>
-
-      {/* Free sources */}
-      <motion.section {...rise(0.2)} className="mt-8 lg:mt-12">
-        <div className="mb-3 flex items-baseline justify-between px-[22px] lg:px-10">
-          <h2 className="text-[21px] lg:text-[26px]">Catálogos grátis</h2>
-          <span className="text-[12.5px] font-semibold text-muted-foreground">Download direto</span>
-        </div>
-        <div className="grid gap-2 px-4 lg:grid-cols-2 lg:gap-3 lg:px-10">
-          {SOURCES.map((s) => (
-            <Link
-              key={s}
-              to="/descobrir"
-              search={{ fonte: s }}
+            ))}
+            <a
+              href="http://www.dominiopublico.gov.br/pesquisa/PesquisaObraForm.jsp"
+              target="_blank"
+              rel="noreferrer"
               className="surface-card press flex items-center gap-3 rounded-[18px] p-3"
             >
-              <SourceBadge source={s} />
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-[#1351b4] font-display text-[15px] text-white">
+                DP
+              </span>
               <div className="min-w-0 flex-1">
-                <p className="text-[14.5px] font-semibold">{SOURCE_LABEL[s]}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">{SOURCE_BADGE[s].hint}</p>
+                <p className="text-[14.5px] font-semibold">Domínio Público</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Acervo do governo · PDF · abre o site oficial
+                </p>
               </div>
-              <ChevronRight className="h-[17px] w-[17px] text-faint" />
-            </Link>
-          ))}
-          <a
-            href="http://www.dominiopublico.gov.br/pesquisa/PesquisaObraForm.jsp"
-            target="_blank"
-            rel="noreferrer"
-            className="surface-card press flex items-center gap-3 rounded-[18px] p-3"
-          >
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-[#1351b4] font-display text-[15px] text-white">
-              DP
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-[14.5px] font-semibold">Domínio Público</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Acervo do governo · PDF · abre o site oficial
-              </p>
-            </div>
-            <ExternalLink className="h-[16px] w-[16px] text-faint" />
-          </a>
-        </div>
-      </motion.section>
+              <ExternalLink className="h-[16px] w-[16px] text-faint" />
+            </a>
+          </div>
+        </motion.section>
+      </Deferred>
     </div>
   );
 }

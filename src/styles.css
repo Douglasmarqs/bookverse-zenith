@@ -1366,7 +1366,7 @@
     filter 0.4s ease;
 }
 .book3d[data-live] .book3d-body,
-html[data-swaying] .book3d-body {
+.book3d[data-swaying] .book3d-body {
   will-change: transform;
 }
 .book3d[data-live] .book3d-body {
@@ -1390,16 +1390,20 @@ html[data-swaying] .book3d-body {
   top: 1.2%;
   bottom: 1.2%;
   left: calc(100% - 1px);
-  width: var(--edge, 0px);
+  /* Fixed width, opened with scaleX (compositor) instead of animating
+     width, which would re-lay out the book on every frame. */
+  width: 6%;
+  transform: scaleX(var(--edge-k, 0));
+  transform-origin: left center;
   clip-path: polygon(0 0, 100% 3.5%, 100% 96.5%, 0 100%);
   background:
     linear-gradient(90deg, rgb(0 0 0 / 0.3), rgb(0 0 0 / 0.04) 60%, rgb(0 0 0 / 0.12)),
     repeating-linear-gradient(0deg, #f8f3e8 0 1px, #d6ccb8 1px 2.5px);
   pointer-events: none;
-  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .book3d[data-live] .book3d-pages {
-  transition: width 0.18s ease-out;
+  transition: transform 0.18s ease-out;
 }
 .book3d-glare {
   position: absolute;

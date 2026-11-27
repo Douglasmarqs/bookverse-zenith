@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 
 import { BookArt } from "@/components/book-art";
+import { Deferred } from "@/components/motion/deferred";
 import { LangTag } from "@/components/lang-tag";
 import { Lumi } from "@/components/brand/lumi";
 import { AccountMenu } from "@/components/shell/account-menu";
@@ -381,61 +382,68 @@ export function HomeScreen({ user }: { user: User | null }) {
         </motion.div>
       </div>
 
-      {todayPick && <LumiTodayCard pick={todayPick} delay={0.16} />}
+      {/* Below the fold: built right after the first frame (see Deferred). */}
+      <Deferred minHeight={560}>
+        {todayPick && <LumiTodayCard pick={todayPick} delay={0.16} />}
 
-      <Rail
-        title="Feito para você"
-        to="/descobrir"
-        delay={0.18}
-        contentKey={shuffle || undefined}
-        action={
-          <button
-            type="button"
-            onClick={() => setShuffle((n) => n + 1)}
-            aria-label="Outras sugestões"
-            className="press inline-flex h-8 items-center gap-1.5 rounded-full bg-surface-2 px-3 text-[12.5px] font-semibold"
-          >
-            <motion.span
-              key={shuffle}
-              initial={{ rotate: -180 }}
-              animate={{ rotate: 0 }}
-              transition={{ duration: 0.5, ease: EASE }}
-              className="grid"
+        <Rail
+          title="Feito para você"
+          to="/descobrir"
+          delay={0.18}
+          contentKey={shuffle || undefined}
+          action={
+            <button
+              type="button"
+              onClick={() => setShuffle((n) => n + 1)}
+              aria-label="Outras sugestões"
+              className="press inline-flex h-8 items-center gap-1.5 rounded-full bg-surface-2 px-3 text-[12.5px] font-semibold"
             >
-              <RefreshCw className="h-3.5 w-3.5" strokeWidth={2.4} />
-            </motion.span>
-            Outras
-          </button>
-        }
-      >
-        {picks.slice(1).map((p) => (
-          <BookTile
-            key={p.gutenbergId}
-            title={p.title}
-            author={p.author}
-            meta={formatMinutes(p.minutes)}
-            lang={p.lang}
-            readerId={gutenbergReaderId(p.gutenbergId)}
-          />
-        ))}
-      </Rail>
-
-      {shelf.length > 0 && (
-        <Rail title="Na sua biblioteca" to="/biblioteca" delay={0.22}>
-          {shelf.map((e) => (
+              <motion.span
+                key={shuffle}
+                initial={{ rotate: -180 }}
+                animate={{ rotate: 0 }}
+                transition={{ duration: 0.5, ease: EASE }}
+                className="grid"
+              >
+                <RefreshCw className="h-3.5 w-3.5" strokeWidth={2.4} />
+              </motion.span>
+              Outras
+            </button>
+          }
+        >
+          {picks.slice(1).map((p) => (
             <BookTile
-              key={e.id}
-              title={e.title}
-              author={e.author}
-              cover={e.cover}
-              meta={
-                e.status === "concluido" ? "Lido" : e.status === "quero-ler" ? "Quero ler" : "Lendo"
-              }
-              readerId={e.readerId ?? undefined}
+              key={p.gutenbergId}
+              title={p.title}
+              author={p.author}
+              meta={formatMinutes(p.minutes)}
+              lang={p.lang}
+              readerId={gutenbergReaderId(p.gutenbergId)}
             />
           ))}
         </Rail>
-      )}
+
+        {shelf.length > 0 && (
+          <Rail title="Na sua biblioteca" to="/biblioteca" delay={0.22}>
+            {shelf.map((e) => (
+              <BookTile
+                key={e.id}
+                title={e.title}
+                author={e.author}
+                cover={e.cover}
+                meta={
+                  e.status === "concluido"
+                    ? "Lido"
+                    : e.status === "quero-ler"
+                      ? "Quero ler"
+                      : "Lendo"
+                }
+                readerId={e.readerId ?? undefined}
+              />
+            ))}
+          </Rail>
+        )}
+      </Deferred>
     </div>
   );
 }
@@ -490,20 +498,28 @@ function Rail({
   useEffect(() => {
     const el = track.current;
     if (!el) return;
-    const update = () =>
-      setEdges({
-        left: el.scrollLeft > 4,
-        right: el.scrollLeft < el.scrollWidth - el.clientWidth - 4,
+    // Once per frame at most, and only re-render when an arrow actually
+    // appears or disappears (scroll events fire dozens of times a second).
+    let raf = 0;
+    const update = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const left = el.scrollLeft > 4;
+        const right = el.scrollLeft < el.scrollWidth - el.clientWidth - 4;
+        setEdges((e) => (e.left === left && e.right === right ? e : { left, right }));
       });
-    update();
+    };
     el.addEventListener("scroll", update, { passive: true });
+    // Also fires once right away with the initial size.
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => {
+      cancelAnimationFrame(raf);
       el.removeEventListener("scroll", update);
       ro.disconnect();
     };
-  }, [contentKey, children]);
+  }, [contentKey]);
 
   useSway(
     () => track.current,

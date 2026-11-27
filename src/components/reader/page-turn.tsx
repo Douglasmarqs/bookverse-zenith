@@ -16,6 +16,11 @@ import type { TurnStyle } from "@/lib/reader-store";
 export interface TurnStageHandle {
   /** Sets the turn progress, 0–1. */
   set: (p: number) => void;
+  /** Animates from one progress to another and calls `onDone` at the end.
+   * Slide and fade run as Web Animations on the compositor (smooth even
+   * while the page is busy); the paper fold is driven frame by frame.
+   * Returns a cancel function. */
+  play: (fromP: number, toP: number, ms: number, onDone: () => void) => () => void;
 }
 
 interface Props {
@@ -111,22 +116,12 @@ export const TurnStage = forwardRef<TurnStageHandle, Props>(function TurnStage(
       t = top.current;
     if (!u || !t) return;
 
-    if (style === "esmaecer") {
-      // under = from, top = to (forward) — both directions just cross-fade.
-      const showTo = forward ? p : 1 - p;
-      t.style.opacity = String(forward ? showTo : 1 - p);
-      u.style.opacity = String(forward ? 1 - p : p);
-      return;
-    }
-
-    if (style === "deslizar") {
-      // Transform + opacity only: the dimming and the edge shadow are static
-      // layers whose opacity changes, so nothing repaints per frame.
-      const k = forward ? p : 1 - p;
-      u.style.transform = `translateX(${-28 * k}%)`;
-      t.style.transform = forward ? `translateX(${100 - 100 * p}%)` : `translateX(${100 * p}%)`;
-      if (dim.current) dim.current.style.opacity = String(0.1 * k);
-      if (edge.current) edge.current.style.opacity = String(0.35 + 0.65 * Math.sin(p * Math.PI));
+    if (style === "esmaecer" || style === "deslizar") {
+      const f = flatFrame(p);
+      Object.assign(u.style, f.under);
+      Object.assign(t.style, f.top);
+      if (dim.current) Object.assign(dim.current.style, f.dim);
+      if (edge.current) Object.assign(edge.current.style, f.edge);
       return;
     }
 
@@ -170,7 +165,76 @@ export const TurnStage = forwardRef<TurnStageHandle, Props>(function TurnStage(
     }
   };
 
-  useImperativeHandle(ref, () => ({ set: apply }));
+  /** Slide/fade styles at progress p — transform and opacity only, so
+   * nothing repaints and the compositor can run it on its own. */
+  const flatFrame = (p: number) => {
+    if (style === "esmaecer") {
+      // under = from, top = to (forward) — both directions just cross-fade.
+      return {
+        under: { opacity: String(forward ? 1 - p : p) },
+        top: { opacity: String(forward ? p : 1 - p) },
+        dim: {},
+        edge: {},
+      };
+    }
+    const k = forward ? p : 1 - p;
+    return {
+      under: { transform: `translateX(${-28 * k}%)` },
+      top: { transform: forward ? `translateX(${100 - 100 * p}%)` : `translateX(${100 * p}%)` },
+      dim: { opacity: String(0.1 * k) },
+      edge: { opacity: String(0.35 + 0.65 * Math.sin(p * Math.PI)) },
+    };
+  };
+
+  const play = (fromP: number, toP: number, ms: number, onDone: () => void) => {
+    const u = under.current;
+    if (style === "folha" || !u || typeof u.animate !== "function") {
+      return tween(fromP, toP, ms, apply, onDone);
+    }
+    // Sample the eased curve into keyframes once; the browser interpolates
+    // between them off the main thread.
+    const N = 14;
+    const frames = Array.from({ length: N + 1 }, (_, i) =>
+      flatFrame(fromP + (toP - fromP) * easeInOut(i / N)),
+    );
+    const parts = [
+      [under, "under"],
+      [top, "top"],
+      [dim, "dim"],
+      [edge, "edge"],
+    ] as const;
+    const timing: KeyframeAnimationOptions = {
+      duration: Math.max(1, ms),
+      easing: "linear",
+      fill: "forwards",
+    };
+    const anims: Animation[] = [];
+    for (const [r, key] of parts) {
+      const el = r.current;
+      if (!el || !Object.keys(frames[0]![key]).length) continue;
+      anims.push(
+        el.animate(
+          frames.map((f) => f[key] as Keyframe),
+          timing,
+        ),
+      );
+    }
+    let cancelled = false;
+    void Promise.all(anims.map((a) => a.finished))
+      .then(() => {
+        if (cancelled) return;
+        apply(toP);
+        anims.forEach((a) => a.cancel());
+        onDone();
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      anims.forEach((a) => a.cancel());
+    };
+  };
+
+  useImperativeHandle(ref, () => ({ set: apply, play }));
   // Paint the current frame before the browser shows the stage (and keep it
   // on any re-render while the finger is still down).
   useLayoutEffect(() => apply(lastP.current));
@@ -242,6 +306,8 @@ export const TurnStage = forwardRef<TurnStageHandle, Props>(function TurnStage(
   );
 });
 
+const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+
 /** Eases a value with requestAnimationFrame; returns a cancel function. */
 export function tween(
   fromP: number,
@@ -251,11 +317,10 @@ export function tween(
   onDone: () => void,
 ) {
   const start = performance.now();
-  const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
   let raf = 0;
   const step = (now: number) => {
     const t = Math.min(1, (now - start) / Math.max(1, ms));
-    onFrame(fromP + (toP - fromP) * ease(t));
+    onFrame(fromP + (toP - fromP) * easeInOut(t));
     if (t < 1) raf = requestAnimationFrame(step);
     else onDone();
   };

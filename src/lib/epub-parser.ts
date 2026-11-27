@@ -96,12 +96,10 @@ async function resolveImageSrc(
       cache.set(path, null);
       return null;
     }
-    const base64 = await file.async("base64");
-    const raw = `data:${guessMimeType(path)};base64,${base64}`;
     // 900px on the long side is plenty for how wide the reader column
     // gets, and keeps an illustrated book's total IndexedDB footprint
     // reasonable even with dozens of images.
-    const resized = await downscaleImage(raw, 900, 0.78);
+    const resized = await downscaleZipImage(file, path, 900, 0.78);
     cache.set(path, resized);
     return resized;
   } catch {
@@ -127,15 +125,66 @@ async function extractChapter(
   chapterDir: string,
   imageCache: Map<string, string | null>,
   imageBudget: { remaining: number },
-): Promise<Chapter> {
+  splits: { frag: string; title: string }[] = [],
+): Promise<(Chapter & { continues: boolean })[]> {
   const doc = parseXml(html);
   const body = doc.body ?? doc.documentElement;
 
   const heading = body?.querySelector("h1, h2, h3");
   const title = textOf(heading) || textOf(doc.querySelector("title")) || `Capítulo ${index + 1}`;
 
-  const paragraphs: string[] = [];
-  const blocks: ChapterBlock[] = [];
+  // Several chapters packed in one file (common in Project Gutenberg
+  // EPUBs: a third of a novel per file) are split where the book's own
+  // table of contents points, so each one is a real, light chapter.
+  const anchors = splits
+    .map((s) => ({
+      el: (doc.getElementById(s.frag) ??
+        doc.querySelector(`[id="${s.frag.replace(/"/g, '\\"')}"]`) ??
+        doc.querySelector(`[name="${s.frag.replace(/"/g, '\\"')}"]`)) as Element | null,
+      title: s.title,
+    }))
+    .filter((a): a is { el: Element; title: string } => !!a.el && isHeadingAnchor(a.el))
+    // An illustration or empty marker just before the heading: the
+    // heading's own text names the chapter better than the TOC caption.
+    .map((a) => {
+      if (/^h[1-6]$/i.test(a.el.tagName) || a.el.closest(HEADINGS)) return a;
+      const h = /^h[1-6]$/i.test(a.el.firstElementChild?.tagName ?? "")
+        ? a.el.firstElementChild
+        : nextHeading(a.el);
+      const text = chapterName(h?.textContent ?? "");
+      return text ? { ...a, title: text } : a;
+    })
+    .sort((a, b) =>
+      a.el.compareDocumentPosition(b.el) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1,
+    );
+  const splitting = anchors.length >= 2;
+
+  const segments: { title: string; paragraphs: string[]; blocks: ChapterBlock[] }[] = [
+    { title, paragraphs: [], blocks: [] },
+  ];
+  let paragraphs = segments[0]!.paragraphs;
+  let blocks = segments[0]!.blocks;
+  let nextAnchor = 0;
+  const enterSegmentsBefore = (el: Element) => {
+    if (!splitting) return;
+    while (nextAnchor < anchors.length) {
+      const a = anchors[nextAnchor]!.el;
+      const reached =
+        a === el ||
+        a.contains(el) ||
+        !!(a.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING);
+      if (!reached) break;
+      const seg = {
+        title: anchors[nextAnchor]!.title,
+        paragraphs: [] as string[],
+        blocks: [] as ChapterBlock[],
+      };
+      segments.push(seg);
+      paragraphs = seg.paragraphs;
+      blocks = seg.blocks;
+      nextAnchor += 1;
+    }
+  };
 
   async function pushImage(rawSrc: string | null, alt: string | null) {
     if (!rawSrc || imageBudget.remaining <= 0) return;
@@ -154,6 +203,7 @@ async function extractChapter(
 
   if (inlineEls.some((el) => el.tagName.toLowerCase() === "p")) {
     for (const el of inlineEls) {
+      enterSegmentsBefore(el);
       const tag = el.tagName.toLowerCase();
       if (tag === "img" || tag === "image") {
         const rawSrc =
@@ -173,20 +223,50 @@ async function extractChapter(
     // No <p> tags (some EPUBs use <div>s per paragraph, or plain text) —
     // fall back to the raw text content split on blank lines, then reflow
     // in case the source hard-wraps at every line instead of per-paragraph.
-    const raw = (body?.textContent ?? "").trim();
-    const reflowed = reflowParagraphs(
-      raw
-        .split(/\n\s*\n/)
-        .map((p) => p.replace(/\s+/g, " ").trim())
-        .filter((p) => p.length > 0),
-    );
-    for (const p of reflowed) {
-      paragraphs.push(p);
-      blocks.push({ type: "text", paragraphIndex: paragraphs.length - 1 });
-    }
+    // With chapter anchors, each chapter's text is the stretch between its
+    // heading and the next one.
+    const toParagraphs = (raw: string) =>
+      reflowParagraphs(
+        raw
+          .trim()
+          .split(/\n\s*\n/)
+          .map((p) => p.replace(/\s+/g, " ").trim())
+          .filter((p) => p.length > 0),
+      );
+    const headingEnd = (el: Element): Element => {
+      if (/^h[1-6]$/i.test(el.tagName)) return el;
+      const inner = el.closest(HEADINGS);
+      if (inner) return inner;
+      let next = el.nextElementSibling;
+      for (let i = 0; next && i < 3; i++, next = next.nextElementSibling)
+        if (/^h[1-6]$/i.test(next.tagName)) return next;
+      return el;
+    };
+    const texts: string[] = [];
+    if (splitting && body) {
+      const between = (after: Element | null, before: Element | null) => {
+        const r = doc.createRange();
+        if (after) r.setStartAfter(after);
+        else r.setStart(body, 0);
+        if (before) r.setEndBefore(before);
+        else r.setEnd(body, body.childNodes.length);
+        return r.toString();
+      };
+      texts.push(between(null, anchors[0]!.el));
+      anchors.forEach((a, i) => {
+        texts.push(between(headingEnd(a.el), anchors[i + 1]?.el ?? null));
+        segments.push({ title: a.title, paragraphs: [], blocks: [] });
+      });
+    } else texts.push(body?.textContent ?? "");
+    texts.forEach((raw, i) => {
+      const seg = segments[i]!;
+      for (const p of toParagraphs(raw)) {
+        seg.paragraphs.push(p);
+        seg.blocks.push({ type: "text", paragraphIndex: seg.paragraphs.length - 1 });
+      }
+    });
     // No positional fidelity available in this fallback path — any
-    // pictures still get imported, just appended after the text rather
-    // than interleaved at their exact original spot.
+    // pictures still get imported, appended to the chapter they sit in.
     const imgEls = Array.from(body?.querySelectorAll("img, image") ?? []);
     for (const el of imgEls) {
       const rawSrc =
@@ -194,11 +274,27 @@ async function extractChapter(
         el.getAttribute("xlink:href") ??
         el.getAttributeNS?.("http://www.w3.org/1999/xlink", "href") ??
         el.getAttribute("href");
+      const at = splitting
+        ? anchors.filter(
+            (a) => !!(a.el.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING),
+          ).length
+        : 0;
+      blocks = segments[at]!.blocks;
       await pushImage(rawSrc, el.getAttribute("alt"));
     }
   }
 
-  return { id: `cap-${index}`, title, paragraphs, blocks };
+  return segments
+    .filter((g) => g.paragraphs.length > 0 || g.blocks.some((b) => b.type === "image"))
+    .map((g, i) => ({
+      id: `cap-${index + i}`,
+      title: g.title || title,
+      paragraphs: g.paragraphs,
+      blocks: g.blocks,
+      // Text before this file's first chapter heading continues the
+      // chapter that began in the previous file.
+      continues: splitting && g === segments[0],
+    }));
 }
 
 function guessMimeType(href: string): string {
@@ -265,8 +361,144 @@ async function downscaleImage(dataUrl: string, maxDim: number, quality: number):
   }
 }
 
-async function downscaleCover(dataUrl: string): Promise<string> {
-  return downscaleImage(dataUrl, 480, 0.82);
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+
+/** Decodes and shrinks an image from the zip without freezing the screen:
+ * createImageBitmap decodes off the main thread and canvas.toBlob encodes
+ * asynchronously (toDataURL does both synchronously — a big illustration
+ * could stall the page for a quarter of a second on a phone). Falls back
+ * to the classic path for formats the fast one can't handle (SVG…). */
+async function downscaleZipImage(
+  file: JSZip.JSZipObject,
+  path: string,
+  maxDim: number,
+  quality: number,
+): Promise<string> {
+  const mime = guessMimeType(path);
+  if (mime !== "image/svg+xml" && typeof createImageBitmap === "function") {
+    try {
+      const blob = new Blob([await file.async("arraybuffer")], { type: mime });
+      const bmp = await createImageBitmap(blob);
+      const scale = Math.min(1, maxDim / Math.max(bmp.width, bmp.height));
+      const w = Math.max(1, Math.round(bmp.width * scale));
+      const h = Math.max(1, Math.round(bmp.height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(bmp, 0, 0, w, h);
+        bmp.close();
+        const out = await new Promise<Blob | null>((res) =>
+          canvas.toBlob(res, "image/jpeg", quality),
+        );
+        if (out) return await blobToDataUrl(out);
+      } else bmp.close();
+    } catch {
+      // fall through to the classic path
+    }
+  }
+  const base64 = await file.async("base64");
+  return downscaleImage(`data:${mime};base64,${base64}`, maxDim, quality);
+}
+
+const HEADINGS = "h1, h2, h3, h4, h5, h6";
+/** "He rode a black horse. CHAPTER III." → "CHAPTER III." — illustrated
+ * editions put the picture's caption inside the chapter heading. */
+function chapterName(raw: string): string {
+  const t = raw.replace(/\s+/g, " ").trim();
+  const m = /\b(chapter|cap[ií]tulo|capitulo|chapitre|kapitel)\s*([ivxlcdm]+|\d+)\b/i.exec(t);
+  if (!m || m.index === 0) return t;
+  return `${m[1]} ${t.slice(m.index + m[1]!.length).trim()}`;
+}
+
+function nextHeading(el: Element): Element | null {
+  let next = el.nextElementSibling;
+  for (let i = 0; next && i < 3; i++, next = next.nextElementSibling)
+    if (/^h[1-6]$/i.test(next.tagName)) return next;
+  return null;
+}
+
+/** A table-of-contents target that starts a chapter: a heading, inside a
+ * heading, or an empty anchor right before one. (Gutenberg TOCs also list
+ * illustrations and page numbers, which must not split a chapter.) */
+function isHeadingAnchor(el: Element): boolean {
+  if (/^h[1-6]$/i.test(el.tagName) || el.closest(HEADINGS)) return true;
+  const firstChild = el.firstElementChild;
+  if (firstChild && /^h[1-6]$/i.test(firstChild.tagName)) return true;
+  let next = el.nextElementSibling;
+  // Skip empty markers (another anchor, a page number span) before the heading.
+  for (let i = 0; next && i < 3; i++, next = next.nextElementSibling) {
+    if (/^h[1-6]$/i.test(next.tagName)) return true;
+    if ((next.textContent ?? "").trim().length > 0) return false;
+  }
+  return false;
+}
+
+interface TocTarget {
+  path: string;
+  frag: string | null;
+  title: string;
+}
+
+/** The book's own table of contents (EPUB 3 nav, else EPUB 2 NCX), as
+ * file + anchor targets — used to split files that pack many chapters. */
+async function readToc(
+  zip: JSZip,
+  opfDoc: Document,
+  manifest: Map<string, { href: string; mediaType: string; properties: string }>,
+): Promise<TocTarget[]> {
+  const dirOf = (p: string) => (p.includes("/") ? p.slice(0, p.lastIndexOf("/") + 1) : "");
+  const target = (dir: string, href: string, title: string): TocTarget => {
+    const [file = "", frag] = href.split("#");
+    return {
+      path: joinPath(dir, decodeURIComponent(file)),
+      frag: frag ? decodeURIComponent(frag) : null,
+      title: chapterName(title),
+    };
+  };
+  const nav = [...manifest.values()].find((m) => m.properties.split(/\s+/).includes("nav"));
+  if (nav) {
+    try {
+      const doc = parseXml(await readText(zip, nav.href));
+      const navs = Array.from(doc.getElementsByTagName("nav"));
+      const tocNav =
+        navs.find((n) =>
+          /\btoc\b/.test(
+            n.getAttribute("epub:type") ??
+              n.getAttributeNS?.("http://www.idpf.org/2007/ops", "type") ??
+              "",
+          ),
+        ) ?? navs[0];
+      const links = tocNav ? Array.from(tocNav.getElementsByTagName("a")) : [];
+      const out = links
+        .filter((a) => a.getAttribute("href"))
+        .map((a) => target(dirOf(nav.href), a.getAttribute("href")!, a.textContent ?? ""));
+      if (out.length) return out;
+    } catch {
+      // fall back to the NCX
+    }
+  }
+  const ncxId = opfDoc.querySelector("spine")?.getAttribute("toc");
+  const ncx =
+    (ncxId ? manifest.get(ncxId) : undefined) ??
+    [...manifest.values()].find((m) => m.mediaType === "application/x-dtbncx+xml");
+  if (!ncx || !/ncx/i.test(ncx.mediaType + ncx.href)) return [];
+  const doc = parseXml(await readText(zip, ncx.href));
+  return Array.from(doc.getElementsByTagName("navPoint"))
+    .map((np) => {
+      const src = np.getElementsByTagName("content")[0]?.getAttribute("src");
+      const label = np.getElementsByTagName("text")[0]?.textContent ?? "";
+      return src ? target(dirOf(ncx.href), src, label) : null;
+    })
+    .filter((t): t is TocTarget => !!t);
 }
 
 export async function parseEpubFile(file: File): Promise<Book> {
@@ -343,11 +575,7 @@ export async function parseEpubFile(file: File): Promise<Book> {
   if (coverEntry) {
     try {
       const coverFile = zip.file(coverEntry.href);
-      if (coverFile) {
-        const base64 = await coverFile.async("base64");
-        const raw = `data:${guessMimeType(coverEntry.href)};base64,${base64}`;
-        cover = await downscaleCover(raw);
-      }
+      if (coverFile) cover = await downscaleZipImage(coverFile, coverEntry.href, 480, 0.82);
     } catch {
       cover = null; // cover is a nice-to-have, never block the import over it
     }
@@ -361,6 +589,8 @@ export async function parseEpubFile(file: File): Promise<Book> {
   if (spineRefs.length === 0) {
     throw new EpubParseError("Este EPUB não tem uma ordem de leitura (spine) reconhecível.");
   }
+
+  const toc = await readToc(zip, opfDoc, manifest).catch(() => [] as TocTarget[]);
 
   const chapters: Chapter[] = [];
   let index = 0;
@@ -376,12 +606,38 @@ export async function parseEpubFile(file: File): Promise<Book> {
       const chapterDir = item.href.includes("/")
         ? item.href.slice(0, item.href.lastIndexOf("/") + 1)
         : "";
-      const chapter = await extractChapter(html, index, zip, chapterDir, imageCache, imageBudget);
+      const splits = toc
+        .filter((t) => t.path === item.href && t.frag)
+        .map((t) => ({ frag: t.frag!, title: t.title }));
+      const parts = await extractChapter(
+        html,
+        index,
+        zip,
+        chapterDir,
+        imageCache,
+        imageBudget,
+        splits,
+      );
       // Give the screen a frame between chapters so big books never freeze it.
       await new Promise((r) => setTimeout(r, 0));
-      const hasImages = chapter.blocks?.some((b) => b.type === "image") ?? false;
-      if (chapter.paragraphs.length > 0 || hasImages) {
-        chapters.push(chapter);
+      for (const { continues, ...chapter } of parts) {
+        const prev = chapters[chapters.length - 1];
+        if (continues && prev) {
+          // Append to the chapter it belongs to, re-numbering its paragraphs.
+          const offset = prev.paragraphs.length;
+          prev.paragraphs.push(...chapter.paragraphs);
+          prev.blocks = [
+            ...(prev.blocks ??
+              prev.paragraphs
+                .slice(0, offset)
+                .map((_, i) => ({ type: "text" as const, paragraphIndex: i }))),
+            ...(chapter.blocks ?? []).map((b) =>
+              b.type === "text" ? { ...b, paragraphIndex: b.paragraphIndex + offset } : b,
+            ),
+          ];
+          continue;
+        }
+        chapters.push({ ...chapter, id: `cap-${index}` });
         index += 1;
       }
     } catch (err) {

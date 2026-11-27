@@ -88,7 +88,7 @@ function LiveBook({ children }: { children: React.ReactNode }) {
       el.style.setProperty("--gx", `${(x * 100).toFixed(1)}%`);
       el.style.setProperty("--gy", `${(y * 100).toFixed(1)}%`);
       // Pressing the right side back shows the block of pages.
-      el.style.setProperty("--edge", `${(Math.max(0, x - 0.35) * 0.09 * r.width).toFixed(1)}px`);
+      el.style.setProperty("--edge-k", (Math.max(0, x - 0.35) / 0.65).toFixed(3));
     });
   };
   const rest = () => {
@@ -98,7 +98,7 @@ function LiveBook({ children }: { children: React.ReactNode }) {
     el.removeAttribute("data-live");
     el.style.removeProperty("--ry");
     el.style.removeProperty("--rx");
-    el.style.removeProperty("--edge");
+    el.style.removeProperty("--edge-k");
   };
 
   return (
