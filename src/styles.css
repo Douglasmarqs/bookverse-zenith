@@ -2086,3 +2086,263 @@ html[data-intro="calm"] .ib-tagline {
     opacity: 1;
   }
 }
+
+/* ——— Estante (library bookcase) —————————————————————————————————————
+   Wood, brass and paper; every motion is transform/opacity. */
+.bookcase {
+  --wood-back: linear-gradient(180deg, #ead8b9 0%, #dcc4a0 100%);
+  --wood-grain: repeating-linear-gradient(
+    90deg,
+    rgb(120 80 40 / 0.035) 0 2px,
+    transparent 2px 9px,
+    rgb(120 80 40 / 0.05) 9px 10px,
+    transparent 10px 23px
+  );
+  --wood-frame: #b98a58;
+  --plank-top: #d1ab7c;
+  --plank-front: linear-gradient(180deg, #ad7d4e, #8f6339);
+  --plank-ink: #fff3e2;
+  position: relative;
+  border-radius: 26px;
+  padding: 40px 12px 14px;
+  background: var(--wood-grain), var(--wood-back);
+  box-shadow:
+    inset 0 0 0 7px var(--wood-frame),
+    inset 0 22px 30px -18px rgb(60 30 10 / 0.45),
+    0 22px 44px -26px rgb(40 20 5 / 0.6);
+}
+html[data-theme="escuro"] .bookcase {
+  --wood-back: linear-gradient(180deg, #2e2017 0%, #21170f 100%);
+  --wood-grain: repeating-linear-gradient(
+    90deg,
+    rgb(255 220 180 / 0.025) 0 2px,
+    transparent 2px 9px,
+    rgb(0 0 0 / 0.12) 9px 10px,
+    transparent 10px 23px
+  );
+  --wood-frame: #46301f;
+  --plank-top: #6e4c30;
+  --plank-front: linear-gradient(180deg, #553820, #3f2916);
+  --plank-ink: #f4dcc0;
+}
+.bookcase-plaque {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 3px 14px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #f1d58a, #c29a45 60%, #a9822f);
+  color: #4a3410;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.5),
+    0 2px 4px rgb(0 0 0 / 0.3);
+}
+.bookcase-plaque::before,
+.bookcase-plaque::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 50%;
+  background: #7d5c1e;
+}
+.bookcase-plaque::before {
+  left: 5px;
+}
+.bookcase-plaque::after {
+  right: 5px;
+}
+.bookcase-row {
+  position: relative;
+  padding-top: 16px;
+}
+.bookcase-books {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  align-items: end;
+  column-gap: 12px;
+  padding: 0 8px;
+}
+.bookcase-plank {
+  position: relative;
+  height: 26px;
+  margin: 0 -4px 26px;
+  border-radius: 3px 3px 5px 5px;
+  background: linear-gradient(180deg, var(--plank-top) 0 8px, transparent 8px), var(--plank-front);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.25),
+    0 12px 16px -10px rgb(30 15 5 / 0.6);
+}
+.bookcase-row:last-child .bookcase-plank {
+  margin-bottom: 4px;
+}
+
+.shelf-book {
+  position: relative;
+  list-style: none;
+}
+/* Soft shadow where the book meets the shelf; shrinks when it's lifted. */
+.shelf-book::after {
+  content: "";
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: -5px;
+  height: 10px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgb(30 15 5 / 0.45), transparent);
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+  pointer-events: none;
+}
+.shelf-book-btn {
+  display: block;
+  width: 100%;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  animation: shelf-drop 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.12) var(--d, 0ms) both;
+}
+.shelf-book-body {
+  position: relative;
+  display: block;
+  width: calc(var(--h, 1) * 100%);
+  margin: 0 auto;
+  transform: rotate(var(--lean, 0deg));
+  transform-origin: 50% 100%;
+  transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: transform;
+}
+.shelf-book[data-state="lift"] .shelf-book-body {
+  transform: translate3d(0, -10px, 0) rotate(0deg) scale(1.03);
+  transition-duration: 0.16s;
+}
+.shelf-book[data-state="pull"] .shelf-book-body {
+  transform: translate3d(0, -26px, 0) rotate(0deg) scale(1.07);
+  transition-duration: 0.17s;
+}
+.shelf-book[data-state="lift"]::after,
+.shelf-book[data-state="pull"]::after {
+  opacity: 0.35;
+  transform: scale(0.8);
+}
+.shelf-book[data-state="wobble"] .shelf-book-body {
+  animation: shelf-wobble 0.42s ease;
+}
+@keyframes shelf-drop {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -46px, 0) rotate(-5deg);
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes shelf-wobble {
+  0%,
+  100% {
+    transform: translate3d(0, -10px, 0) rotate(0deg) scale(1.03);
+  }
+  25% {
+    transform: translate3d(0, -10px, 0) rotate(-4deg) scale(1.05);
+  }
+  60% {
+    transform: translate3d(0, -10px, 0) rotate(3deg) scale(1.05);
+  }
+}
+
+/* Library label: format of the file, like the tape on a library book. */
+.shelf-label {
+  position: absolute;
+  left: 7%;
+  bottom: 8%;
+  z-index: 2;
+  padding: 2px 5px 1.5px;
+  border-radius: 3px;
+  background: var(--tone);
+  color: #fff;
+  font-size: 8.5px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transform: rotate(-3deg);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.35),
+    inset 0 0 0 1px rgb(255 255 255 / 0.18);
+  pointer-events: none;
+}
+/* Ribbon bookmark: the longer it hangs, the further you've read. */
+.shelf-ribbon {
+  position: absolute;
+  top: -3px;
+  right: 16%;
+  z-index: 2;
+  width: 9px;
+  height: calc(var(--p, 0.2) * 46%);
+  min-height: 14px;
+  background: linear-gradient(90deg, #d93d12, #ff5a24 55%, #c9370f);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 82%, 0 100%);
+  filter: drop-shadow(0 2px 1px rgb(0 0 0 / 0.3));
+  pointer-events: none;
+}
+.shelf-seal {
+  position: absolute;
+  top: 6%;
+  right: 7%;
+  z-index: 2;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffe08a, #d4a017 70%, #a87b0c);
+  color: #4a3200;
+  box-shadow: 0 2px 4px rgb(0 0 0 / 0.35);
+  pointer-events: none;
+}
+/* The tag on the shelf's front edge, under each book. */
+.shelf-caption {
+  position: absolute;
+  top: calc(100% + 11px);
+  left: 0;
+  right: 0;
+  overflow: hidden;
+  color: var(--plank-ink);
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.9;
+  pointer-events: none;
+}
+.bookcase-lumi {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  list-style: none;
+  transform: translateY(4px);
+  animation: shelf-drop 0.8s cubic-bezier(0.2, 0.9, 0.3, 1.12) 0.5s both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .shelf-book-btn,
+  .bookcase-lumi,
+  .shelf-book[data-state="wobble"] .shelf-book-body {
+    animation: none;
+  }
+}
