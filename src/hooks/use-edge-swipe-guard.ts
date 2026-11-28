@@ -28,7 +28,19 @@ export function useEdgeSwipeGuard(enabled = true, edge = 22) {
       const t = e.changedTouches[0];
       if (!s || !t) return;
       if (Math.hypot(t.clientX - s.x, t.clientY - s.y) < 10 && performance.now() - s.t < 600) {
-        (document.elementFromPoint(t.clientX, t.clientY) as HTMLElement | null)?.click();
+        // A real click at the same spot (HTMLElement.click() would carry
+        // no coordinates, and page zones read where the tap landed).
+        document.elementFromPoint(t.clientX, t.clientY)?.dispatchEvent(
+          new MouseEvent("click", {
+            bubbles: true,
+            cancelable: true,
+            view: window,
+            clientX: t.clientX,
+            clientY: t.clientY,
+            screenX: t.screenX,
+            screenY: t.screenY,
+          }),
+        );
       }
     };
     document.addEventListener("touchstart", onStart, { passive: false, capture: true });
