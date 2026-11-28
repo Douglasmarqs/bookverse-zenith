@@ -1,4 +1,11 @@
-import { AnimatePresence, motion, useDragControls } from "motion/react";
+import {
+  AnimatePresence,
+  LayoutGroup,
+  motion,
+  useDragControls,
+  useReducedMotion,
+  type Variants,
+} from "motion/react";
 import { ArrowUp, Headphones, List, Minus, Plus, SlidersHorizontal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -42,6 +49,29 @@ const QUICK: { id: Exclude<PullSheetAsk, { free: string }>; label: string }[] = 
 
 const HINT_KEY = "bookverse:reader:pull-hint-seen";
 
+/* The sheet's sections arrive one after another as it rises. */
+const LIST: Variants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.055, delayChildren: 0.06 } },
+};
+const ITEM: Variants = {
+  hidden: { opacity: 0, y: 22, scale: 0.97 },
+  show: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: { type: "spring", stiffness: 420, damping: 30 },
+  },
+};
+const CHIPS: Variants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.04, delayChildren: 0.12 } },
+};
+const CHIP: Variants = {
+  hidden: { opacity: 0, y: 10, scale: 0.9 },
+  show: { opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 520, damping: 28 } },
+};
+
 /**
  * A grab handle at the bottom of the page. Pull it up (or tap it) for a
  * quick sheet: ask Lumi about what you're reading, switch how pages turn,
@@ -75,6 +105,7 @@ export function ReaderPullSheet({
   onMore: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const reduce = useReducedMotion();
   const [text, setText] = useState("");
   const [hint, setHint] = useState(false);
   const drag = useDragControls();
@@ -190,6 +221,7 @@ export function ReaderPullSheet({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
               className="fixed inset-0 z-[55] bg-black/35"
               onClick={() => setOpen(false)}
             />
@@ -205,10 +237,10 @@ export function ReaderPullSheet({
               onDragEnd={(_, info) => {
                 if (info.offset.y > 90 || info.velocity.y > 500) setOpen(false);
               }}
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 32, stiffness: 340 }}
+              initial={reduce ? { opacity: 0 } : { y: "100%", scaleX: 0.94 }}
+              animate={reduce ? { opacity: 1 } : { y: 0, scaleX: 1 }}
+              exit={reduce ? { opacity: 0 } : { y: "100%", scaleX: 0.96 }}
+              transition={{ type: "spring", damping: 28, stiffness: 300, mass: 0.9 }}
               className="fixed inset-x-0 bottom-0 z-[56] mx-auto flex max-h-[min(88dvh,720px)] w-full max-w-[560px] flex-col rounded-t-[30px]"
               style={{
                 background: chrome.card,
@@ -224,11 +256,40 @@ export function ReaderPullSheet({
                 <span className="h-[5px] w-10 rounded-full" style={{ background: chrome.line }} />
               </div>
 
-              <div className="min-h-0 overflow-y-auto overscroll-contain px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+              <motion.div
+                variants={LIST}
+                initial={reduce ? false : "hidden"}
+                animate="show"
+                className="min-h-0 overflow-y-auto overscroll-contain px-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+              >
                 {/* Lumi */}
-                <div className="rounded-[22px] p-3" style={{ background: chrome.lilac }}>
-                  <div className="flex items-center gap-2.5">
-                    <LumiFace size={30} />
+                <motion.div
+                  variants={ITEM}
+                  className="relative overflow-hidden rounded-[22px] p-3"
+                  style={{ background: chrome.lilac }}
+                >
+                  {!reduce && (
+                    <motion.span
+                      aria-hidden
+                      initial={{ x: "-120%" }}
+                      animate={{ x: "220%" }}
+                      transition={{ duration: 1.1, delay: 0.35, ease: [0.4, 0, 0.2, 1] }}
+                      className="pointer-events-none absolute inset-y-0 left-0 w-1/2 -skew-x-12"
+                      style={{
+                        background:
+                          "linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent)",
+                      }}
+                    />
+                  )}
+                  <div className="relative flex items-center gap-2.5">
+                    <motion.span
+                      initial={reduce ? false : { scale: 0.4, rotate: -25 }}
+                      animate={{ scale: 1, rotate: 0 }}
+                      transition={{ type: "spring", stiffness: 380, damping: 12, delay: 0.15 }}
+                      className="inline-flex"
+                    >
+                      <LumiFace size={30} />
+                    </motion.span>
                     <p className="text-[14.5px] font-bold">Lumi está lendo com você</p>
                   </div>
                   <form
@@ -236,7 +297,7 @@ export function ReaderPullSheet({
                       e.preventDefault();
                       if (text.trim()) ask({ free: text.trim() });
                     }}
-                    className="mt-2.5 flex items-center gap-2 rounded-full py-1 pl-4 pr-1"
+                    className="relative mt-2.5 flex items-center gap-2 rounded-full py-1 pl-4 pr-1"
                     style={{ background: chrome.card }}
                   >
                     <input
@@ -257,64 +318,78 @@ export function ReaderPullSheet({
                       <ArrowUp className="h-[18px] w-[18px]" strokeWidth={2.4} />
                     </button>
                   </form>
-                  <div className="mt-2.5 flex flex-wrap gap-1.5">
+                  <motion.div variants={CHIPS} className="relative mt-2.5 flex flex-wrap gap-1.5">
                     {QUICK.map((q) => (
-                      <button
+                      <motion.button
                         key={q.id}
+                        variants={CHIP}
+                        whileTap={{ scale: 0.94 }}
                         type="button"
                         onClick={() => ask(q.id)}
-                        className="rounded-full px-3 py-1.5 text-[12.5px] font-semibold transition-transform active:scale-95"
+                        className="rounded-full px-3 py-1.5 text-[12.5px] font-semibold"
                         style={{ background: chrome.card, color: chrome.ink }}
                       >
                         {q.label}
-                      </button>
+                      </motion.button>
                     ))}
-                  </div>
-                </div>
+                  </motion.div>
+                </motion.div>
 
                 {/* Turn style */}
-                <p
-                  className="mb-2 mt-4 px-1 text-[12px] font-bold uppercase tracking-[0.1em]"
-                  style={{ color: chrome.muted }}
-                >
-                  Como virar a página
-                </p>
-                <div
-                  className="grid grid-cols-[repeat(auto-fit,minmax(68px,1fr))] gap-1.5"
-                  role="radiogroup"
-                  aria-label="Como virar a página"
-                >
-                  {TURNS.map((t) => {
-                    const on = turn === t.value;
-                    return (
-                      <button
-                        key={t.value}
-                        type="button"
-                        role="radio"
-                        aria-checked={on}
-                        onClick={() =>
-                          t.value === "rolagem"
-                            ? onChange({ mode: "scroll" })
-                            : onChange({
-                                mode: "paginated",
-                                turnStyle: t.value,
-                                pageTurn: t.value !== "instantaneo",
-                              })
-                        }
-                        className="h-10 min-w-0 truncate rounded-[13px] px-1 text-[12.5px] font-bold transition-colors"
-                        style={{
-                          background: on ? accent : chrome.surface2,
-                          color: on ? "#fff" : chrome.ink,
-                        }}
-                      >
-                        {t.label}
-                      </button>
-                    );
-                  })}
-                </div>
+                <motion.div variants={ITEM}>
+                  <p
+                    className="mb-2 mt-4 px-1 text-[12px] font-bold uppercase tracking-[0.1em]"
+                    style={{ color: chrome.muted }}
+                  >
+                    Como virar a página
+                  </p>
+                  <LayoutGroup id="turn-style">
+                    <div
+                      className="grid grid-cols-[repeat(auto-fit,minmax(68px,1fr))] gap-1.5"
+                      role="radiogroup"
+                      aria-label="Como virar a página"
+                    >
+                      {TURNS.map((t) => {
+                        const on = turn === t.value;
+                        return (
+                          <button
+                            key={t.value}
+                            type="button"
+                            role="radio"
+                            aria-checked={on}
+                            onClick={() =>
+                              t.value === "rolagem"
+                                ? onChange({ mode: "scroll" })
+                                : onChange({
+                                    mode: "paginated",
+                                    turnStyle: t.value,
+                                    pageTurn: t.value !== "instantaneo",
+                                  })
+                            }
+                            className="relative h-10 min-w-0 truncate rounded-[13px] px-1 text-[12.5px] font-bold transition-colors duration-200"
+                            style={{
+                              background: chrome.surface2,
+                              color: on ? "#fff" : chrome.ink,
+                            }}
+                          >
+                            {on && (
+                              <motion.span
+                                layoutId="turn-on"
+                                transition={{ type: "spring", stiffness: 520, damping: 34 }}
+                                className="absolute inset-0 rounded-[13px]"
+                                style={{ background: accent }}
+                              />
+                            )}
+                            <span className="relative">{t.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </LayoutGroup>
+                </motion.div>
 
                 {/* Size + theme */}
-                <div className="mt-4 flex items-center gap-3">
+                <motion.div variants={ITEM} className="mt-4 flex items-center gap-3">
                   <div
                     className="flex h-11 shrink-0 items-center rounded-full"
                     style={{ background: chrome.surface2 }}
@@ -343,8 +418,11 @@ export function ReaderPullSheet({
                     {THEMES.map((t) => {
                       const on = settings.theme === t.value;
                       return (
-                        <button
+                        <motion.button
                           key={t.value}
+                          whileTap={{ scale: 0.86 }}
+                          animate={{ scale: on ? 1.08 : 1 }}
+                          transition={{ type: "spring", stiffness: 500, damping: 22 }}
                           type="button"
                           aria-label={`Tema ${t.label}`}
                           aria-pressed={on}
@@ -359,14 +437,14 @@ export function ReaderPullSheet({
                           }}
                         >
                           Aa
-                        </button>
+                        </motion.button>
                       );
                     })}
                   </div>
-                </div>
+                </motion.div>
 
                 {/* Shortcuts */}
-                <div className="mt-4 grid grid-cols-3 gap-2">
+                <motion.div variants={ITEM} className="mt-4 grid grid-cols-3 gap-2">
                   {(
                     [
                       [List, "Sumário", onToc],
@@ -387,8 +465,8 @@ export function ReaderPullSheet({
                       <Icon className="h-[18px] w-[18px]" /> {label}
                     </button>
                   ))}
-                </div>
-              </div>
+                </motion.div>
+              </motion.div>
             </motion.div>
           </>
         )}
