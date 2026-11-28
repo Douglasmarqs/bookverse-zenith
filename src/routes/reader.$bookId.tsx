@@ -105,6 +105,7 @@ import { PageOverview } from "@/components/reader/page-overview";
 import { openLumiPanel } from "@/lib/lumi-panel-store";
 import { recordGamificationMilestone } from "@/lib/user-profile";
 import { markAsReading, setLibraryStatus, slugFor } from "@/lib/library";
+import { useLockDocumentScroll } from "@/hooks/use-lock-document-scroll";
 import { toast } from "sonner";
 import { describeFirestoreError } from "@/lib/async-utils";
 import { ReaderPageSkeleton } from "@/components/reader-page-skeleton";
@@ -1585,6 +1586,27 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
 
   // Folha / Deslizar follow the finger: the page moves with it and only
   // turns for real when you let go past a quarter (or flick).
+  // In the browser (not the installed app), Safari scrolls and rubber-bands
+  // the page *behind* the reader when a finger moves vertically — the whole
+  // book slid down while you dragged a page. While reading, the document is
+  // pinned, and in page mode every move belongs to the page turn.
+  const touchAreaRef = useRef<HTMLDivElement>(null);
+  useLockDocumentScroll();
+  useEffect(() => {
+    const el = touchAreaRef.current;
+    if (!el || settings.mode !== "paginated") return;
+    const onMove = (e: TouchEvent) => {
+      if (e.touches.length !== 1 || !e.cancelable) return; // pinch stays free
+      const t = e.target as Element | null;
+      if (t?.closest?.("[role=dialog], input, textarea, select, [contenteditable]")) return;
+      // Adjusting a text selection keeps the system's own handles.
+      if (!window.getSelection()?.isCollapsed) return;
+      e.preventDefault();
+    };
+    el.addEventListener("touchmove", onMove, { passive: false });
+    return () => el.removeEventListener("touchmove", onMove);
+  }, [settings.mode]);
+
   const handlePaginatedTouchMove = useCallback(
     (event: React.TouchEvent<HTMLDivElement>) => {
       const d = dragRef.current;
@@ -2574,10 +2596,11 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       {/* Content — a tap anywhere that isn't a control shows/hides the
           chrome, like a Kindle. Side zones (paginated) turn pages. */}
       <div
+        ref={touchAreaRef}
         className="relative flex-1 overflow-hidden"
         style={
           settings.mode === "paginated"
-            ? { touchAction: "pan-y pinch-zoom", overscrollBehavior: "none" }
+            ? { touchAction: "none", overscrollBehavior: "none" }
             : undefined
         }
         onTouchStart={settings.mode === "paginated" ? handlePaginatedTouchStart : undefined}

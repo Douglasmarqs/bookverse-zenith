@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useEdgeSwipeGuard } from "@/hooks/use-edge-swipe-guard";
+import { useLockDocumentScroll } from "@/hooks/use-lock-document-scroll";
 import { toast } from "sonner";
 
 import type { PdfBook } from "@/lib/pdf-store";
@@ -146,6 +147,7 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
 
   // No iOS "back" swipe sliding the previous screen over the page.
   useEdgeSwipeGuard();
+  useLockDocumentScroll();
 
   async function saveRegion(draft: RegionDraft) {
     const x = Math.min(draft.startX, draft.x);
