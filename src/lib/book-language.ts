@@ -93,8 +93,30 @@ const MARKERS: Record<string, string[]> = {
 export function normalizeLang(code?: string | null): string | null {
   const c = (code ?? "").trim().toLowerCase();
   if (!c) return null;
-  const map: Record<string, string> = { por: "pt", eng: "en", spa: "es", fre: "fr", fra: "fr" };
-  return map[c] ?? (c.split(/[-_]/)[0] || null);
+  const map: Record<string, string> = {
+    por: "pt",
+    eng: "en",
+    spa: "es",
+    fre: "fr",
+    fra: "fr",
+    // Some EPUBs write the language's name instead of its code.
+    português: "pt",
+    portugues: "pt",
+    portuguese: "pt",
+    inglês: "en",
+    ingles: "en",
+    english: "en",
+    español: "es",
+    espanol: "es",
+    spanish: "es",
+    espanhol: "es",
+    français: "fr",
+    francais: "fr",
+    french: "fr",
+    francês: "fr",
+  };
+  const base = c.split(/[-_\s(]/)[0] || "";
+  return map[c] ?? map[base] ?? (base.length <= 3 ? base || null : null);
 }
 
 /** Best guess from a sample of the text; null when there's too little. */

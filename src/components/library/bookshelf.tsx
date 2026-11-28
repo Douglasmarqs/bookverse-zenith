@@ -15,10 +15,11 @@ import { Check } from "lucide-react";
 
 import { BookArt } from "@/components/book-art";
 import { Lumi } from "@/components/brand/lumi";
-import { coverIn, playBookOpen } from "@/lib/book-motion";
+import { afterPaint, coverIn, playBookOpen } from "@/lib/book-motion";
 import type { DeviceKind } from "@/lib/device-books";
 import { bookFormat } from "@/lib/book-format";
 import { languageLabel } from "@/lib/public-domain";
+import { normalizeLang } from "@/lib/book-language";
 
 export interface ShelfItem {
   id: string;
@@ -136,6 +137,7 @@ function ShelfBook({
   const li = useRef<HTMLLIElement>(null);
   const press = useRef<{ t: ReturnType<typeof setTimeout>; fired: boolean } | null>(null);
   const fmt = bookFormat(book);
+  const lang = normalizeLang(book.language);
   const h = hash(book.id);
   // Books aren't all the same height, nor perfectly straight.
   const vars = {
@@ -159,7 +161,7 @@ function ShelfBook({
     <li ref={li} className="shelf-book" style={vars}>
       <button
         type="button"
-        aria-label={`${book.title}, ${book.author} · ${fmt.label}${book.language ? ` · ${languageLabel(book.language)}` : ""} · ${fmt.origin}${reading ? ` · ${Math.round(book.progress * 100)}% lido` : done ? " · lido" : ""}`}
+        aria-label={`${book.title}, ${book.author} · ${fmt.label}${lang ? ` · ${languageLabel(lang)}` : ""} · ${fmt.origin}${reading ? ` · ${Math.round(book.progress * 100)}% lido` : done ? " · lido" : ""}`}
         className="shelf-book-btn [-webkit-touch-callout:none]"
         onPointerDown={() => {
           set("lift");
@@ -199,10 +201,12 @@ function ShelfBook({
           set("pull");
           const cover = coverIn(e.currentTarget);
           setTimeout(() => {
-            if (book.readerId) playBookOpen(cover);
-            onOpen();
+            const played = book.readerId ? playBookOpen(cover) : false;
+            // The reader mounts only after the opening is on screen.
+            if (played) afterPaint(onOpen);
+            else onOpen();
             setTimeout(() => set(null), 400);
-          }, 170);
+          }, 150);
         }}
       >
         <span className="shelf-book-body">
@@ -215,13 +219,13 @@ function ShelfBook({
             >
               {fmt.label === "ONLINE" ? "Online" : fmt.label === "SALVO" ? "Lista" : fmt.label}
             </span>
-            {book.language && (
+            {lang && (
               <span
                 className="shelf-label"
-                style={{ "--tone": LANG_TONE[book.language] ?? "#5b6270" } as CSSProperties}
-                title={`Idioma: ${languageLabel(book.language)}`}
+                style={{ "--tone": LANG_TONE[lang] ?? "#5b6270" } as CSSProperties}
+                title={`Idioma: ${languageLabel(lang)}`}
               >
-                {book.language.toUpperCase()}
+                {lang.toUpperCase()}
               </span>
             )}
           </span>

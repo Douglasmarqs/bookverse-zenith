@@ -747,6 +747,7 @@ function sliceForTurn(
   }
   for (let i = start; i <= end; i++) {
     const copy = kids[i]!.cloneNode(true) as HTMLElement;
+    copy.querySelectorAll("img[loading]").forEach((img) => img.removeAttribute("loading"));
     if (i === start) copy.style.marginTop = `${Math.max(0, r0.top - (sRect.top + padTop))}px`;
     shell.appendChild(copy);
   }
@@ -846,7 +847,10 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   const [noteDraft, setNoteDraft] = useState("");
   const [saved, setSaved] = useState(true);
   const [hydrated, setHydrated] = useState(false);
-  const [controlsVisible, setControlsVisible] = useState(true);
+  // Opening a book shows a small "where you are" card instead of the whole
+  // control panel; a tap brings the controls.
+  const [controlsVisible, setControlsVisible] = useState(false);
+  const [resumeCard, setResumeCard] = useState<"in" | "out" | null>("in");
   const [selectedPassage, setSelectedPassage] = useState<SelectedPassage | null>(null);
   const [completedChapterIndexes, setCompletedChapterIndexes] = useState<number[]>([]);
   const [bookCompletionRecorded, setBookCompletionRecorded] = useState(false);
@@ -908,11 +912,23 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   }, []);
 
   useEffect(() => {
-    revealControls();
+    setControlsVisible(false);
+    setResumeCard("in");
+    const out = setTimeout(() => setResumeCard((c) => (c ? "out" : c)), 3600);
+    const gone = setTimeout(() => setResumeCard(null), 4100);
     return () => {
+      clearTimeout(out);
+      clearTimeout(gone);
       if (controlsTimer.current) clearTimeout(controlsTimer.current);
     };
-  }, [book.id, revealControls]);
+  }, [book.id]);
+  // Opening the controls sends the card away at once.
+  useEffect(() => {
+    if (!controlsVisible) return;
+    setResumeCard((c) => (c === "in" ? "out" : c));
+    const id = setTimeout(() => setResumeCard(null), 450);
+    return () => clearTimeout(id);
+  }, [controlsVisible]);
 
   const guest = useContext(ReaderGuestContext);
   const [guestTipOpen, setGuestTipOpen] = useState(true);
@@ -1384,10 +1400,22 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       return;
     }
     const done = () => finishTurn(turn.to);
-    cancelTweenRef.current =
-      stageRef.current?.play(0, 1, TURN_MS[turn.style], done) ??
-      tween(0, 1, TURN_MS[turn.style], (p) => stageRef.current?.set(p), done);
-    return () => cancelTweenRef.current?.();
+    let cancelled = false;
+    const start = () => {
+      if (cancelled) return;
+      cancelTweenRef.current =
+        stageRef.current?.play(0, 1, TURN_MS[turn.style], done) ??
+        tween(0, 1, TURN_MS[turn.style], (p) => stageRef.current?.set(p), done);
+    };
+    // Pictures on the two pages are decoded first (a few ms when cached),
+    // so no image pops in mid-turn. Text-only pages start at once.
+    const ready = stageRef.current?.ready();
+    if (ready) void ready.then(start);
+    else start();
+    return () => {
+      cancelled = true;
+      cancelTweenRef.current?.();
+    };
   }, [turn, finishTurn]);
 
   useEffect(
@@ -2243,7 +2271,10 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
               <img
                 src={displaySrc(block.src)}
                 alt={block.alt ?? ""}
-                loading="lazy"
+                // Paginated: every picture of the chapter is loaded and
+                // decoded up front, so turning onto it never flashes.
+                loading={settings.mode === "paginated" ? "eager" : "lazy"}
+                decoding="async"
                 className="max-h-[calc(100vh-13rem)] w-auto max-w-full rounded-lg object-contain [box-shadow:0_8px_30px_rgba(0,0,0,0.25)]"
               />
             </figure>
@@ -2405,7 +2436,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
 
       {/* Top bar (mockup 09) */}
       <header
-        className={`absolute inset-x-0 top-0 z-30 transition-[opacity,transform,translate] duration-300 lg:pointer-events-auto lg:translate-y-0 lg:opacity-100 ${
+        className={`absolute inset-x-0 top-0 z-30 transition-[opacity,transform,translate] duration-[420ms] ease-[cubic-bezier(.16,1,.3,1)] lg:pointer-events-auto lg:translate-y-0 lg:opacity-100 ${
           controlsVisible
             ? "translate-y-0 opacity-100"
             : "pointer-events-none -translate-y-full opacity-0"
@@ -2559,7 +2590,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                 : undefined
           }
           style={contentStyle}
-          className="relative h-full"
+          className="reader-in relative h-full"
         >
           {settings.mode === "paginated" && (
             <span
@@ -2713,8 +2744,30 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
           </>
         )}
 
+        {resumeCard && (
+          <ResumeCard
+            leaving={resumeCard === "out"}
+            onTap={() => {
+              setResumeCard("out");
+              revealControls();
+            }}
+            progress={overallProgress}
+            chapterLabel={`Cap. ${romanize(chapterIndex + 1)}`}
+            chapterTitle={chapter.title}
+            detail={
+              settings.mode === "paginated" && chapterPageTotal > 0
+                ? `pág. ${chapterPageLabel} de ${chapterPageTotal}`
+                : `${Math.round(overallProgress * 100)}% lido`
+            }
+            timeLeft={`${formatDuration(minutesLeftInBook)} para terminar`}
+            chrome={chrome}
+            accent={ACCENT}
+          />
+        )}
+
         {settings.mode === "paginated" &&
           showPageGestureHint &&
+          !resumeCard &&
           !controlsVisible &&
           !panelOpen &&
           !tocOpen && (
@@ -3070,10 +3123,10 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       {/* Controls card (mockup 09) */}
       <div
         data-reader-action="true"
-        className={`absolute inset-x-3 bottom-[max(1.6rem,calc(env(safe-area-inset-bottom)+0.6rem))] z-30 mx-auto max-w-[560px] rounded-[30px] lg:hidden px-[18px] pb-3.5 pt-[18px] transition-[opacity,transform,translate] duration-300 ${
+        className={`absolute inset-x-3 bottom-[max(1.6rem,calc(env(safe-area-inset-bottom)+0.6rem))] z-30 mx-auto max-w-[560px] origin-bottom rounded-[30px] lg:hidden px-[18px] pb-3.5 pt-[18px] transition-[opacity,transform,translate,scale] ${
           controlsVisible
-            ? "translate-y-0 opacity-100"
-            : "pointer-events-none translate-y-[120%] opacity-0"
+            ? "translate-y-0 scale-100 opacity-100 duration-[520ms] ease-[cubic-bezier(.16,1,.3,1)]"
+            : "pointer-events-none translate-y-[calc(100%+2rem)] scale-[.94] opacity-0 duration-[320ms] ease-[cubic-bezier(.5,0,.75,0)]"
         }`}
         style={{
           background: chrome.card,
@@ -3190,12 +3243,17 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
               },
               { icon: ALargeSmall, label: "Aparência", on: () => setPanelOpen(true) },
             ] as { icon: typeof List; label: string; lumi?: boolean; on: () => void }[]
-          ).map((btn) => (
+          ).map((btn, i) => (
             <button
               key={btn.label}
               type="button"
               onClick={btn.on}
-              className="press flex w-[62px] flex-col items-center gap-1.5"
+              className={`press flex w-[62px] flex-col items-center gap-1.5 transition-[opacity,translate] ${
+                controlsVisible
+                  ? "translate-y-0 opacity-100 duration-[520ms] ease-[cubic-bezier(.16,1,.3,1)]"
+                  : "translate-y-4 opacity-0 duration-150"
+              }`}
+              style={{ transitionDelay: controlsVisible ? `${90 + i * 45}ms` : "0ms" }}
             >
               <span
                 className="grid h-[50px] w-[50px] place-items-center rounded-[18px]"
@@ -3721,4 +3779,88 @@ function formatDuration(minutes: number): string {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
   return m ? `${h}h ${m}min` : `${h}h`;
+}
+
+/** "Where you are" card shown when a book opens: it springs up with the
+ * progress ring filling in, waits a moment and slides away. CSS keyframes
+ * (transform/opacity) so it stays smooth while the book lays itself out. */
+function ResumeCard({
+  leaving,
+  onTap,
+  progress,
+  chapterLabel,
+  chapterTitle,
+  detail,
+  timeLeft,
+  chrome,
+  accent,
+}: {
+  leaving: boolean;
+  onTap: () => void;
+  progress: number;
+  chapterLabel: string;
+  chapterTitle: string;
+  detail: string;
+  timeLeft: string;
+  chrome: { card: string; ink: string; muted: string; line: string; surface2: string };
+  accent: string;
+}) {
+  const fresh = progress < 0.005;
+  const pct = Math.round(progress * 100);
+  const R = 17;
+  const C = 2 * Math.PI * R;
+  return (
+    <button
+      type="button"
+      data-reader-action="true"
+      onClick={onTap}
+      aria-label={`${chapterLabel}, ${detail}. Toque para abrir os controles.`}
+      className={`resume-card fixed bottom-[max(3.5rem,calc(env(safe-area-inset-bottom)+2.75rem))] left-1/2 z-[38] flex w-max max-w-[calc(100vw-2rem)] items-center gap-3 rounded-full py-2 pl-2 pr-5 text-left ${
+        leaving ? "is-leaving" : ""
+      }`}
+      style={{
+        background: chrome.card,
+        color: chrome.ink,
+        fontFamily: "var(--font-sans)",
+        boxShadow: `0 18px 44px -16px rgba(0,0,0,.38), inset 0 0 0 1px ${chrome.line}`,
+      }}
+    >
+      <span className="relative grid h-11 w-11 shrink-0 place-items-center">
+        <svg width="44" height="44" viewBox="0 0 44 44" className="absolute inset-0 -rotate-90">
+          <circle cx="22" cy="22" r={R} fill="none" stroke={chrome.surface2} strokeWidth="4" />
+          <circle
+            cx="22"
+            cy="22"
+            r={R}
+            fill="none"
+            stroke={accent}
+            strokeWidth="4"
+            strokeLinecap="round"
+            className="resume-ring"
+            style={
+              {
+                strokeDasharray: C,
+                "--ring-from": C,
+                "--ring-to": C * (1 - Math.max(0.03, progress)),
+              } as React.CSSProperties
+            }
+          />
+        </svg>
+        <span className="relative text-[11px] font-bold tabular-nums">
+          {fresh ? "✦" : `${pct}%`}
+        </span>
+      </span>
+      <span className="min-w-0">
+        <span className="resume-line block truncate text-[14px] font-bold leading-tight">
+          {fresh ? "Boa leitura!" : `${chapterLabel} · ${chapterTitle}`}
+        </span>
+        <span
+          className="resume-line block truncate text-[12px] font-semibold"
+          style={{ color: chrome.muted, animationDelay: "560ms" }}
+        >
+          {fresh ? `${chapterLabel} · ${timeLeft}` : `${detail} · ${timeLeft}`}
+        </span>
+      </span>
+    </button>
+  );
 }

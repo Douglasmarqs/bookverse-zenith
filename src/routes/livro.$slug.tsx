@@ -20,7 +20,7 @@ import { BookArt } from "@/components/book-art";
 import { BookReviews } from "@/components/book-reviews";
 import { LumiAskBar } from "@/components/lumi-ask-bar";
 import { LangTag } from "@/components/lang-tag";
-import { flyToLibrary, playBookOpen } from "@/lib/book-motion";
+import { afterPaint, flyToLibrary, playBookOpen } from "@/lib/book-motion";
 import { formatMinutes } from "@/components/home/home-screen";
 import { describeFirestoreError } from "@/lib/async-utils";
 import {
@@ -216,7 +216,9 @@ function BookPage() {
   const realCover = cover ?? meta?.cover ?? copy?.cover ?? null;
 
   async function open(listen = false) {
-    if (readerId && !listen)
+    const played =
+      !!readerId &&
+      !listen &&
       playBookOpen(document.querySelector<HTMLElement>(".book3d-body > :first-child"));
     let rid = readerId;
     if (!rid) {
@@ -235,11 +237,15 @@ function BookPage() {
         return;
       }
     }
-    void navigate({
-      to: "/reader/$bookId",
-      params: { bookId: rid },
-      search: (listen ? { ouvir: 1 } : {}) as never,
-    });
+    const go = () =>
+      void navigate({
+        to: "/reader/$bookId",
+        params: { bookId: rid },
+        search: (listen ? { ouvir: 1 } : {}) as never,
+      });
+    // The reader mounts once the opening is on screen.
+    if (played) afterPaint(go);
+    else go();
   }
 
   async function save() {

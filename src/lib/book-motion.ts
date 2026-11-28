@@ -95,18 +95,37 @@ export function flyToLibrary(source: Element | null | undefined) {
 
 let opening = false;
 
-export function playBookOpen(cover: HTMLElement | null | undefined) {
-  if (!cover || opening || reduced()) return;
+/**
+ * Runs `fn` once the browser has painted at least one frame: the opening
+ * animation is put on screen (and on the compositor) *before* the heavy
+ * reader starts mounting, so it never waits behind it.
+ */
+export function afterPaint(fn: () => void) {
+  if (typeof requestAnimationFrame !== "function") return fn();
+  requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(fn, 0)));
+}
+
+/**
+ * Tapping a cover: it lifts to the centre, the cover swings open on a
+ * page and the page grows into the reader. Every step is scheduled up
+ * front with its own delay (no step waits for the previous one to report
+ * back), transform/opacity only, so it all runs on the compositor and
+ * stays smooth while the reader loads on the main thread.
+ */
+export function playBookOpen(cover: HTMLElement | null | undefined): boolean {
+  if (!cover || opening || reduced()) return false;
   const r = cover.getBoundingClientRect();
-  if (!r.width || !r.height) return;
+  if (!r.width || !r.height) return false;
   opening = true;
 
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  const h = Math.min(vh * 0.62, 520);
+  const h = Math.min(vh * 0.58, 500);
   const scale = h / r.height;
   const tx = vw / 2 - (r.left + r.width / 2);
   const ty = vh / 2 - (r.top + r.height / 2);
+  // Big enough for the page to cover the screen at the end.
+  const fill = Math.max(vw / (r.width * scale), vh / (r.height * scale)) * 1.15;
 
   const stage = document.createElement("div");
   Object.assign(stage.style, {
@@ -115,6 +134,14 @@ export function playBookOpen(cover: HTMLElement | null | undefined) {
     zIndex: "9998",
     pointerEvents: "none",
     perspective: "1600px",
+    contain: "strict",
+  });
+  const shade = document.createElement("div");
+  Object.assign(shade.style, {
+    position: "absolute",
+    inset: "0",
+    background: "rgb(10 10 12 / .28)",
+    opacity: "0",
   });
   const book = document.createElement("div");
   Object.assign(book.style, {
@@ -125,6 +152,7 @@ export function playBookOpen(cover: HTMLElement | null | undefined) {
     height: `${r.height}px`,
     transformStyle: "preserve-3d",
     transformOrigin: "50% 50%",
+    willChange: "transform",
   });
   const page = document.createElement("div");
   Object.assign(page.style, {
@@ -132,10 +160,14 @@ export function playBookOpen(cover: HTMLElement | null | undefined) {
     inset: "0",
     borderRadius: "2px 6px 6px 2px",
     background:
-      "linear-gradient(90deg, rgb(0 0 0 / .12), transparent 12%), repeating-linear-gradient(180deg, transparent 0 14%, rgb(42 38 32 / .07) 14% 15%), #F7F3EA",
-    boxShadow: "0 30px 60px -20px rgb(0 0 0 / .45)",
+      "linear-gradient(90deg, rgb(0 0 0 / .10), transparent 14%), repeating-linear-gradient(180deg, transparent 0 13%, rgb(42 38 32 / .06) 13% 14%), #F7F3EA",
+    boxShadow: "0 30px 70px -24px rgb(0 0 0 / .5)",
   });
   const front = cover.cloneNode(true) as HTMLElement;
+  front.querySelectorAll("img").forEach((img) => {
+    img.loading = "eager";
+    img.decoding = "sync";
+  });
   Object.assign(front.style, {
     position: "absolute",
     inset: "0",
@@ -143,58 +175,91 @@ export function playBookOpen(cover: HTMLElement | null | undefined) {
     height: "100%",
     transformOrigin: "0% 50%",
     backfaceVisibility: "hidden",
+    willChange: "transform",
   });
   book.append(page, front);
-  stage.append(book);
+  stage.append(shade, book);
   document.body.appendChild(stage);
 
-  const ease = "cubic-bezier(.16,1,.3,1)";
-  const rise = book.animate(
+  const at = `translate(${tx}px, ${ty}px) scale(${scale})`;
+  const RISE = 360;
+  const SWING = 520;
+  const OPEN_AT = 260; // the cover starts opening before the rise ends
+  const GROW_AT = OPEN_AT + SWING - 140;
+  const GROW = 380;
+  const total = GROW_AT + GROW;
+
+  shade.animate([{ opacity: 0 }, { opacity: 1, offset: 0.35 }, { opacity: 1 }], {
+    duration: GROW_AT,
+    easing: "ease-out",
+    fill: "forwards",
+  });
+  book.animate(
     [
-      { transform: "translate(0,0) scale(1)" },
-      { transform: `translate(${tx}px, ${ty}px) scale(${scale})` },
+      { transform: "translate(0,0) scale(1) rotate(0deg)" },
+      {
+        transform: `translate(${tx * 0.5}px, ${ty * 0.5 - 24}px) scale(${(1 + scale) / 2}) rotate(-2deg)`,
+        offset: 0.55,
+      },
+      { transform: at },
     ],
-    { duration: 420, easing: ease, fill: "forwards" },
+    { duration: RISE, easing: "cubic-bezier(.2,.8,.2,1)", fill: "forwards" },
   );
-  rise.onfinish = () => {
-    const swing = front.animate(
-      [{ transform: "rotateY(0deg)" }, { transform: "rotateY(-118deg)" }],
-      { duration: 520, easing: "cubic-bezier(.4,0,.2,1)", fill: "forwards" },
-    );
-    swing.onfinish = () => {
-      const fade = stage.animate([{ opacity: 1 }, { opacity: 0 }], {
-        duration: 260,
-        easing: "ease-out",
-        fill: "forwards",
-      });
-      book.animate(
-        [
-          { transform: `translate(${tx}px, ${ty}px) scale(${scale})` },
-          { transform: `translate(${tx}px, ${ty}px) scale(${scale * 1.6})` },
-        ],
-        { duration: 260, easing: "ease-in", fill: "forwards" },
-      );
-      fade.onfinish = () => {
-        stage.remove();
-        opening = false;
-      };
-    };
-  };
-  // Safety net: never leave the stage on screen.
-  window.setTimeout(() => {
+  front.animate(
+    [
+      { transform: "rotateY(0deg)" },
+      { transform: "rotateY(-125deg)", opacity: 1, offset: 0.85 },
+      { transform: "rotateY(-150deg)", opacity: 0 },
+    ],
+    { duration: SWING, delay: OPEN_AT, easing: "cubic-bezier(.55,0,.25,1)", fill: "both" },
+  );
+  book.animate(
+    [{ transform: at }, { transform: `translate(${tx}px, ${ty}px) scale(${scale * fill})` }],
+    {
+      duration: GROW,
+      delay: GROW_AT,
+      easing: "cubic-bezier(.7,0,.2,1)",
+      fill: "forwards",
+      composite: "replace",
+    },
+  );
+  const fade = stage.animate([{ opacity: 1 }, { opacity: 1, offset: 0.55 }, { opacity: 0 }], {
+    duration: GROW,
+    delay: GROW_AT,
+    easing: "ease-in",
+    fill: "forwards",
+  });
+  const cleanup = () => {
     stage.remove();
     opening = false;
-  }, 2200);
+  };
+  fade.onfinish = cleanup;
+  // Safety net: never leave the stage on screen.
+  window.setTimeout(cleanup, total + 900);
+  return true;
 }
 
 /** Mount once: any tap on a link into the reader that carries a cover opens it. */
 export function installBookOpen() {
   if (typeof document === "undefined") return () => {};
+  let replaying: Element | null = null;
   const onClick = (e: MouseEvent) => {
     if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     const link = (e.target as Element | null)?.closest?.('a[href^="/reader/"]');
     if (!link) return;
-    playBookOpen(coverIn(link));
+    if (replaying === link) {
+      replaying = null;
+      return;
+    }
+    if (!playBookOpen(coverIn(link))) return;
+    // Hold the navigation until the animation is on screen, then let the
+    // link do its job.
+    e.preventDefault();
+    e.stopPropagation();
+    afterPaint(() => {
+      replaying = link;
+      (link as HTMLAnchorElement).click();
+    });
   };
   document.addEventListener("click", onClick, true);
   return () => document.removeEventListener("click", onClick, true);

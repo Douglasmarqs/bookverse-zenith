@@ -60,7 +60,7 @@ import {
   subscribeReadingProgress,
   type ReadingProgress,
 } from "@/lib/reader-store";
-import { coverIn, playBookOpen } from "@/lib/book-motion";
+import { afterPaint, coverIn, playBookOpen } from "@/lib/book-motion";
 
 export const Route = createFileRoute("/biblioteca")({
   head: () => ({
@@ -739,8 +739,8 @@ function GridItem({
         {...handlers}
         onClick={(e) => {
           if (fired.current) return;
-          if (book.readerId) playBookOpen(coverIn(e.currentTarget));
-          onOpen();
+          if (book.readerId && playBookOpen(coverIn(e.currentTarget))) afterPaint(onOpen);
+          else onOpen();
         }}
         className="press block w-full select-none text-left [-webkit-touch-callout:none]"
         aria-label={`${book.title}, ${book.author}`}

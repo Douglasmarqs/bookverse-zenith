@@ -38,7 +38,7 @@ import {
 } from "@/lib/catalog";
 import { COLLECTIONS, collectionById, type Collection } from "@/lib/collections";
 import { picksFor } from "@/lib/editorial";
-import { coverIn, flyToLibrary, playBookOpen } from "@/lib/book-motion";
+import { afterPaint, coverIn, flyToLibrary, playBookOpen } from "@/lib/book-motion";
 import { LumiAskBar } from "@/components/lumi-ask-bar";
 import { LangTag } from "@/components/lang-tag";
 import { slugFor } from "@/lib/library";
@@ -767,8 +767,9 @@ function ResultRow({ book: b, q, last }: { book: CatalogBook; q: string; last: b
 
   async function act(row: Element | null) {
     if (ready) {
-      playBookOpen(coverIn(row));
-      void navigate({ to: "/reader/$bookId", params: { bookId: ready } });
+      const go = () => void navigate({ to: "/reader/$bookId", params: { bookId: ready } });
+      if (playBookOpen(coverIn(row))) afterPaint(go);
+      else go();
       return;
     }
     try {
