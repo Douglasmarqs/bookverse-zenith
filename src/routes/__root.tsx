@@ -23,6 +23,7 @@ import { isFirebaseConfigured } from "../lib/firebase";
 import { SiteFooter } from "../components/site-footer";
 import { LumiPanel } from "../components/lumi-panel";
 import { InstallPwaBanner } from "../components/install-pwa";
+import { InstallSheet } from "../components/install-sheet";
 import { Toaster } from "../components/ui/sonner";
 import { CommandPalette } from "../components/command-palette";
 import { Dock } from "../components/shell/dock";
@@ -348,6 +349,7 @@ function RootComponent() {
         <LumiPanel />
         <CelebrationOverlay />
         {!isReaderRoute && <InstallPwaBanner />}
+        <InstallSheet />
         <AppToaster />
       </div>
     </QueryClientProvider>
