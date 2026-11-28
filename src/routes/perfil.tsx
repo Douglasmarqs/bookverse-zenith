@@ -7,6 +7,7 @@ import {
   Flame,
   NotebookPen,
   Settings,
+  Smartphone,
   Sparkles,
   Target,
   Trophy,
@@ -23,6 +24,7 @@ import { subscribeLibrary, type LibraryEntry } from "@/lib/library";
 import { getLocalOnboarding, type ReadingMoment } from "@/lib/onboarding";
 import { openLumiPanel } from "@/lib/lumi-panel-store";
 import { dayKey, useRitual, type RitualDays } from "@/lib/ritual";
+import { isStandalone, openInstallSheet } from "@/lib/install";
 import { subscribeUserProfile, type UserProfile } from "@/lib/user-profile";
 
 export const Route = createFileRoute("/perfil")({
@@ -314,6 +316,7 @@ function MemberVoce({ user }: { user: User }) {
               label="Downloads e arquivos"
               hint="livros neste aparelho"
             />
+            <InstallRow />
             <Row
               to="/ajustes"
               icon={Settings}
@@ -530,6 +533,33 @@ function WeekBars({
         );
       })}
     </div>
+  );
+}
+
+/** "Instalar o app" — hidden when already running installed. */
+function InstallRow() {
+  const [show, setShow] = useState(false);
+  useEffect(() => setShow(!isStandalone()), []);
+  if (!show) return null;
+  return (
+    <li className="border-b border-border">
+      <button
+        type="button"
+        onClick={openInstallSheet}
+        className="press flex w-full items-center gap-3.5 py-3 text-left"
+      >
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] bg-gold text-primary-foreground">
+          <Smartphone className="h-[19px] w-[19px]" strokeWidth={2} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[15px] font-semibold">Instalar o app</p>
+          <p className="truncate text-[12.5px] text-muted-foreground">
+            tela cheia e ícone na tela inicial
+          </p>
+        </div>
+        <ChevronRight className="h-[18px] w-[18px] shrink-0 text-faint" />
+      </button>
+    </li>
   );
 }
 

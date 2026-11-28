@@ -1,105 +1,78 @@
 import { useEffect, useState } from "react";
-import { Download, Share, X } from "lucide-react";
+import { Download, X } from "lucide-react";
 import { LumiMascot } from "@/components/lumi-mascot";
+import {
+  detectInstallPlatform,
+  openInstallSheet,
+  useInstallPrompt,
+  type InstallPlatform,
+} from "@/lib/install";
 
 const DISMISS_KEY = "bookverse:install-banner-dismissed-at";
 const DISMISS_COOLDOWN_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
 
-type BeforeInstallPromptEvent = Event & {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
-};
-
-function isStandalone(): boolean {
-  if (typeof window === "undefined") return false;
-  return (
-    window.matchMedia?.("(display-mode: standalone)").matches ||
-    // iOS Safari's own flag for "launched from home screen"
-    (navigator as unknown as { standalone?: boolean }).standalone === true
-  );
-}
-
-function isIos(): boolean {
-  if (typeof navigator === "undefined") return false;
-  return /iphone|ipad|ipod/i.test(navigator.userAgent);
-}
-
 function recentlyDismissed(): boolean {
-  const raw = localStorage.getItem(DISMISS_KEY);
-  if (!raw) return false;
-  return Date.now() - Number(raw) < DISMISS_COOLDOWN_MS;
+  try {
+    const raw = localStorage.getItem(DISMISS_KEY);
+    return !!raw && Date.now() - Number(raw) < DISMISS_COOLDOWN_MS;
+  } catch {
+    return false;
+  }
 }
 
 /**
- * A small, dismissible bottom banner offering to install the app.
- *   - Chrome/Edge/Android: captures the native `beforeinstallprompt`
- *     event and triggers it on tap — a real install, home-screen icon
- *     included.
- *   - iOS Safari: has no such event (Apple doesn't expose one), so this
- *     shows the manual "Share → Add to Home Screen" steps instead.
- * Hidden entirely once the app is already running standalone, and stays
- * quiet for two weeks after being dismissed rather than nagging every visit.
+ * A small, dismissible banner offering to install the app. With the
+ * browser's own prompt (Chrome/Edge/Android) it installs in one tap;
+ * everywhere else (iPhone, Samsung Internet, Firefox, in-app browsers) it
+ * opens the step-by-step sheet for that browser. Hidden once installed,
+ * and quiet for two weeks after being dismissed — the sheet stays one tap
+ * away in "Você" → "Instalar o app".
  */
 export function InstallPwaBanner() {
-  const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
-  const [showIosTip, setShowIosTip] = useState(false);
-  const [dismissed, setDismissed] = useState(true); // start hidden until checks resolve, avoids a flash
+  const install = useInstallPrompt();
+  const [platform, setPlatform] = useState<InstallPlatform | null>(null);
 
   useEffect(() => {
-    if (isStandalone() || recentlyDismissed()) return;
-    setDismissed(false);
-
-    if (isIos()) {
-      setShowIosTip(true);
-      return;
-    }
-
-    function onPrompt(e: Event) {
-      e.preventDefault();
-      setDeferred(e as BeforeInstallPromptEvent);
-    }
-    window.addEventListener("beforeinstallprompt", onPrompt);
-    return () => window.removeEventListener("beforeinstallprompt", onPrompt);
+    if (recentlyDismissed()) return;
+    setPlatform(detectInstallPlatform());
   }, []);
 
   function dismiss() {
-    localStorage.setItem(DISMISS_KEY, String(Date.now()));
-    setDismissed(true);
+    try {
+      localStorage.setItem(DISMISS_KEY, String(Date.now()));
+    } catch {
+      // ignore
+    }
+    setPlatform(null);
   }
 
-  async function install() {
-    if (!deferred) return;
-    await deferred.prompt();
-    const { outcome } = await deferred.userChoice;
-    if (outcome === "accepted") setDismissed(true);
-    setDeferred(null);
-  }
+  if (!platform || platform === "installed") return null;
+  // On computers, only when the browser can install right away.
+  if ((platform === "desktop" || platform === "mac-safari") && !install.available) return null;
 
-  if (dismissed || (!deferred && !showIosTip)) return null;
+  const oneTap = install.available;
+  const text =
+    platform === "inapp"
+      ? "Abra no navegador para instalar e ler em tela cheia."
+      : oneTap
+        ? "Tela cheia, ícone na tela inicial e livros offline."
+        : "Em poucos toques: veja o passo a passo para o seu celular.";
 
   return (
-    <div className="fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-40 lg:bottom-4 mx-auto flex max-w-sm items-start gap-3 rounded-2xl border border-border/60 bg-card/95 p-4 shadow-2xl backdrop-blur-md sm:inset-x-auto sm:right-4">
+    <div className="fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-40 mx-auto flex max-w-sm items-start gap-3 rounded-2xl border border-border/60 bg-card/95 p-4 shadow-2xl backdrop-blur-md sm:inset-x-auto sm:right-4 lg:bottom-4">
       <LumiMascot size={40} blink={false} />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">Instale o BookVerse</p>
-        {showIosTip ? (
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            Toque em <Share className="mx-0.5 inline h-3 w-3 align-[-1px]" /> Compartilhar, depois
-            em "Adicionar à Tela de Início".
-          </p>
-        ) : (
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            Acesso rápido direto da tela inicial, sem precisar abrir o navegador.
-          </p>
-        )}
-        {!showIosTip && (
-          <button
-            onClick={install}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-gold px-4 py-1.5 text-xs font-medium text-primary-foreground"
-          >
-            <Download className="h-3.5 w-3.5" /> Instalar
-          </button>
-        )}
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{text}</p>
+        <button
+          onClick={() => {
+            if (oneTap) void install.prompt().then((ok) => ok && setPlatform(null));
+            else openInstallSheet();
+          }}
+          className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-gold px-4 py-1.5 text-xs font-medium text-primary-foreground"
+        >
+          <Download className="h-3.5 w-3.5" /> {oneTap ? "Instalar" : "Como instalar"}
+        </button>
       </div>
       <button
         onClick={dismiss}
