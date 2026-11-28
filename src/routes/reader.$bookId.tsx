@@ -1723,6 +1723,15 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   // animating its own scroll, so the two don't fight each other.
   const onPaginatedScroll = useCallback(() => {
     if (isProgrammaticScroll.current) return;
+    // Dragging a selection handle makes the browser scroll the columns to
+    // follow it (half of the next page slid in). The page stays put.
+    const sel = window.getSelection();
+    const el0 = contentRef.current;
+    if (el0 && sel && !sel.isCollapsed && sel.anchorNode && el0.contains(sel.anchorNode)) {
+      const want = pageIndex * pageWidthPx;
+      if (Math.abs(el0.scrollLeft - want) > 1) el0.scrollLeft = want;
+      return;
+    }
     if (snapTimer.current) clearTimeout(snapTimer.current);
     snapTimer.current = setTimeout(() => {
       const el = contentRef.current;
@@ -1736,7 +1745,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       setScrollRatio(r);
       queueSave(makeProgress(chapterIndex, r, { index: nearest, count: pageCount }));
     }, 120);
-  }, [pageWidthPx, pageCount, chapterIndex, makeProgress, queueSave]);
+  }, [pageWidthPx, pageCount, pageIndex, chapterIndex, makeProgress, queueSave]);
 
   // Keyboard: arrows/space/PageUp/PageDown turn pages (or scroll), and
   // single letters open the main tools — ignored while typing.
@@ -2057,6 +2066,27 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     },
     [chapter.paragraphs],
   );
+
+  // The bar follows the selection while its handles are dragged (iOS
+  // fires no pointerup on the page for handle drags).
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const onChange = () => {
+      if (t) clearTimeout(t);
+      t = setTimeout(() => {
+        const sel = window.getSelection();
+        const content = contentRef.current;
+        if (!sel || sel.isCollapsed || !content || !sel.anchorNode) return;
+        if (!content.contains(sel.anchorNode)) return;
+        captureTextSelection();
+      }, 220);
+    };
+    document.addEventListener("selectionchange", onChange);
+    return () => {
+      document.removeEventListener("selectionchange", onChange);
+      if (t) clearTimeout(t);
+    };
+  }, [captureTextSelection]);
 
   function askLumiAboutPassage(
     action: string,
@@ -2612,7 +2642,35 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
           if (target.closest("[data-reader-action],button,a,input,textarea,mark,label")) return;
           const sel = window.getSelection();
           if (sel && !sel.isCollapsed) return;
-          if (selectedPassage || activeHighlightId) return;
+          // A tap on the page puts an open selection/highlight bar away.
+          if (selectedPassage || activeHighlightId) {
+            setSelectedPassage(null);
+            setActiveHighlightId(null);
+            return;
+          }
+          // Page zones work by where you tap, so the text underneath stays
+          // the real target: a long press anywhere — edges included —
+          // selects words instead of turning the page.
+          if (
+            settings.mode === "paginated" &&
+            (settings.tapZones ?? "padrao") !== "deslizar" &&
+            Date.now() > suppressPageNavigationUntilRef.current
+          ) {
+            const box = e.currentTarget.getBoundingClientRect();
+            const x = (e.clientX - box.left) / Math.max(1, box.width);
+            const lefty = settings.tapZones === "canhoto";
+            const isBack = lefty ? x > 0.72 : x < 0.28;
+            const isNext = lefty ? x < 0.38 : x > 0.62;
+            if (isBack) {
+              if (!(pageIndex === 0 && chapterIndex === 0)) goToPage(pageIndex - 1);
+              return;
+            }
+            if (isNext) {
+              if (!(pageIndex === pageCount - 1 && chapterIndex === book.chapters.length - 1))
+                goToPage(pageIndex + 1);
+              return;
+            }
+          }
           if (controlsTimer.current) clearTimeout(controlsTimer.current);
           setControlsVisible((v) => !v);
         }}
@@ -2757,7 +2815,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                   onClick={() => goToPage(pageIndex - 1)}
                   disabled={pageIndex === 0 && chapterIndex === 0}
                   aria-label="Página anterior"
-                  className={`absolute inset-y-0 w-[28%] min-w-10 cursor-pointer disabled:cursor-default ${lefty ? "right-0" : "left-0"}`}
+                  className={`pointer-events-none absolute inset-y-0 w-[28%] min-w-10 ${lefty ? "right-0" : "left-0"}`}
                 />
               );
               const next = (
@@ -2768,7 +2826,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                     pageIndex === pageCount - 1 && chapterIndex === book.chapters.length - 1
                   }
                   aria-label="Próxima página"
-                  className={`absolute inset-y-0 w-[38%] min-w-10 cursor-pointer disabled:cursor-default ${lefty ? "left-0" : "right-0"}`}
+                  className={`pointer-events-none absolute inset-y-0 w-[38%] min-w-10 ${lefty ? "left-0" : "right-0"}`}
                 />
               );
               return (
@@ -2862,187 +2920,223 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
           </div>
         )}
 
-        {(selectedPassage || activeHighlight) &&
-          (() => {
-            const r = selectedPassage?.rect;
-            const vw = typeof window !== "undefined" ? window.innerWidth : 390;
-            const W = Math.min(354, vw - 36);
-            const centre = r ? (r.left + r.right) / 2 : vw / 2;
-            const left = Math.max(18, Math.min(vw - W - 18, centre - W / 2));
-            const tall = !activeHighlight;
-            const above = r ? r.top > (tall ? 200 : 150) : false;
-            const pos: React.CSSProperties = r
-              ? above
-                ? { top: r.top - (tall ? 176 : 124), left }
-                : { top: r.bottom + 16, left }
-              : { bottom: "max(5rem, calc(var(--safe-bottom, 0px) + 5rem))", left };
-            const close = () => {
-              window.getSelection()?.removeAllRanges();
-              setSelectedPassage(null);
-              setActiveHighlightId(null);
-            };
-            const actions: { icon: typeof List; label: string; on: () => void }[] = activeHighlight
-              ? [
-                  {
-                    icon: NotebookPen,
-                    label: "Nota",
-                    on: () => {
-                      setEditingNoteFor(activeHighlight.id);
-                      setNoteDraft(activeHighlight.note ?? "");
-                    },
-                  },
-                  {
-                    icon: Copy,
-                    label: "Copiar",
-                    on: () =>
-                      void navigator.clipboard
-                        ?.writeText(activeHighlight.excerpt)
-                        .then(() => toast.success("Copiado")),
-                  },
-                  {
-                    icon: Share2,
-                    label: "Citar",
-                    on: () => void handleShareHighlight(activeHighlight),
-                  },
-                  {
-                    icon: Trash2,
-                    label: "Remover",
-                    on: () => {
-                      void removeHighlight(uid, book.id, activeHighlight.id);
-                      setActiveHighlightId(null);
-                    },
-                  },
-                  {
-                    icon: LumiIcon as unknown as typeof List,
-                    label: "Lumi",
-                    on: () => askLumiAboutPassage("Explique em linguagem simples", "explanation"),
-                  },
-                ]
-              : [
-                  {
-                    icon: NotebookPen,
-                    label: "Nota",
-                    on: () => void handleHighlightColor("gold", true),
-                  },
-                  {
-                    icon: Copy,
-                    label: "Copiar",
-                    on: () => {
-                      void navigator.clipboard
-                        ?.writeText(selectedPassage!.text)
-                        .then(() => toast.success("Copiado"));
-                      close();
-                    },
-                  },
-                  {
-                    icon: BookA,
-                    label: "Definir",
-                    on: () =>
-                      askLumiAboutPassage(
-                        "Defina esta palavra ou expressão, em uma frase, no sentido usado no texto",
-                        "explanation",
-                      ),
-                  },
-                  {
-                    icon: Languages,
-                    label: "Traduzir",
-                    on: () =>
-                      askLumiAboutPassage("Traduza para português do Brasil", "translation"),
-                  },
-                  {
-                    icon: Share2,
-                    label: "Citar",
-                    on: () => {
-                      const quote = `“${selectedPassage!.text.trim()}” — ${book.author}, ${book.title}`;
-                      const done = () => close();
-                      if (navigator.share)
-                        void navigator
-                          .share({ text: quote })
-                          .catch(() => {})
-                          .finally(done);
-                      else
-                        void navigator.clipboard
-                          ?.writeText(quote)
-                          .then(() => toast.success("Citação copiada"))
-                          .finally(done);
-                    },
-                  },
-                ];
-            return (
-              <div
-                data-reader-action="true"
-                role="toolbar"
-                aria-label="Ações do trecho"
-                className="fixed z-[70] rounded-[20px] p-2.5 text-white shadow-[0_20px_40px_-12px_rgba(0,0,0,.5)]"
-                style={{ ...pos, width: W, background: "#1b1b1d", fontFamily: "var(--font-sans)" }}
-              >
-                <div className="flex items-center gap-2.5 border-b border-white/[.12] px-1.5 pb-2.5">
-                  {(["gold", "green", "blue", "pink", "lilac"] as HighlightColor[]).map((color) => (
+        <AnimatePresence>
+          {(selectedPassage || activeHighlight) &&
+            (() => {
+              const r = selectedPassage?.rect;
+              const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+              const tall = !activeHighlight;
+              // Docked to the screen edge, never on top of the passage — and
+              // never fighting the iPhone's own Copy/Translate menu, which
+              // sits right next to the selection.
+              const barH = tall ? 214 : 160;
+              const atTop = r ? r.bottom > vh - barH - 28 : false;
+              const close = () => {
+                window.getSelection()?.removeAllRanges();
+                setSelectedPassage(null);
+                setActiveHighlightId(null);
+              };
+              const quoteText = (selectedPassage?.text ?? activeHighlight?.excerpt ?? "").trim();
+              const words = quoteText ? quoteText.split(/\s+/).length : 0;
+              const actions: { icon: typeof List; label: string; on: () => void }[] =
+                activeHighlight
+                  ? [
+                      {
+                        icon: NotebookPen,
+                        label: "Nota",
+                        on: () => {
+                          setEditingNoteFor(activeHighlight.id);
+                          setNoteDraft(activeHighlight.note ?? "");
+                        },
+                      },
+                      {
+                        icon: Copy,
+                        label: "Copiar",
+                        on: () =>
+                          void navigator.clipboard
+                            ?.writeText(activeHighlight.excerpt)
+                            .then(() => toast.success("Copiado")),
+                      },
+                      {
+                        icon: Share2,
+                        label: "Citar",
+                        on: () => void handleShareHighlight(activeHighlight),
+                      },
+                      {
+                        icon: Trash2,
+                        label: "Remover",
+                        on: () => {
+                          void removeHighlight(uid, book.id, activeHighlight.id);
+                          setActiveHighlightId(null);
+                        },
+                      },
+                      {
+                        icon: LumiIcon as unknown as typeof List,
+                        label: "Lumi",
+                        on: () =>
+                          askLumiAboutPassage("Explique em linguagem simples", "explanation"),
+                      },
+                    ]
+                  : [
+                      {
+                        icon: NotebookPen,
+                        label: "Nota",
+                        on: () => void handleHighlightColor("gold", true),
+                      },
+                      {
+                        icon: Copy,
+                        label: "Copiar",
+                        on: () => {
+                          void navigator.clipboard
+                            ?.writeText(selectedPassage!.text)
+                            .then(() => toast.success("Copiado"));
+                          close();
+                        },
+                      },
+                      {
+                        icon: BookA,
+                        label: "Definir",
+                        on: () =>
+                          askLumiAboutPassage(
+                            "Defina esta palavra ou expressão, em uma frase, no sentido usado no texto",
+                            "explanation",
+                          ),
+                      },
+                      {
+                        icon: Languages,
+                        label: "Traduzir",
+                        on: () =>
+                          askLumiAboutPassage("Traduza para português do Brasil", "translation"),
+                      },
+                      {
+                        icon: Share2,
+                        label: "Citar",
+                        on: () => {
+                          const quote = `“${selectedPassage!.text.trim()}” — ${book.author}, ${book.title}`;
+                          const done = () => close();
+                          if (navigator.share)
+                            void navigator
+                              .share({ text: quote })
+                              .catch(() => {})
+                              .finally(done);
+                          else
+                            void navigator.clipboard
+                              ?.writeText(quote)
+                              .then(() => toast.success("Citação copiada"))
+                              .finally(done);
+                        },
+                      },
+                    ];
+              return (
+                <motion.div
+                  key={atTop ? "sel-top" : "sel-bottom"}
+                  data-reader-action="true"
+                  role="toolbar"
+                  aria-label="Ações do trecho"
+                  initial={{ opacity: 0, y: atTop ? -28 : 28, scale: 0.94 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: atTop ? -20 : 20, scale: 0.96 }}
+                  transition={{ type: "spring", stiffness: 460, damping: 32 }}
+                  className="fixed inset-x-3 z-[70] mx-auto max-w-[560px] rounded-[24px] p-3 text-white shadow-[0_24px_50px_-14px_rgba(0,0,0,.55)]"
+                  style={{
+                    ...(atTop
+                      ? { top: "calc(env(safe-area-inset-top) + 10px)" }
+                      : { bottom: "max(0.9rem, calc(env(safe-area-inset-bottom) + 0.5rem))" }),
+                    background: "#1b1b1d",
+                    fontFamily: "var(--font-sans)",
+                  }}
+                >
+                  <div className="flex items-start gap-3 px-1">
+                    <p className="min-w-0 flex-1 text-[12.5px] leading-snug text-white/70">
+                      <span className="line-clamp-1 font-display text-[14px] italic text-white/90">
+                        “{quoteText.slice(0, 160)}”
+                      </span>
+                      <span className="text-[11.5px] text-white/50">
+                        {activeHighlight
+                          ? "Destaque salvo"
+                          : `${words} ${words === 1 ? "palavra" : "palavras"} · arraste as alças para ajustar`}
+                      </span>
+                    </p>
                     <button
-                      key={color}
                       data-reader-action="true"
-                      onClick={() => void handleHighlightColor(color)}
-                      aria-label={`Destacar em ${color}`}
-                      className="h-[26px] w-[26px] rounded-full transition hover:scale-110"
-                      style={{
-                        backgroundColor: HIGHLIGHT_ACCENT[color],
-                        boxShadow:
-                          activeHighlight?.color === color
-                            ? "0 0 0 2px #1b1b1d, 0 0 0 4px #fff"
-                            : undefined,
-                      }}
-                    />
-                  ))}
-                  <span className="flex-1" />
-                  <button
-                    data-reader-action="true"
-                    aria-label="Fechar"
-                    onClick={close}
-                    className="grid h-7 w-7 place-items-center rounded-full text-white/70"
-                  >
-                    <XIcon className="h-4 w-4" />
-                  </button>
-                </div>
-                <div className="flex justify-between px-1 pt-2.5">
-                  {actions.map((a) => (
-                    <button
-                      key={a.label}
-                      data-reader-action="true"
-                      onClick={a.on}
-                      className="flex w-14 flex-col items-center gap-1.5 text-[11px] font-semibold transition hover:opacity-75"
+                      aria-label="Fechar"
+                      onClick={close}
+                      className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/10 text-white/80"
                     >
-                      <a.icon className="h-[19px] w-[19px]" strokeWidth={2} />
-                      {a.label}
+                      <XIcon className="h-4 w-4" />
                     </button>
-                  ))}
-                </div>
-                {tall && (
-                  <button
-                    type="button"
-                    data-reader-action="true"
-                    onClick={() =>
-                      askLumiAboutPassage("Explique em linguagem simples", "explanation")
-                    }
-                    className="mt-2.5 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-lilac pl-1.5 pr-4 text-[14.5px] font-semibold text-[#131313] transition active:scale-[0.98]"
-                  >
-                    <LumiFace size={32} />
-                    Explicar trecho
-                  </button>
-                )}
-                {r && (
-                  <i
-                    aria-hidden
-                    className="absolute h-3.5 w-3.5 rotate-45"
-                    style={{
-                      background: "#1b1b1d",
-                      left: Math.max(16, Math.min(W - 30, centre - left - 7)),
-                      ...(above ? { bottom: -7 } : { top: -7 }),
-                    }}
-                  />
-                )}
-              </div>
-            );
-          })()}
+                  </div>
+                  <div className="mt-2.5 flex items-center gap-2.5 border-b border-white/[.12] px-1 pb-2.5">
+                    {(["gold", "green", "blue", "pink", "lilac"] as HighlightColor[]).map(
+                      (color, i) => (
+                        <motion.button
+                          key={color}
+                          data-reader-action="true"
+                          onClick={() => void handleHighlightColor(color)}
+                          aria-label={`Destacar em ${color}`}
+                          initial={{ scale: 0.3, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          transition={{
+                            type: "spring",
+                            stiffness: 600,
+                            damping: 20,
+                            delay: 0.05 + i * 0.035,
+                          }}
+                          whileTap={{ scale: 0.82 }}
+                          className="h-[28px] w-[28px] rounded-full"
+                          style={{
+                            backgroundColor: HIGHLIGHT_ACCENT[color],
+                            boxShadow:
+                              activeHighlight?.color === color
+                                ? "0 0 0 2px #1b1b1d, 0 0 0 4px #fff"
+                                : undefined,
+                          }}
+                        />
+                      ),
+                    )}
+                    <span className="flex-1" />
+                    <span className="text-[11px] font-semibold text-white/45">
+                      {activeHighlight ? "toque de novo p/ remover" : "destacar"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between px-0.5 pt-2.5">
+                    {actions.map((a, i) => (
+                      <motion.button
+                        key={a.label}
+                        data-reader-action="true"
+                        onClick={a.on}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.08 + i * 0.03, duration: 0.3 }}
+                        whileTap={{ scale: 0.9 }}
+                        className="flex w-[62px] flex-col items-center gap-1.5 rounded-[14px] py-1 text-[11px] font-semibold active:bg-white/10"
+                      >
+                        <a.icon className="h-[19px] w-[19px]" strokeWidth={2} />
+                        {a.label}
+                      </motion.button>
+                    ))}
+                  </div>
+                  {tall && (
+                    <motion.button
+                      type="button"
+                      data-reader-action="true"
+                      onClick={() =>
+                        askLumiAboutPassage("Explique em linguagem simples", "explanation")
+                      }
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.22, duration: 0.3 }}
+                      whileTap={{ scale: 0.97 }}
+                      className="mt-2.5 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-lilac pl-1.5 pr-4 text-[14.5px] font-semibold text-[#131313]"
+                    >
+                      <LumiFace size={32} />
+                      Explicar trecho
+                    </motion.button>
+                  )}
+                </motion.div>
+              );
+            })()}
+        </AnimatePresence>
       </div>
 
       {/* Night light + dimmer, like a Kindle's warm light and brightness. */}
