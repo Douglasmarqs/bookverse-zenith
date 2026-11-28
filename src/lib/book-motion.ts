@@ -136,13 +136,6 @@ export function playBookOpen(cover: HTMLElement | null | undefined): boolean {
     perspective: "1600px",
     contain: "strict",
   });
-  const shade = document.createElement("div");
-  Object.assign(shade.style, {
-    position: "absolute",
-    inset: "0",
-    background: "rgb(10 10 12 / .28)",
-    opacity: "0",
-  });
   const book = document.createElement("div");
   Object.assign(book.style, {
     position: "absolute",
@@ -178,7 +171,9 @@ export function playBookOpen(cover: HTMLElement | null | undefined): boolean {
     willChange: "transform",
   });
   book.append(page, front);
-  stage.append(shade, book);
+  // No dimming layer: Safari on iPhone tints the status bar from fixed
+  // layers touching the top edge and kept it grey after the animation.
+  stage.append(book);
   document.body.appendChild(stage);
 
   const at = `translate(${tx}px, ${ty}px) scale(${scale})`;
@@ -189,11 +184,6 @@ export function playBookOpen(cover: HTMLElement | null | undefined): boolean {
   const GROW = 380;
   const total = GROW_AT + GROW;
 
-  shade.animate([{ opacity: 0 }, { opacity: 1, offset: 0.35 }, { opacity: 1 }], {
-    duration: GROW_AT,
-    easing: "ease-out",
-    fill: "forwards",
-  });
   book.animate(
     [
       { transform: "translate(0,0) scale(1) rotate(0deg)" },

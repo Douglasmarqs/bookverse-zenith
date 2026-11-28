@@ -1782,6 +1782,20 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   useEffect(() => () => stopAmbient(), []);
 
   const theme = THEME_STYLES[settings.theme];
+  // The status bar (iPhone) wears the page colour while reading, and the
+  // app's own colour comes back on the way out.
+  useEffect(() => {
+    const meta = document.querySelector('meta[name="theme-color"]');
+    const prev = meta?.getAttribute("content");
+    meta?.setAttribute("content", theme.bg);
+    const html = document.documentElement;
+    const prevBg = html.style.backgroundColor;
+    html.style.backgroundColor = theme.bg;
+    return () => {
+      if (prev) meta?.setAttribute("content", prev);
+      html.style.backgroundColor = prevBg;
+    };
+  }, [theme.bg]);
   const chapter = book.chapters[chapterIndex];
   // "Luz quente à noite": warms the page by itself from 20h to 6h.
   const [nightHours, setNightHours] = useState(false);
