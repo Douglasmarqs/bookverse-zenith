@@ -94,6 +94,9 @@ export interface LastBook {
   bookMinutesLeft?: number;
   cover?: string;
   updatedAt?: number;
+  /** "Ouvir" was used in the last reading session — only then does the
+   * "Lendo agora" bar follow you around the app. */
+  listened?: boolean;
 }
 
 const LAST_BOOK_EVENT = "bookverse:last-book";

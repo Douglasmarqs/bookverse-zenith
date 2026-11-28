@@ -934,8 +934,13 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   const [guestTipOpen, setGuestTipOpen] = useState(true);
   // Lets the dock's "Ler" button (and the landing) jump straight back in.
   useEffect(() => {
-    rememberLastBook(book.id, book.title, book.author);
+    // A new session starts without audio: the "Lendo agora" bar only shows
+    // after leaving a book you were listening to.
+    rememberLastBook(book.id, book.title, book.author, { listened: false });
   }, [book.id, book.title, book.author]);
+  useEffect(() => {
+    if (listenOpen) rememberLastBook(book.id, undefined, undefined, { listened: true });
+  }, [listenOpen, book.id]);
 
   // Opening a book counts as "starting" it — track it in the library so it
   // shows up under "Minha biblioteca" / "Continue lendo" and can be resumed.
@@ -1782,6 +1787,20 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   useEffect(() => () => stopAmbient(), []);
 
   const theme = THEME_STYLES[settings.theme];
+  // The status bar (iPhone) wears the page colour while reading, and the
+  // app's own colour comes back on the way out.
+  useEffect(() => {
+    const meta = document.querySelector('meta[name="theme-color"]');
+    const prev = meta?.getAttribute("content");
+    meta?.setAttribute("content", theme.bg);
+    const html = document.documentElement;
+    const prevBg = html.style.backgroundColor;
+    html.style.backgroundColor = theme.bg;
+    return () => {
+      if (prev) meta?.setAttribute("content", prev);
+      html.style.backgroundColor = prevBg;
+    };
+  }, [theme.bg]);
   const chapter = book.chapters[chapterIndex];
   // "Luz quente à noite": warms the page by itself from 20h to 6h.
   const [nightHours, setNightHours] = useState(false);
