@@ -1309,7 +1309,19 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       const t = e.changedTouches[0];
       if (!s || !t) return;
       if (Math.hypot(t.clientX - s.x, t.clientY - s.y) < 10 && performance.now() - s.t < 600) {
-        (document.elementFromPoint(t.clientX, t.clientY) as HTMLElement | null)?.click();
+        // A real click at the same spot (HTMLElement.click() would carry
+        // no coordinates, and page zones read where the tap landed).
+        document.elementFromPoint(t.clientX, t.clientY)?.dispatchEvent(
+          new MouseEvent("click", {
+            bubbles: true,
+            cancelable: true,
+            view: window,
+            clientX: t.clientX,
+            clientY: t.clientY,
+            screenX: t.screenX,
+            screenY: t.screenY,
+          }),
+        );
       }
     };
     document.addEventListener("touchstart", onStart, { passive: false, capture: true });
@@ -1561,6 +1573,10 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   // Page turns are deliberate rather than a raw horizontal scrollbar: a
   // lateral gesture advances exactly one virtual page, with the same paper
   // leaf animation used by the keyboard and the edge controls.
+  const barOpenRef = useRef(false);
+  barOpenRef.current = !!(selectedPassage || activeHighlightId);
+  /** When a touch last put the selection bar away (that tap does nothing else). */
+  const dismissTapRef = useRef(0);
   const handlePaginatedTouchStart = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
     if (event.target instanceof Element && event.target.closest("[data-reader-action='true']")) {
       dragRef.current = null;
@@ -1570,6 +1586,14 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       suppressPageNavigationUntilRef.current = Date.now() + 700;
       dragRef.current = null;
       return;
+    }
+    // The system already dropped the selection (a tap elsewhere): its bar
+    // goes too, and the page is free to turn again. That tap only puts the
+    // bar away (no page turn, no controls); a swipe still turns.
+    if (barOpenRef.current) {
+      dismissTapRef.current = Date.now();
+      setSelectedPassage(null);
+      setActiveHighlightId(null);
     }
     const touch = event.touches[0];
     // A drag born on the left screen edge is the browser's "back" swipe:
@@ -1599,8 +1623,10 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       if (e.touches.length !== 1 || !e.cancelable) return; // pinch stays free
       const t = e.target as Element | null;
       if (t?.closest?.("[role=dialog], input, textarea, select, [contenteditable]")) return;
-      // Adjusting a text selection keeps the system's own handles.
-      if (!window.getSelection()?.isCollapsed) return;
+      // Only once a page turn is under way: before that the touch may be
+      // the start of a long press, and the system's text selection (loupe,
+      // handles) must get it untouched.
+      if (!dragRef.current?.active) return;
       e.preventDefault();
     };
     el.addEventListener("touchmove", onMove, { passive: false });
@@ -1616,7 +1642,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       const dy = touch.clientY - d.y;
       if (!d.active) {
         if (Math.abs(dx) < 10 || Math.abs(dx) <= Math.abs(dy) * 1.2) return;
-        if (selectedPassage || !window.getSelection()?.isCollapsed) return;
+        if (!window.getSelection()?.isCollapsed) return;
         const dir: 1 | -1 = dx < 0 ? 1 : -1;
         const target = pageIndex + dir;
         const followable = turnStyle === "folha" || turnStyle === "deslizar";
@@ -1630,7 +1656,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       d.p = Math.max(0, Math.min(1, (-dx * d.dir) / (width * 0.85)));
       stageRef.current?.set(d.p);
     },
-    [beginTurn, pageCount, pageIndex, selectedPassage, turnStyle],
+    [beginTurn, pageCount, pageIndex, turnStyle],
   );
 
   const handlePaginatedTouchEnd = useCallback(
@@ -1664,7 +1690,6 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       const selection = window.getSelection();
       if (
         Date.now() < suppressPageNavigationUntilRef.current ||
-        selectedPassage ||
         (selection && !selection.isCollapsed)
       ) {
         suppressPageNavigationUntilRef.current = Date.now() + 700;
@@ -1676,7 +1701,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       // Like a paper book (and a Kindle): swipe left for the next page.
       goToPage(pageIndex + (dx < 0 ? 1 : -1));
     },
-    [dismissPageGestureHint, finishTurn, goToPage, pageIndex, selectedPassage, turnStyle],
+    [dismissPageGestureHint, finishTurn, goToPage, pageIndex, turnStyle],
   );
 
   // The browser can take over a long edge-to-edge drag (touchcancel). Let
@@ -2042,7 +2067,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
       };
       const text = selection.toString().replace(/\s+/g, " ").trim();
       if (text.length < 2) return;
-      suppressPageNavigationUntilRef.current = Date.now() + 900;
+      suppressPageNavigationUntilRef.current = Date.now() + 450;
 
       const startOffset = offsetIn(startParagraph, range.startContainer, range.startOffset);
       const endOffset = offsetIn(endParagraph, range.endContainer, range.endOffset);
@@ -2067,23 +2092,39 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
     [chapter.paragraphs],
   );
 
-  // The bar follows the selection while its handles are dragged (iOS
-  // fires no pointerup on the page for handle drags).
+  // The selection bar shows up once the finger lifts — never while the
+  // system is still running its own selection gesture (loupe, handles) —
+  // and follows later adjustments of the handles.
   useEffect(() => {
+    let touching = 0;
     let t: ReturnType<typeof setTimeout> | null = null;
-    const onChange = () => {
+    const capture = () => {
       if (t) clearTimeout(t);
       t = setTimeout(() => {
+        if (touching) return;
         const sel = window.getSelection();
         const content = contentRef.current;
         if (!sel || sel.isCollapsed || !content || !sel.anchorNode) return;
         if (!content.contains(sel.anchorNode)) return;
         captureTextSelection();
-      }, 220);
+      }, 180);
     };
-    document.addEventListener("selectionchange", onChange);
+    const onStart = (e: TouchEvent) => {
+      touching = e.touches.length;
+    };
+    const onEnd = (e: TouchEvent) => {
+      touching = e.touches.length;
+      if (!touching) capture();
+    };
+    document.addEventListener("selectionchange", capture);
+    document.addEventListener("touchstart", onStart, { capture: true, passive: true });
+    document.addEventListener("touchend", onEnd, { capture: true, passive: true });
+    document.addEventListener("touchcancel", onEnd, { capture: true, passive: true });
     return () => {
-      document.removeEventListener("selectionchange", onChange);
+      document.removeEventListener("selectionchange", capture);
+      document.removeEventListener("touchstart", onStart, { capture: true });
+      document.removeEventListener("touchend", onEnd, { capture: true });
+      document.removeEventListener("touchcancel", onEnd, { capture: true });
       if (t) clearTimeout(t);
     };
   }, [captureTextSelection]);
@@ -2642,8 +2683,10 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
           if (target.closest("[data-reader-action],button,a,input,textarea,mark,label")) return;
           const sel = window.getSelection();
           if (sel && !sel.isCollapsed) return;
-          // A tap on the page puts an open selection/highlight bar away.
-          if (selectedPassage || activeHighlightId) {
+          // A tap on the page puts an open selection/highlight bar away —
+          // and does only that.
+          if (Date.now() - dismissTapRef.current < 700 || selectedPassage || activeHighlightId) {
+            dismissTapRef.current = 0;
             setSelectedPassage(null);
             setActiveHighlightId(null);
             return;
@@ -2929,7 +2972,7 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
               // Docked to the screen edge, never on top of the passage — and
               // never fighting the iPhone's own Copy/Translate menu, which
               // sits right next to the selection.
-              const barH = tall ? 214 : 160;
+              const barH = 172;
               const atTop = r ? r.bottom > vh - barH - 28 : false;
               const close = () => {
                 window.getSelection()?.removeAllRanges();
@@ -2973,8 +3016,22 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                       {
                         icon: LumiIcon as unknown as typeof List,
                         label: "Lumi",
-                        on: () =>
-                          askLumiAboutPassage("Explique em linguagem simples", "explanation"),
+                        on: () => {
+                          const i = activeHighlight.paragraphIndex;
+                          askLumiAboutPassage("Explique em linguagem simples", "explanation", {
+                            rect: { top: 0, bottom: 0, left: 0, right: 0 },
+                            text: activeHighlight.excerpt,
+                            context: chapter.paragraphs
+                              .slice(Math.max(0, i - 1), i + 2)
+                              .join(" ")
+                              .slice(0, 1500),
+                            startParagraphIndex: i,
+                            endParagraphIndex: i,
+                            startOffset: activeHighlight.startOffset ?? 0,
+                            endOffset: activeHighlight.endOffset ?? 0,
+                          });
+                          setActiveHighlightId(null);
+                        },
                       },
                     ]
                   : [
@@ -3033,11 +3090,16 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                   data-reader-action="true"
                   role="toolbar"
                   aria-label="Ações do trecho"
-                  initial={{ opacity: 0, y: atTop ? -28 : 28, scale: 0.94 }}
+                  initial={{ opacity: 0, y: atTop ? -36 : 36, scale: 0.9 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: atTop ? -20 : 20, scale: 0.96 }}
-                  transition={{ type: "spring", stiffness: 460, damping: 32 }}
-                  className="fixed inset-x-3 z-[70] mx-auto max-w-[560px] rounded-[24px] p-3 text-white shadow-[0_24px_50px_-14px_rgba(0,0,0,.55)]"
+                  exit={{
+                    opacity: 0,
+                    y: atTop ? -24 : 24,
+                    scale: 0.94,
+                    transition: { duration: 0.2, ease: [0.4, 0, 1, 1] },
+                  }}
+                  transition={{ type: "spring", stiffness: 520, damping: 30, mass: 0.8 }}
+                  className="fixed inset-x-3 z-[70] mx-auto max-w-[560px] origin-bottom rounded-[24px] px-3 pb-2.5 pt-2.5 text-white shadow-[0_24px_50px_-14px_rgba(0,0,0,.55)]"
                   style={{
                     ...(atTop
                       ? { top: "calc(env(safe-area-inset-top) + 10px)" }
@@ -3046,27 +3108,26 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                     fontFamily: "var(--font-sans)",
                   }}
                 >
-                  <div className="flex items-start gap-3 px-1">
-                    <p className="min-w-0 flex-1 text-[12.5px] leading-snug text-white/70">
-                      <span className="line-clamp-1 font-display text-[14px] italic text-white/90">
-                        “{quoteText.slice(0, 160)}”
-                      </span>
-                      <span className="text-[11.5px] text-white/50">
-                        {activeHighlight
-                          ? "Destaque salvo"
-                          : `${words} ${words === 1 ? "palavra" : "palavras"} · arraste as alças para ajustar`}
-                      </span>
+                  <div className="flex items-center gap-2 pl-1">
+                    <p className="min-w-0 flex-1 truncate text-[12px] text-white/55">
+                      <span className="font-display text-[14px] italic text-white/90">
+                        “{quoteText.slice(0, 120)}”
+                      </span>{" "}
+                      ·{" "}
+                      {activeHighlight
+                        ? "destaque salvo"
+                        : `${words} ${words === 1 ? "palavra" : "palavras"}`}
                     </p>
                     <button
                       data-reader-action="true"
                       aria-label="Fechar"
                       onClick={close}
-                      className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/10 text-white/80"
+                      className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/10 text-white/80 active:scale-90"
                     >
                       <XIcon className="h-4 w-4" />
                     </button>
                   </div>
-                  <div className="mt-2.5 flex items-center gap-2.5 border-b border-white/[.12] px-1 pb-2.5">
+                  <div className="mt-2 flex items-center gap-2 py-1 pl-1">
                     {(["gold", "green", "blue", "pink", "lilac"] as HighlightColor[]).map(
                       (color, i) => (
                         <motion.button
@@ -3074,32 +3135,50 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                           data-reader-action="true"
                           onClick={() => void handleHighlightColor(color)}
                           aria-label={`Destacar em ${color}`}
-                          initial={{ scale: 0.3, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
+                          initial={{ scale: 0.2, opacity: 0, y: 6 }}
+                          animate={{ scale: 1, opacity: 1, y: 0 }}
                           transition={{
                             type: "spring",
-                            stiffness: 600,
-                            damping: 20,
-                            delay: 0.05 + i * 0.035,
+                            stiffness: 620,
+                            damping: 18,
+                            delay: 0.06 + i * 0.04,
                           }}
-                          whileTap={{ scale: 0.82 }}
-                          className="h-[28px] w-[28px] rounded-full"
-                          style={{
-                            backgroundColor: HIGHLIGHT_ACCENT[color],
-                            boxShadow:
-                              activeHighlight?.color === color
-                                ? "0 0 0 2px #1b1b1d, 0 0 0 4px #fff"
-                                : undefined,
-                          }}
-                        />
+                          whileTap={{ scale: 0.8 }}
+                          className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-full"
+                        >
+                          <span
+                            className="block h-[28px] w-[28px] rounded-full"
+                            style={{
+                              backgroundColor: HIGHLIGHT_ACCENT[color],
+                              boxShadow:
+                                activeHighlight?.color === color
+                                  ? "0 0 0 2px #1b1b1d, 0 0 0 4px #fff"
+                                  : "inset 0 -2px 0 rgba(0,0,0,.12)",
+                            }}
+                          />
+                        </motion.button>
                       ),
                     )}
                     <span className="flex-1" />
-                    <span className="text-[11px] font-semibold text-white/45">
-                      {activeHighlight ? "toque de novo p/ remover" : "destacar"}
-                    </span>
+                    {tall && (
+                      <motion.button
+                        type="button"
+                        data-reader-action="true"
+                        onClick={() =>
+                          askLumiAboutPassage("Explique em linguagem simples", "explanation")
+                        }
+                        initial={{ opacity: 0, x: 12 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.2, type: "spring", stiffness: 420, damping: 26 }}
+                        whileTap={{ scale: 0.94 }}
+                        className="flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-lilac pl-1 pr-3 text-[13px] font-semibold text-[#131313]"
+                      >
+                        <LumiFace size={28} />
+                        Explicar
+                      </motion.button>
+                    )}
                   </div>
-                  <div className="flex justify-between px-0.5 pt-2.5">
+                  <div className="mt-1.5 flex justify-between border-t border-white/[.12] px-0.5 pt-2">
                     {actions.map((a, i) => (
                       <motion.button
                         key={a.label}
@@ -3107,32 +3186,19 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
                         onClick={a.on}
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.08 + i * 0.03, duration: 0.3 }}
+                        transition={{
+                          delay: 0.1 + i * 0.035,
+                          duration: 0.32,
+                          ease: [0.16, 1, 0.3, 1],
+                        }}
                         whileTap={{ scale: 0.9 }}
-                        className="flex w-[62px] flex-col items-center gap-1.5 rounded-[14px] py-1 text-[11px] font-semibold active:bg-white/10"
+                        className="flex w-[60px] flex-col items-center gap-1 rounded-[14px] py-1 text-[11px] font-semibold active:bg-white/10"
                       >
                         <a.icon className="h-[19px] w-[19px]" strokeWidth={2} />
                         {a.label}
                       </motion.button>
                     ))}
                   </div>
-                  {tall && (
-                    <motion.button
-                      type="button"
-                      data-reader-action="true"
-                      onClick={() =>
-                        askLumiAboutPassage("Explique em linguagem simples", "explanation")
-                      }
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.22, duration: 0.3 }}
-                      whileTap={{ scale: 0.97 }}
-                      className="mt-2.5 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-lilac pl-1.5 pr-4 text-[14.5px] font-semibold text-[#131313]"
-                    >
-                      <LumiFace size={32} />
-                      Explicar trecho
-                    </motion.button>
-                  )}
                 </motion.div>
               );
             })()}
