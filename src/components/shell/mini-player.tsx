@@ -38,9 +38,7 @@ function useHiddenUntil(): [number, (v: number) => void] {
 export function MiniPlayer({ compact = false }: { compact?: boolean }) {
   const last = useLastBook();
   const [hiddenUntil, setHiddenUntil] = useHiddenUntil();
-  // Only after listening ("Ouvir") and leaving the book — not every time a
-  // book was opened.
-  const book = last && last.listened && (last.updatedAt ?? 1) > hiddenUntil ? last : null;
+  const book = last && (last.updatedAt ?? 1) > hiddenUntil ? last : null;
   const dismiss = () => {
     haptic(8);
     setHiddenUntil(last?.updatedAt ?? Date.now());

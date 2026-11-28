@@ -934,13 +934,8 @@ function ReaderPage({ uid, book }: { uid: string; book: Book }) {
   const [guestTipOpen, setGuestTipOpen] = useState(true);
   // Lets the dock's "Ler" button (and the landing) jump straight back in.
   useEffect(() => {
-    // A new session starts without audio: the "Lendo agora" bar only shows
-    // after leaving a book you were listening to.
-    rememberLastBook(book.id, book.title, book.author, { listened: false });
+    rememberLastBook(book.id, book.title, book.author);
   }, [book.id, book.title, book.author]);
-  useEffect(() => {
-    if (listenOpen) rememberLastBook(book.id, undefined, undefined, { listened: true });
-  }, [listenOpen, book.id]);
 
   // Opening a book counts as "starting" it — track it in the library so it
   // shows up under "Minha biblioteca" / "Continue lendo" and can be resumed.
