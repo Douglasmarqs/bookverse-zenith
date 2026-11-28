@@ -2401,3 +2401,81 @@ select,
     stroke-dashoffset: 0;
   }
 }
+
+/* Reader — the page rises in when a book opens (any format). */
+.reader-in {
+  animation: reader-in 560ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes reader-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Reader — "where you are" card: springs up, then slides away. */
+.resume-card {
+  transform: translate3d(-50%, 0, 0);
+  animation: resume-in 680ms cubic-bezier(0.22, 1.35, 0.36, 1) 420ms both;
+}
+.resume-card.is-leaving {
+  animation: resume-out 420ms cubic-bezier(0.5, 0, 0.75, 0) forwards;
+}
+@keyframes resume-in {
+  from {
+    opacity: 0;
+    transform: translate3d(-50%, 28px, 0) scale(0.82);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(-50%, 0, 0) scale(1);
+  }
+}
+@keyframes resume-out {
+  from {
+    opacity: 1;
+    transform: translate3d(-50%, 0, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(-50%, 22px, 0) scale(0.92);
+  }
+}
+.resume-ring {
+  stroke-dashoffset: var(--ring-to);
+  animation: resume-ring 1100ms cubic-bezier(0.16, 1, 0.3, 1) 620ms both;
+}
+@keyframes resume-ring {
+  from {
+    stroke-dashoffset: var(--ring-from);
+  }
+  to {
+    stroke-dashoffset: var(--ring-to);
+  }
+}
+.resume-line {
+  animation: resume-line 520ms cubic-bezier(0.16, 1, 0.3, 1) 500ms both;
+}
+@keyframes resume-line {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reader-in,
+  .resume-card,
+  .resume-ring,
+  .resume-line {
+    animation-duration: 1ms;
+    animation-delay: 0ms;
+  }
+}

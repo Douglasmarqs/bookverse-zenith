@@ -516,7 +516,7 @@ export function PdfPageViewer({ uid, book }: { uid: string; book: PdfBook }) {
           className="absolute inset-0 overflow-auto"
           style={{ padding: `${displaySettings.pagePadding}px` }}
         >
-          <div className="grid min-h-full min-w-full place-items-center">
+          <div className="reader-in grid min-h-full min-w-full place-items-center">
             <div
               className="relative shrink-0 shadow-2xl ring-1 ring-black/10"
               style={{

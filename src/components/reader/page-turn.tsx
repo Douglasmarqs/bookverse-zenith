@@ -21,6 +21,9 @@ export interface TurnStageHandle {
    * while the page is busy); the paper fold is driven frame by frame.
    * Returns a cancel function. */
   play: (fromP: number, toP: number, ms: number, onDone: () => void) => () => void;
+  /** Resolves once the pictures on the turning pages are decoded (or after
+   * a short cap), so a turn never shows an image popping in. */
+  ready: () => Promise<void>;
 }
 
 interface Props {
@@ -234,7 +237,21 @@ export const TurnStage = forwardRef<TurnStageHandle, Props>(function TurnStage(
     };
   };
 
-  useImperativeHandle(ref, () => ({ set: apply, play }));
+  const ready = () => {
+    const imgs = Array.from(root.current?.querySelectorAll("img") ?? []);
+    if (!imgs.length) return Promise.resolve();
+    const decodes = imgs.map((img) => {
+      // Copies of lazy pictures must load now: they're on screen.
+      img.loading = "eager";
+      return img.decode ? img.decode().catch(() => {}) : Promise.resolve();
+    });
+    return Promise.race([
+      Promise.all(decodes).then(() => {}),
+      new Promise<void>((r) => setTimeout(r, 180)),
+    ]);
+  };
+
+  useImperativeHandle(ref, () => ({ set: apply, play, ready }));
   // Paint the current frame before the browser shows the stage (and keep it
   // on any re-render while the finger is still down).
   useLayoutEffect(() => apply(lastP.current));
@@ -250,7 +267,9 @@ export const TurnStage = forwardRef<TurnStageHandle, Props>(function TurnStage(
       ref={root}
       aria-hidden="true"
       className="pointer-events-none absolute inset-0 z-[5] overflow-hidden"
-      style={{ background: bg }}
+      // No backdrop of its own: until the stage's layers are painted, the
+      // real column underneath (showing the very same page) shows through,
+      // instead of a blank sheet flashing for a frame.
     >
       <div ref={under} className="absolute inset-0 will-change-transform">
         <Page {...pageProps} index={underIndex} />
